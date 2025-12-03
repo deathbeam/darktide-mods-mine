@@ -99,6 +99,7 @@ function PocketableFeature.update(widgets, hud_state, hotkey_override)
 
     local stimm_widget = widgets.stimm_indicator_widget
     local crate_widget = widgets.crate_indicator_widget
+    local countdown_widget = widgets.stimm_countdown_widget
     local pocketable_visibility_dropdown = mod._settings.pocketable_visibility_dropdown
     local changed = false
 
@@ -302,6 +303,52 @@ function PocketableFeature.update(widgets, hud_state, hotkey_override)
 
     if changed then
         stimm_widget.dirty = true; crate_widget.dirty = true
+    end
+
+    -- UPDATE STIMM COUNTDOWN TEXT
+    local countdown_widget = widgets.stimm_countdown_widget
+    if countdown_widget then
+        local display_text = ""
+        local display_color = ALL_COLORS.GENERIC_WHITE or { 255, 255, 255, 255 }
+        local should_show = false
+
+        -- Get buff and cooldown times from hud_state
+        local buff_time = hud_state.stimm_buff_time_remaining or 0
+        local cooldown_time = hud_state.stimm_cooldown_remaining or 0
+
+        -- Check if player is broker class (Hive Scum)
+        local player = Managers.player and Managers.player:local_player_safe(1)
+        local is_broker = false
+        if player then
+            local profile = player:profile()
+            is_broker = profile and profile.archetype and profile.archetype.name == "broker"
+        end
+        
+        -- Show for broker class only
+        if is_broker then
+            -- Show active buff time (green)
+            if buff_time >= 0.05 then
+                display_text = string.format("%.0f", math.ceil(buff_time))
+                display_color = ALL_COLORS.HEALTH_GREEN or { 255, 0, 255, 0 }
+                should_show = true
+            -- Show cooldown time (red)
+            elseif cooldown_time >= 0.05 then
+                display_text = string.format("%.0f", math.ceil(cooldown_time))
+                display_color = ALL_COLORS.POWER_RED or { 255, 255, 0, 0 }
+                should_show = true
+            end
+        end
+
+        -- Update widget
+        countdown_widget.content.text = display_text
+        if countdown_widget.style.text and countdown_widget.style.text.text_color then
+            countdown_widget.style.text.text_color[1] = display_color[1]
+            countdown_widget.style.text.text_color[2] = display_color[2]
+            countdown_widget.style.text.text_color[3] = display_color[3]
+            countdown_widget.style.text.text_color[4] = display_color[4]
+        end
+        countdown_widget.style.text.visible = should_show
+        countdown_widget.dirty = true
     end
 end
 

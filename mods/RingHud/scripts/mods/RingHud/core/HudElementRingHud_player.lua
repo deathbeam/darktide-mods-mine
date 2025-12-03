@@ -434,11 +434,22 @@ HudElementRingHud_player._draw_widgets = function(self, dt, t, input_service, ui
     -- -------------- STIMM / CRATE ICONS --------------
     do
         local stw = widgets.stimm_indicator_widget
-        if stw and stw.style and stw.style.stimm_icon then
-            if U.apply_shake_to_style_offset(stw.style.stimm_icon, 0, 0, 0, apply_shake, dx, dy,
-                    user_bias_px, -user_bias_px) then
-                stw.dirty = true
+        if stw and stw.style then
+            local changed = false
+            if stw.style.stimm_icon then
+                if U.apply_shake_to_style_offset(stw.style.stimm_icon, 0, 0, 0, apply_shake, dx, dy,
+                        user_bias_px, -user_bias_px) then
+                    changed = true
+                end
             end
+            if stw.style.stimm_countdown_text then
+                local base_x = 18 * mod.scalable_unit
+                if U.apply_shake_to_style_offset(stw.style.stimm_countdown_text, base_x, 0, 1, apply_shake, dx, dy,
+                        user_bias_px, -user_bias_px) then
+                    changed = true
+                end
+            end
+            if changed then stw.dirty = true end
         end
 
         local cw = widgets.crate_indicator_widget

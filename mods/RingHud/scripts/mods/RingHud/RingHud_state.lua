@@ -95,6 +95,8 @@ function RingHudState.get_hud_data_state(ring_hud_instance)
 
         stimm_item_name = nil,
         stimm_icon_path = nil,
+        stimm_buff_time_remaining = 0,
+        stimm_cooldown_remaining = 0,
         crate_item_name = nil,
         crate_icon_path = nil,
 
@@ -266,6 +268,29 @@ function RingHudState.get_hud_data_state(ring_hud_instance)
                 hud_state.crate_icon_path = crate_template.hud_icon_small
             end
         end
+    end
+
+    -- Calculate stimm buff and cooldown times
+    if buff_ext and ability_ext then
+        -- Check for active stimm buff (syringe_broker_buff)
+        local buffs_by_index = buff_ext._buffs_by_index
+        if buffs_by_index then
+            local max_buff_time = 0
+            for _, buff in pairs(buffs_by_index) do
+                local template = buff:template()
+                if template and template.name == "syringe_broker_buff" then
+                    local remaining = buff:duration_progress() or 1
+                    local duration = buff:duration() or 15
+                    local buff_time = duration * remaining
+                    max_buff_time = math.max(max_buff_time, buff_time)
+                end
+            end
+            hud_state.stimm_buff_time_remaining = max_buff_time
+        end
+
+        -- Check for stimm cooldown
+        local cooldown = ability_ext:remaining_ability_cooldown("pocketable_ability") or 0
+        hud_state.stimm_cooldown_remaining = cooldown
     end
 
     hud_state.near_any_stimm_source        = mod.near_syringe_corruption_pocketable or

@@ -72,6 +72,15 @@ health_text_style.text_horizontal_alignment       = "center"
 health_text_style.text_vertical_alignment         = "center"
 health_text_style.offset                          = { 0, 0, 1 }
 
+local stimm_countdown_text_style                  = table.clone(UIFontSettings.body_small)
+stimm_countdown_text_style.font_type              = "machine_medium"
+stimm_countdown_text_style.font_size              = 20
+stimm_countdown_text_style.drop_shadow            = true
+stimm_countdown_text_style.text_horizontal_alignment = "left"
+stimm_countdown_text_style.text_vertical_alignment   = "center"
+stimm_countdown_text_style.text_color             = ARGB.GENERIC_WHITE
+stimm_countdown_text_style.offset                 = { 0, 0, 2 }
+
 -- RGBA 0..1
 local AMMO_CLIP_UNFILLED_COLOR                    = { 0.3, 0.3, 0.3, 0.8 }
 
@@ -153,6 +162,13 @@ local Definitions                                 = {
             size = { 15, 15 },
             horizontal_alignment = "center",
             vertical_alignment = "top",
+        },
+        stimm_countdown                = {
+            parent = "stimm_indicator",
+            position = { 25, 0, 1 },
+            size = { 40, 30 },
+            horizontal_alignment = "left",
+            vertical_alignment = "center",
         },
         crate_indicator                = {
             parent = "container",
@@ -730,6 +746,16 @@ local Definitions                                 = {
                 style = { color = ARGB.GENERIC_WHITE, offset = { 0, 0, 0 }, visible = false }
             },
         }, "stimm_indicator"),
+
+        stimm_countdown_widget = UIWidget.create_definition({
+            {
+                pass_type = "text",
+                value_id = "text",
+                style_id = "text",
+                value = "",
+                style = stimm_countdown_text_style
+            },
+        }, "stimm_countdown"),
 
         crate_indicator_widget = UIWidget.create_definition({
             {

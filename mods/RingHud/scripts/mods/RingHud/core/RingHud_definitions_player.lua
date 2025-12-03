@@ -91,6 +91,15 @@ health_text_style.text_horizontal_alignment     = "center"
 health_text_style.text_vertical_alignment       = "center"
 health_text_style.offset                        = { 0, 0, 1 }
 
+local stimm_countdown_text_style                = table.clone(UIFontSettings.body_small)
+stimm_countdown_text_style.font_type            = "machine_medium"
+stimm_countdown_text_style.font_size            = 32
+stimm_countdown_text_style.drop_shadow          = true
+stimm_countdown_text_style.text_horizontal_alignment = "left"
+stimm_countdown_text_style.text_vertical_alignment   = "center"
+stimm_countdown_text_style.text_color           = { 255, 255, 255, 0 }
+stimm_countdown_text_style.offset               = { 20, 0, 2 }
+
 -- RGBA 0..1
 local AMMO_CLIP_UNFILLED_COLOR                  = { 0.3, 0.3, 0.3, 0.8 }
 
@@ -179,6 +188,13 @@ local Definitions                               = {
             horizontal_alignment = "center",
             vertical_alignment   = "top",
         },
+        stimm_countdown                = {
+            parent               = "container",
+            position             = { 0, -100 * mod.scalable_unit, 20 },
+            size                 = { 200 * mod.scalable_unit, 50 * mod.scalable_unit },
+            horizontal_alignment = "center",
+            vertical_alignment   = "center",
+        },
         crate_indicator                = {
             parent               = "container",
             position             = { offset_correction + text_offset - (4 * mod.scalable_unit), offset_correction + (8 * mod.scalable_unit), 12 },
@@ -209,6 +225,7 @@ local Definitions                               = {
         -- ABILITY TIMER
         ability_timer = UIWidget.create_definition({
             { value_id = "ability_text", style_id = "ability_text", pass_type = "text", value = "", style = ability_buff_text_style },
+            { value_id = "test_text", style_id = "test_text", pass_type = "text", value = "TEST99", style = stimm_countdown_text_style },
         }, "ability_timer"),
 
         -- TEXT/ICONS
@@ -228,6 +245,16 @@ local Definitions                               = {
                 style = { color = ARGB.GENERIC_WHITE, offset = { 0, 0, 0 }, visible = false }
             },
         }, "stimm_indicator"),
+
+        stimm_countdown_widget = UIWidget.create_definition({
+            {
+                pass_type = "text",
+                value_id = "text",
+                style_id = "text",
+                value = "99",
+                style = stimm_countdown_text_style
+            },
+        }, "stimm_countdown"),
 
         crate_indicator_widget = UIWidget.create_definition({
             {

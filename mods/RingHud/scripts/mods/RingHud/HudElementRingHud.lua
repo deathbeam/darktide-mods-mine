@@ -606,6 +606,14 @@ HudElementRingHud._draw_widgets = function(self, dt, t, input_service, ui_render
         end
     end
 
+    local scw = widgets.stimm_countdown_widget
+    if scw and scw.style and scw.style.text then
+        if _apply_shake_to_style_offset(scw.style.text, 0, 0, 2, apply_shake, dx, dy,
+                user_bias + center_dx, -user_bias + center_dy, s) then
+            scw.dirty = true
+        end
+    end
+
     local cw = widgets.crate_indicator_widget
     if cw and cw.style and cw.style.crate_icon then
         if _apply_shake_to_style_offset(cw.style.crate_icon, 0, 0, 0, apply_shake, dx, dy,
