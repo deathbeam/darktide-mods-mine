@@ -11,6 +11,7 @@ Skitarius
 QuickDeploy
 AutoBlitz
 guarantee_weapon_swap
+hybrid_sprint
 
 -- General HUD
 custom_hud
