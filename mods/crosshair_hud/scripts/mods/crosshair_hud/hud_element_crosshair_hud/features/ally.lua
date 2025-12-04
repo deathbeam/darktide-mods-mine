@@ -585,121 +585,62 @@ local function update_grenade(parent, dt, t, widget, player)
 end
 
 local function update_ammo(parent, dt, t, widget, player)
-  local function sum_ammo(value)
-    if type(value) == "table" then
-      local total = 0
-
-      for key, v in pairs(value) do
-        if key ~= "value" then
-          total = total + sum_ammo(v)
-        end
-      end
-
-      if type(value.value) == "number" then
-        total = total + value.value
-      end
-
-      return total
-    end
-
-    return value or 0
-  end
-
-  local clips_in_use = (NetworkConstants and NetworkConstants.clips_in_use and NetworkConstants.clips_in_use.max_size) or 1
-  local function clip_totals(slot_component)
-    local clip_total = 0
-    local clip_max_total = 0
-    local helper_total = 0
-    local helper_max = 0
-    local first_clip = first_clip_amount(slot_component.current_ammunition_clip)
-    local first_max_clip = first_clip_amount(slot_component.max_ammunition_clip)
-
-    if Ammo and Ammo.current_ammo_in_clips and Ammo.max_ammo_in_clips then
-      for i = 1, clips_in_use do
-        helper_total = helper_total + (Ammo.current_ammo_in_clips(slot_component, i) or 0)
-        helper_max = helper_max + (Ammo.max_ammo_in_clips(slot_component, i) or 0)
-      end
-    end
-
-    local raw_total = sum_ammo(slot_component.current_ammunition_clip)
-    local raw_max = sum_ammo(slot_component.max_ammunition_clip)
-
-    clip_total = helper_total > 0 and helper_total or raw_total
-    clip_max_total = helper_max > 0 and helper_max or raw_max
-
-    if clip_total == 0 then
-      clip_total = first_clip or clip_total
-    end
-
-    if clip_max_total == 0 then
-      clip_max_total = first_max_clip or clip_max_total
-    end
-
-    return clip_total, clip_max_total
-  end
-
   local unit_data_extension = ScriptUnit.has_extension(player.player_unit, "unit_data_system")
   if not unit_data_extension then
+    widget.style.ammo_icon.visible = false
     return
   end
 
-  -- Prefer the wielded slot if it has ammo; otherwise fall back between secondary/primary.
-  local inventory = unit_data_extension:read_component("inventory")
-  local wielded_slot_name = inventory and inventory.wielded_slot
-  local slot_secondary = unit_data_extension:read_component("slot_secondary")
-  local slot_primary = unit_data_extension:read_component("slot_primary")
-  local slot_wielded = wielded_slot_name and unit_data_extension:read_component(wielded_slot_name)
-
-  local function pick_ammo_slot(slot_a, slot_b)
-    local function slot_total(slot)
-      if not slot then
-        return -1
-      end
-
-      local _, clip_max_total = clip_totals(slot)
-      local reserve = sum_ammo(slot.max_ammunition_reserve)
-      return clip_max_total + reserve
-    end
-
-    local total_a = slot_total(slot_a)
-    local total_b = slot_total(slot_b)
-
-    if total_a >= total_b and total_a > 0 then
-      return slot_a
-    elseif total_b > 0 then
-      return slot_b
-    end
-  end
-
-  local inventory_component = pick_ammo_slot(slot_wielded, pick_ammo_slot(slot_secondary, slot_primary))
-
-  if not inventory_component then
+  local secondary_component = unit_data_extension:read_component("slot_secondary")
+  if not secondary_component then
+    widget.style.ammo_icon.visible = false
     return
   end
 
-  local clip_ammo, clip_max = clip_totals(inventory_component)
-  local reserve_max = sum_ammo(inventory_component.max_ammunition_reserve)
-  local max_ammo = clip_max + reserve_max
+  -- For allies, read raw ammunition values directly (Ammo.clip_in_use may not work for remote players)
+  -- This matches RingHud's approach for team ammo
+  local current_clip = secondary_component.current_ammunition_clip or 0
+  local max_clip = secondary_component.max_ammunition_clip or 0
+  local current_reserve = secondary_component.current_ammunition_reserve or 0
+  local max_reserve = secondary_component.max_ammunition_reserve or 0
 
+  -- Handle multi-clip arrays
+  if type(current_clip) == "table" then
+    local clip_sum = 0
+    for i = 1, #current_clip do
+      clip_sum = clip_sum + (current_clip[i] or 0)
+    end
+    current_clip = clip_sum
+  end
+
+  if type(max_clip) == "table" then
+    local max_clip_sum = 0
+    for i = 1, #max_clip do
+      max_clip_sum = max_clip_sum + (max_clip[i] or 0)
+    end
+    max_clip = max_clip_sum
+  end
+
+  local max_ammo = max_clip + max_reserve
   widget.style.ammo_icon.visible = max_ammo > 0
 
   if max_ammo == 0 then
     return
   end
 
-  local reserve_ammo = sum_ammo(inventory_component.current_ammunition_reserve)
-  local current_ammo = clip_ammo + reserve_ammo
+  local current_ammo = current_clip + current_reserve
   local current_ammo_percent = current_ammo / max_ammo
-  local current_clip_percent = clip_max > 0 and (clip_ammo / clip_max) or 0
+  local reserve_ammo_percent = max_reserve > 0 and (current_reserve / max_reserve) or 0
+  local clip_ammo_percent = max_clip > 0 and (current_clip / max_clip) or 0
 
   local content = widget.content
-  content.max_ammo = reserve_ammo
-  content.current_ammo = clip_ammo
+  content.max_ammo = current_reserve
+  content.current_ammo = current_clip
 
   local style = widget.style
   local icon_style = style.ammo_icon
-  local clip_color = mod_utils.get_text_color_for_percent_threshold(current_clip_percent, "ammo")
-  local reserve_color = mod_utils.get_text_color_for_percent_threshold(current_ammo_percent, "ammo")
+  local clip_color = mod_utils.get_text_color_for_percent_threshold(clip_ammo_percent, "ammo")
+  local reserve_color = mod_utils.get_text_color_for_percent_threshold(reserve_ammo_percent, "ammo")
 
   style.current_ammo.text_color = clip_color
   style.max_ammo.text_color = reserve_color
@@ -849,18 +790,24 @@ function feature.update(parent, dt, t)
       local player = PlayerCompositions.player_from_unique_id(feature._player_composition_name, unique_id)
       if not player or player.__deleted then
         ally_content.visible = false
-        table.remove(feature._players, i)
-
-        local wounds_widgets = feature._wounds_widgets_by_player[player] or {}
-        for _, wounds_widget in pairs(wounds_widgets) do
-          local index = table.index_of(parent._widgets, wounds_widget)
-          if index then
-            parent:_unregister_widget_name(wounds_widget.name)
-            table.remove(parent._widgets, index)
+        
+        -- Clean up wounds widgets for this player BEFORE removing from table
+        if unique_id then
+          local old_player = feature._players[i]
+          local wounds_widgets = feature._wounds_widgets_by_player[old_player]
+          if wounds_widgets then
+            for _, wounds_widget in pairs(wounds_widgets) do
+              local index = table.index_of(parent._widgets, wounds_widget)
+              if index then
+                parent:_unregister_widget_name(wounds_widget.name)
+                table.remove(parent._widgets, index)
+              end
+            end
+            feature._wounds_widgets_by_player[old_player] = nil
           end
         end
-
-        table.clear(wounds_widgets)
+        
+        table.remove(feature._players, i)
 
         break
       end
