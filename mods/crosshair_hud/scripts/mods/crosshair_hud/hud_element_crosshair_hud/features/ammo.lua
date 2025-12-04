@@ -49,7 +49,7 @@ function feature.create_widget_definitions()
         style = {
           size = { 20 * ammo_scale, 20 * ammo_scale },
           vertical_alignment = "center",
-          horizontal_alignment = "left",
+          horizontal_alignment = "right",
           color = UIHudSettings.color_tint_main_1,
           offset = { 0, 0, 1 }
         }
@@ -62,39 +62,9 @@ function feature.create_widget_definitions()
           text_style_id = "ammo_icon",
           size = { 20 * ammo_scale, 20 * ammo_scale },
           vertical_alignment = "center",
-          horizontal_alignment = "left",
+          horizontal_alignment = "right",
           color = UIHudSettings.color_tint_0,
           offset = { 2 * ammo_scale, 2 * ammo_scale, 0}
-        },
-        visibility_function = function(content, style)
-          return style.parent[style.text_style_id].visible and _shadows_enabled("ammo")
-        end
-      },
-      {
-        pass_type = "text",
-        value_id = "clip_ammo",
-        style_id = "clip_ammo",
-        style = {
-          font_size = 20 * ammo_scale,
-          font_type = "machine_medium",
-          text_vertical_alignment = "center",
-          text_horizontal_alignment = "left",
-          text_color = UIHudSettings.color_tint_1,
-          offset = { 25 * ammo_scale, 0, 2 }
-        }
-      },
-      {
-        pass_type = "text",
-        value_id = "clip_ammo",
-        style_id = "clip_ammo_shadow",
-        style = {
-          text_style_id = "clip_ammo",
-          font_size = 20 * ammo_scale,
-          font_type = "machine_medium",
-          text_vertical_alignment = "center",
-          text_horizontal_alignment = "left",
-          text_color = UIHudSettings.color_tint_0,
-          offset = { 27 * ammo_scale, 2 * ammo_scale, 1 }
         },
         visibility_function = function(content, style)
           return style.parent[style.text_style_id].visible and _shadows_enabled("ammo")
@@ -108,9 +78,9 @@ function feature.create_widget_definitions()
           font_size = 18 * ammo_scale,
           font_type = "machine_medium",
           text_vertical_alignment = "center",
-          text_horizontal_alignment = "left",
+          text_horizontal_alignment = "right",
           text_color = UIHudSettings.color_tint_1,
-          offset = { 60 * ammo_scale, 0, 2 }
+          offset = { -25 * ammo_scale, 0, 2 }
         }
       },
       {
@@ -122,9 +92,39 @@ function feature.create_widget_definitions()
           font_size = 18 * ammo_scale,
           font_type = "machine_medium",
           text_vertical_alignment = "center",
-          text_horizontal_alignment = "left",
+          text_horizontal_alignment = "right",
           text_color = UIHudSettings.color_tint_0,
-          offset = { 62 * ammo_scale, 2 * ammo_scale, 1 }
+          offset = { -23 * ammo_scale, 2 * ammo_scale, 1 }
+        },
+        visibility_function = function(content, style)
+          return style.parent[style.text_style_id].visible and _shadows_enabled("ammo")
+        end
+      },
+      {
+        pass_type = "text",
+        value_id = "clip_ammo",
+        style_id = "clip_ammo",
+        style = {
+          font_size = 20 * ammo_scale,
+          font_type = "machine_medium",
+          text_vertical_alignment = "center",
+          text_horizontal_alignment = "right",
+          text_color = UIHudSettings.color_tint_1,
+          offset = { -55 * ammo_scale, 0, 2 }
+        }
+      },
+      {
+        pass_type = "text",
+        value_id = "clip_ammo",
+        style_id = "clip_ammo_shadow",
+        style = {
+          text_style_id = "clip_ammo",
+          font_size = 20 * ammo_scale,
+          font_type = "machine_medium",
+          text_vertical_alignment = "center",
+          text_horizontal_alignment = "right",
+          text_color = UIHudSettings.color_tint_0,
+          offset = { -53 * ammo_scale, 2 * ammo_scale, 1 }
         },
         visibility_function = function(content, style)
           return style.parent[style.text_style_id].visible and _shadows_enabled("ammo")
@@ -212,7 +212,7 @@ function feature.update(parent)
   local reserve_ammo_percent = max_reserve > 0 and (current_reserve / max_reserve) or 0
   local clip_ammo_percent = max_clip > 0 and (current_clip / max_clip) or 0
 
-  content.clip_ammo = string.format("%03d", current_clip)
+  content.clip_ammo = tostring(current_clip)
   content.reserve_ammo = string.format("%03d", current_reserve)
 
   local style = ammo_widget.style

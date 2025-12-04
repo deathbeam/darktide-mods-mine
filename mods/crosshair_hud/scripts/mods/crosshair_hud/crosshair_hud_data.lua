@@ -521,7 +521,7 @@ return {
               },
               create_shadow_setting("ammo"),
               create_scale_setting("ammo"),
-              create_coordinate_setting("ammo", "x", 100),
+              create_coordinate_setting("ammo", "x", 65),
               create_coordinate_setting("ammo", "y", 250),
               unpack(create_threshold_settings("ammo"))
             }
@@ -541,7 +541,7 @@ return {
             sub_widgets = {
               create_shadow_setting("pocketable"),
               create_scale_setting("pocketable"),
-              create_coordinate_setting("pocketable", "x", 100),
+              create_coordinate_setting("pocketable", "x", 105),
               create_coordinate_setting("pocketable", "y", 275)
             }
           }
