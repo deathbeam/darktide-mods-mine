@@ -43,6 +43,15 @@ local _stimm_colors = {
     syringe_ability_boost_pocketable = { 255, 230, 192, 13 },
     syringe_power_boost_pocketable = { 255, 205, 51, 26 },
     syringe_speed_boost_pocketable = { 255, 0, 127, 218 },
+    syringe_broker_pocketable = { 255, 178, 102, 255 }, -- syringe_broker_buff buff name
+}
+
+local _stimm_icons = {
+    syringe_corruption_pocketable = "content/ui/materials/icons/pocketables/hud/small/party_syringe_corruption",
+    syringe_ability_boost_pocketable = "content/ui/materials/icons/pocketables/hud/small/party_syringe_ability",
+    syringe_power_boost_pocketable = "content/ui/materials/icons/pocketables/hud/small/party_syringe_power",
+    syringe_speed_boost_pocketable = "content/ui/materials/icons/pocketables/hud/small/party_syringe_speed",
+    syringe_broker_pocketable = "content/ui/materials/icons/pocketables/hud/small/party_syringe_broker",
 }
 
 function feature.create_widget_definitions()
@@ -132,30 +141,15 @@ function feature.update(parent)
     end
 
     local player_extensions = parent._parent:player_extensions()
-    local visual_loadout_extension = player_extensions.visual_loadout
-    local weapon_template = visual_loadout_extension:weapon_template_from_slot("slot_pocketable_small")
-
-    if not weapon_template then
-        content.visible = false
-
-        return
-    end
-
-    local stimm_name = weapon_template.name
-    local color = _stimm_colors[stimm_name]
-
-    if RecolorStimms and RecolorStimms.get_stimm_argb_255 and RecolorStimms:is_enabled() then
-        color = RecolorStimms.get_stimm_argb_255(stimm_name)
-    end
-
-    content.stimm_icon = weapon_template and weapon_template.hud_icon_small
-    style.stimm_icon.color = color or { 255, 255, 255, 255 }
-
-    -- Calculate stimm buff and cooldown times
     local buff_ext = player_extensions.buff
     local ability_ext = player_extensions.ability
+    local visual_loadout_extension = player_extensions.visual_loadout
+    
+    -- Calculate stimm buff and cooldown times
     local stimm_countdown = ""
     local countdown_color = UIHudSettings.color_tint_1
+    local active_stimm_name = nil
+    local has_active_buff = false
 
     if buff_ext and ability_ext then
         -- Check for active stimm buff (syringe_)
@@ -168,7 +162,11 @@ function feature.update(parent)
                     local remaining = buff:duration_progress() or 1
                     local duration = buff:duration() or 15
                     local buff_time = duration * remaining
-                    max_buff_time = math.max(max_buff_time, buff_time)
+                    if buff_time > max_buff_time then
+                        max_buff_time = buff_time
+                        -- Extract stimm name from buff (e.g., syringe_broker_buff -> syringe_broker_pocketable)
+                        active_stimm_name = string.gsub(template.name, "_buff$", "_pocketable")
+                    end
                 end
             end
 
@@ -176,6 +174,7 @@ function feature.update(parent)
             if max_buff_time >= 0.05 then
                 stimm_countdown = string.format("%.0f", math.ceil(max_buff_time))
                 countdown_color = { 255, 0, 255, 0 }
+                has_active_buff = true
             end
         end
 
@@ -189,6 +188,38 @@ function feature.update(parent)
             end
         end
     end
+
+    -- Get current pocketable or use active buff name
+    local weapon_template = visual_loadout_extension:weapon_template_from_slot("slot_pocketable_small")
+    local stimm_name = nil
+    
+    if weapon_template then
+        stimm_name = weapon_template.name
+    elseif has_active_buff and active_stimm_name then
+        stimm_name = active_stimm_name
+    end
+
+    -- Hide if no pocketable and no active buff
+    if not stimm_name then
+        content.visible = false
+        return
+    end
+
+    local color = _stimm_colors[stimm_name]
+
+    if RecolorStimms and RecolorStimms.get_stimm_argb_255 and RecolorStimms:is_enabled() then
+        color = RecolorStimms.get_stimm_argb_255(stimm_name)
+    end
+
+    -- Use weapon template icon if available, otherwise use generic icon based on stimm name
+    if weapon_template then
+        content.stimm_icon = weapon_template.hud_icon_small
+    else
+        -- Fallback icon when pocketable is consumed but buff is active
+        content.stimm_icon = _stimm_icons[stimm_name]
+    end
+    
+    style.stimm_icon.color = color or { 255, 255, 255, 255 }
 
     content.stimm_countdown = stimm_countdown
     style.stimm_countdown.text_color = countdown_color
