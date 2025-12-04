@@ -7,8 +7,10 @@
 -- ################################################################
 
 -- Gameplay
-QuickDeploy
 Skitarius
+QuickDeploy
+AutoBlitz
+guarantee_weapon_swap
 
 -- General HUD
 custom_hud
