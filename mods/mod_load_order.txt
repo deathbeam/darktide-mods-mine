@@ -19,7 +19,9 @@ how_did_I_get_that
 scoreboard
 
 -- In Game HUD
-RingHud
+markers_aio
+-- RingHud
+crosshair_hud
 Healthbars
 debuff_indicator
 SpawnFeed
