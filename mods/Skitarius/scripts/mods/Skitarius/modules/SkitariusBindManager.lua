@@ -25,8 +25,8 @@ local MONITORED_ACTIONS = {
     sprint = true,
     sprinting = true,
     hold_to_sprint = true,
-    move_forward = true,
-    move_backward = true
+    --move_forward = true,
+    --move_backward = true
 }
 
 -- INPUT: The true state of each input (i.e. literal player input), as well as the system setting keybind for each input

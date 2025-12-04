@@ -228,7 +228,7 @@ local INCORRECT_TIMES = {
             incorrect = 0.3,
             correct = 0.35,
         }
-    }
+    },
     --]]
 }
 

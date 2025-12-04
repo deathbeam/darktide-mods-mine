@@ -26,7 +26,7 @@ local PRAY = {
         special_start_attack = { weapon_extra_hold = true, action_one_pressed = false, action_one_hold = false, action_two_hold = false },
         special_light_attack = { weapon_extra_hold = true },
         special_heavy_attack = { weapon_extra_hold = true },
-        special_action       = { weapon_extra_pressed = true, action_one_pressed = false, action_one_hold = false },
+        special_action       = { weapon_extra_pressed = true, weapon_extra_hold = true, action_one_pressed = false, action_one_hold = false },
     },
     sprint = {
         sprint               = { action_one_hold = false, action_two_hold = false, sprint = true, sprinting = true,  hold_to_sprint = true, move_forward = 1 },
@@ -79,7 +79,7 @@ local PRAY = {
         special_start_attack = { weapon_extra_hold = true },
         special_light_attack = { weapon_extra_hold = true },
         special_heavy_attack = { weapon_extra_hold = true },
-        special_action       = { weapon_extra_pressed = true },
+        special_action       = { weapon_extra_pressed = true, weapon_extra_hold = true },
     },
     weapon_reload = {
         idle                 = { weapon_reload_hold = false },
@@ -365,7 +365,7 @@ SkitariusOmnissiah.omnissiah = function(self, queried_input, user_value)
     end
     --self.mod:echo("%s, %s", current_action, desired_action) -- DEBUG: View current action and final desired engram action after potential modifications
     local divine_outcome = PRAY[current_action][desired_action][queried_input]
-    
+
     -- STAGE 5 : RESOLVE_CONFLICTS
     divine_outcome = self:resolve_conflicts(queried_input, user_value, divine_outcome, current_action, desired_action)
     LAST_DIVINATION[queried_input] = divine_outcome
@@ -456,6 +456,8 @@ SkitariusOmnissiah.action_to_step = function(self, action_name)
     elseif string.find(action_name, "special") or string.find(action_name, "psyker_push") or string.find(action_name, "flashlight") or string.find(action_name, "whip") then
         if action_name == "action_attack_special_2" and string.find(weapon_name, "combatsword_p2") then
             return "light_attack"
+        elseif string.find(action_name, "pushfollow") then
+            return "push_follow_up"
         elseif string.find(action_name, "light") and not string.find(action_name, "flashlight") then
             return "light_attack"
         elseif string.find(action_name, "heavy") then
@@ -643,6 +645,10 @@ SkitariusOmnissiah.maybe_convert_desire = function(self, current_action, desired
             return current_action
         end
     end
+    -- Dual Stubs should move from special to special without waiting for idle during special mode
+    if desired_action == "idle" and engram:get_setting("MODE") == "special_action" and string.find(weapon_name, "dual_stubpistols") then
+        return "special_action"
+    end
     return desired_action
 end
 
@@ -699,11 +705,13 @@ SkitariusOmnissiah.resolve_conflicts = function(self, input, user, omnissiah, cu
             return true
         end
     end
+    --[[]
     if input == "move_backward" then -- Force moving forwards
         if PRAY[current_action] and PRAY[current_action][desired_action] and PRAY[current_action][desired_action]["move_forward"] == 1 then
             outcome = 0
         end
     end
+    --]]
     return outcome
 end
 

@@ -294,7 +294,7 @@ SkitariusWeaponManager.is_light_complete = function(self, running_action, compon
     if chain_action then
         local start_t = component.start_t
         local current_action_t = t - start_t
-        local chain_time = chain_action.chain_time
+        local chain_time = chain_action.chain_time or chain_action[1].chain_time -- Fix for crowbars having multiple chain_times in a table - fortunately they are the same value for each
         chain_validated = (chain_time and chain_time < current_action_t or not not chain_until and current_action_t < chain_until) and true
         return chain_validated
     end
