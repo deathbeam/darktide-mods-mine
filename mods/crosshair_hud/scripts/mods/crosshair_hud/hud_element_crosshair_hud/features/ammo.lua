@@ -5,6 +5,7 @@ local _shadows_enabled = mod_utils.shadows_enabled
 local UIWorkspaceSettings = require("scripts/settings/ui/ui_workspace_settings")
 local UIWidget = require("scripts/managers/ui/ui_widget")
 local UIHudSettings = require("scripts/settings/ui/ui_hud_settings")
+local Ammo = require("scripts/utilities/ammo")
 
 local global_scale = mod:get("global_scale")
 local ammo_scale = mod:get("ammo_scale") * global_scale
@@ -29,7 +30,7 @@ feature.scenegraph_definition = {
     parent = "screen",
     vertical_alignment = "center",
     horizontal_alignment = "center",
-    size = { 52 * ammo_scale, 44 * ammo_scale },
+    size = { 120 * ammo_scale, 30 * ammo_scale },
     position = {
       global_offset[1] + ammo_offset[1],
       global_offset[2] + ammo_offset[2],
@@ -47,7 +48,7 @@ function feature.create_widget_definitions()
         style_id = "ammo_icon",
         style = {
           size = { 20 * ammo_scale, 20 * ammo_scale },
-          vertical_alignment = "bottom",
+          vertical_alignment = "center",
           horizontal_alignment = "left",
           color = UIHudSettings.color_tint_main_1,
           offset = { 0, 0, 1 }
@@ -60,7 +61,7 @@ function feature.create_widget_definitions()
         style = {
           text_style_id = "ammo_icon",
           size = { 20 * ammo_scale, 20 * ammo_scale },
-          vertical_alignment = "bottom",
+          vertical_alignment = "center",
           horizontal_alignment = "left",
           color = UIHudSettings.color_tint_0,
           offset = { 2 * ammo_scale, 2 * ammo_scale, 0}
@@ -71,31 +72,29 @@ function feature.create_widget_definitions()
       },
       {
         pass_type = "text",
-        value = "000",
         value_id = "clip_ammo",
         style_id = "clip_ammo",
         style = {
-          font_size = 30 * ammo_scale,
+          font_size = 20 * ammo_scale,
           font_type = "machine_medium",
-          text_vertical_alignment = "top",
-          text_horizontal_alignment = "center",
+          text_vertical_alignment = "center",
+          text_horizontal_alignment = "left",
           text_color = UIHudSettings.color_tint_1,
-          offset = { 10 * ammo_scale, 0, 2 }
+          offset = { 25 * ammo_scale, 0, 2 }
         }
       },
       {
         pass_type = "text",
-        value = "000",
         value_id = "clip_ammo",
         style_id = "clip_ammo_shadow",
         style = {
           text_style_id = "clip_ammo",
-          font_size = 30 * ammo_scale,
+          font_size = 20 * ammo_scale,
           font_type = "machine_medium",
-          text_vertical_alignment = "top",
-          text_horizontal_alignment = "center",
+          text_vertical_alignment = "center",
+          text_horizontal_alignment = "left",
           text_color = UIHudSettings.color_tint_0,
-          offset = { 12 * ammo_scale, 2 * ammo_scale, 1 }
+          offset = { 27 * ammo_scale, 2 * ammo_scale, 1 }
         },
         visibility_function = function(content, style)
           return style.parent[style.text_style_id].visible and _shadows_enabled("ammo")
@@ -103,31 +102,29 @@ function feature.create_widget_definitions()
       },
       {
         pass_type = "text",
-        value = "0000",
         value_id = "reserve_ammo",
         style_id = "reserve_ammo",
         style = {
           font_size = 18 * ammo_scale,
           font_type = "machine_medium",
-          text_vertical_alignment = "bottom",
-          text_horizontal_alignment = "center",
+          text_vertical_alignment = "center",
+          text_horizontal_alignment = "left",
           text_color = UIHudSettings.color_tint_1,
-          offset = { 10 * ammo_scale, 0, 2 }
+          offset = { 60 * ammo_scale, 0, 2 }
         }
       },
       {
         pass_type = "text",
-        value = "0000",
         value_id = "reserve_ammo",
         style_id = "reserve_ammo_shadow",
         style = {
           text_style_id = "reserve_ammo",
           font_size = 18 * ammo_scale,
           font_type = "machine_medium",
-          text_vertical_alignment = "bottom",
-          text_horizontal_alignment = "center",
+          text_vertical_alignment = "center",
+          text_horizontal_alignment = "left",
           text_color = UIHudSettings.color_tint_0,
-          offset = { 12 * ammo_scale, 2 * ammo_scale, 1 }
+          offset = { 62 * ammo_scale, 2 * ammo_scale, 1 }
         },
         visibility_function = function(content, style)
           return style.parent[style.text_style_id].visible and _shadows_enabled("ammo")
@@ -157,59 +154,66 @@ function feature.update(parent)
   end
   
   local unit_data_extension = player_extensions.unit_data
-  local inventory_component = unit_data_extension:read_component("slot_secondary")
+  local inventory_component = unit_data_extension:read_component("inventory")
+  local secondary_component = unit_data_extension:read_component("slot_secondary")
 
-  if not inventory_component then
+  if not secondary_component then
+    content.visible = false
     return
   end
 
-  -- Handle both number and table formats (Hotfix #80 changed structure)
-  local function extract_value(val)
-    if type(val) == "number" then
-      return val
-    elseif type(val) == "table" then
-      local total = 0
+  -- Check if we're wielding a weapon that uses ammo
+  local weapon_ext = player_extensions.weapon
+  local wielded_slot = inventory_component and inventory_component.wielded_slot
+  local weapon_uses_ammo = false
+  local current_clip, max_clip = 0, 0
+  local current_reserve, max_reserve = 0, 0
 
-      for key, v in pairs(val) do
-        if key ~= "value" then
-          total = total + extract_value(v)
+  -- Reserve is always from slot_secondary
+  current_reserve = secondary_component.current_ammunition_reserve or 0
+  max_reserve = secondary_component.max_ammunition_reserve or 0
+
+  -- Check if ranged weapon uses ammo (to determine if we should show anything)
+  local wielded_template = weapon_ext and weapon_ext:weapon_template()
+  local slot_secondary_template = player_extensions.visual_loadout and player_extensions.visual_loadout:weapon_template_from_slot("slot_secondary")
+  
+  -- Check slot_secondary weapon for ammo usage
+  if slot_secondary_template
+    and slot_secondary_template.hud_configuration
+    and slot_secondary_template.hud_configuration.uses_ammunition
+  then
+    weapon_uses_ammo = true
+
+    -- Always show clip ammo from slot_secondary (even if wielding melee)
+    local max_num_clips = NetworkConstants and NetworkConstants.ammunition_clip_array and NetworkConstants.ammunition_clip_array.max_size
+    if max_num_clips then
+      for i = 1, max_num_clips do
+        if Ammo.clip_in_use(secondary_component, i) then
+          max_clip = max_clip + (secondary_component.max_ammunition_clip[i] or 0)
+          current_clip = current_clip + (secondary_component.current_ammunition_clip[i] or 0)
         end
       end
-
-      if type(val.value) == "number" then
-        total = total + val.value
-      end
-
-      return total
     end
-
-    return 0
   end
 
-  local clip_max = extract_value(inventory_component.max_ammunition_clip)
-  local reserve_max = extract_value(inventory_component.max_ammunition_reserve)
-  local max_ammo = clip_max + reserve_max
+  if not weapon_uses_ammo then
+    content.visible = false
+    return
+  end
 
+  local max_ammo = max_clip + max_reserve
   if max_ammo == 0 then
     content.visible = false
     return
   end
 
-  local clip_ammo = extract_value(inventory_component.current_ammunition_clip)
-  local reserve_ammo = extract_value(inventory_component.current_ammunition_reserve)
-  local current_ammo = clip_ammo + reserve_ammo
-  local current_ammo_percent = 0
-  local reserve_ammo_percent = 0
-  local clip_ammo_percent = 0
+  local current_ammo = current_clip + current_reserve
+  local current_ammo_percent = current_ammo / max_ammo
+  local reserve_ammo_percent = max_reserve > 0 and (current_reserve / max_reserve) or 0
+  local clip_ammo_percent = max_clip > 0 and (current_clip / max_clip) or 0
 
-  current_ammo_percent = current_ammo / max_ammo
-  reserve_ammo_percent = reserve_max > 0 and (reserve_ammo / reserve_max) or 0
-  clip_ammo_percent = clip_max > 0 and (clip_ammo / clip_max) or 0
-
-  content.max_ammo = max_ammo or 0
-  content.current_ammo = current_ammo or 0
-  content.reserve_ammo = reserve_ammo or 0
-  content.clip_ammo = clip_ammo or 0
+  content.clip_ammo = string.format("%03d", current_clip)
+  content.reserve_ammo = string.format("%03d", current_reserve)
 
   local style = ammo_widget.style
   local icon_style = style.ammo_icon

@@ -29,7 +29,7 @@ feature.scenegraph_definition = {
         parent = "screen",
         vertical_alignment = "center",
         horizontal_alignment = "center",
-        size = { 20 * stimm_scale, 20 * stimm_scale },
+        size = { 40 * stimm_scale, 20 * stimm_scale },
         position = {
             global_offset[1] + stimm_offset[1],
             global_offset[2] + stimm_offset[2],
@@ -55,7 +55,7 @@ function feature.create_widget_definitions()
                 style = {
                     size = { 20 * stimm_scale, 20 * stimm_scale },
                     vertical_alignment = "center",
-                    horizontal_alignment = "center",
+                    horizontal_alignment = "left",
                     color = UIHudSettings.color_tint_main_1,
                     offset = { 0, 0, 1 },
                 },
@@ -70,12 +70,44 @@ function feature.create_widget_definitions()
                 style = {
                     size = { 20 * stimm_scale, 20 * stimm_scale },
                     vertical_alignment = "center",
-                    horizontal_alignment = "center",
+                    horizontal_alignment = "left",
                     color = UIHudSettings.color_tint_0,
                     offset = { 2 * stimm_scale, 2 * stimm_scale, 0 },
                 },
                 visibility_function = function(content, style)
                     return content.stimm_icon and _shadows_enabled("stimm")
+                end
+            },
+            {
+                pass_type = "text",
+                value_id = "stimm_countdown",
+                style_id = "stimm_countdown",
+                style = {
+                    font_size = 20 * stimm_scale,
+                    font_type = "machine_medium",
+                    text_vertical_alignment = "center",
+                    text_horizontal_alignment = "right",
+                    text_color = UIHudSettings.color_tint_1,
+                    offset = { 0, 0, 2 }
+                },
+                visibility_function = function(content, style)
+                    return content.stimm_countdown and content.stimm_countdown ~= ""
+                end
+            },
+            {
+                pass_type = "text",
+                value_id = "stimm_countdown",
+                style_id = "stimm_countdown_shadow",
+                style = {
+                    font_size = 20 * stimm_scale,
+                    font_type = "machine_medium",
+                    text_vertical_alignment = "center",
+                    text_horizontal_alignment = "right",
+                    text_color = UIHudSettings.color_tint_0,
+                    offset = { 2 * stimm_scale, 2 * stimm_scale, 1 }
+                },
+                visibility_function = function(content, style)
+                    return content.stimm_countdown and content.stimm_countdown ~= "" and _shadows_enabled("stimm")
                 end
             },
         }, feature_name)
@@ -118,6 +150,48 @@ function feature.update(parent)
 
     content.stimm_icon = weapon_template and weapon_template.hud_icon_small
     style.stimm_icon.color = color or { 255, 255, 255, 255 }
+
+    -- Calculate stimm buff and cooldown times
+    local buff_ext = player_extensions.buff
+    local ability_ext = player_extensions.ability
+    local stimm_countdown = ""
+    local countdown_color = UIHudSettings.color_tint_1
+
+    if buff_ext and ability_ext then
+        -- Check for active stimm buff (syringe_)
+        local buffs_by_index = buff_ext._buffs_by_index
+        if buffs_by_index then
+            local max_buff_time = 0
+            for _, buff in pairs(buffs_by_index) do
+                local template = buff:template()
+                if template and template.name and string.find(template.name, "^syringe") then
+                    local remaining = buff:duration_progress() or 1
+                    local duration = buff:duration() or 15
+                    local buff_time = duration * remaining
+                    max_buff_time = math.max(max_buff_time, buff_time)
+                end
+            end
+
+            -- Show active buff time (green)
+            if max_buff_time >= 0.05 then
+                stimm_countdown = string.format("%.0f", math.ceil(max_buff_time))
+                countdown_color = { 255, 0, 255, 0 }
+            end
+        end
+
+        -- If no active buff, check for cooldown
+        if stimm_countdown == "" then
+            local cooldown = ability_ext:remaining_ability_cooldown("pocketable_ability") or 0
+            -- Show cooldown time (red)
+            if cooldown >= 0.05 then
+                stimm_countdown = string.format("%.0f", math.ceil(cooldown))
+                countdown_color = { 255, 255, 0, 0 }
+            end
+        end
+    end
+
+    content.stimm_countdown = stimm_countdown
+    style.stimm_countdown.text_color = countdown_color
 end
 
 return feature

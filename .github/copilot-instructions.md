@@ -12,17 +12,9 @@ This repository contains Warhammer 40,000: Darktide mods written in Lua. The mod
 - Keep code changes as small as possible
 
 ### 2. Development Workflow
-The mods are developed in `/home/deathbeam/git/darktide-mods/mods/` but the game loads them from:
+The mods are developed in `/home/deathbeam/git/darktide-mods/mods/` but the game loads them from as symlink:
 ```
 /home/deathbeam/.local/share/Steam/steamapps/common/Warhammer 40,000 DARKTIDE/mods/
-```
-
-**Important**: After editing files, they must be **copied to the game directory** before restarting Darktide to see changes.
-
-Copy command:
-```bash
-cd /home/deathbeam/.local/share/Steam/steamapps/common/Warhammer\ 40,000\ DARKTIDE/mods
-cp -r /home/deathbeam/git/darktide-mods/mods/[ModName] .
 ```
 
 ### 3. Testing Changes
