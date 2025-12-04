@@ -11,7 +11,6 @@ Skitarius
 QuickDeploy
 AutoBlitz
 guarantee_weapon_swap
-hybrid_sprint
 
 -- General HUD
 custom_hud
@@ -20,7 +19,6 @@ scoreboard
 
 -- In Game HUD
 markers_aio
--- RingHud
 crosshair_hud
 Healthbars
 debuff_indicator
