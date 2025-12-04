@@ -238,13 +238,18 @@ mod:hook(CLASS.HudElementTacticalOverlay, "update", function(func, self, dt, t, 
 
     end
 
-    local in_hub = _is_in_hub()
-    local in_prologue_hub = _is_in_prologue_hub()
-    scoreboard_widget.visible = not in_hub and not in_prologue_hub
-    for i = 1, #self.row_widgets do
-        local widget = self.row_widgets[i]
-        widget.visible = not in_hub and not in_prologue_hub
-    end
+	local in_hub = _is_in_hub()
+	local in_prologue_hub = _is_in_prologue_hub()
+	if scoreboard_widget then
+		scoreboard_widget.visible = not in_hub and not in_prologue_hub
+	end
+
+	for i = 1, #self.row_widgets do
+		local widget = self.row_widgets[i]
+		if widget then
+			widget.visible = not in_hub and not in_prologue_hub
+		end
+	end
 
     --mod.animate_rows = function(self, dt, widgets_by_name, widget_times)
     -- mod:animate_rows(dt, self._widgets_by_name, self.widget_times)

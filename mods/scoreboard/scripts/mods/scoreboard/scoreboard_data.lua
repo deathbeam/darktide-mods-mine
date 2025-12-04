@@ -44,7 +44,12 @@ return {
 				["default_value"] = 1,
 				["options"] = {
 					{["text"] = "worst_values_normal", ["value"] = 1, ["show_widgets"] = {}},
-					{["text"] = "worst_values_dark", ["value"] = 2, ["show_widgets"] = {}},
+					{["text"] = "worst_values_grey", ["value"] = 2, ["show_widgets"] = {}},
+					{["text"] = "worst_values_red", ["value"] = 3, ["show_widgets"] = {}},
+					{["text"] = "worst_values_blue", ["value"] = 4, ["show_widgets"] = {}},
+					{["text"] = "worst_values_purple", ["value"] = 5, ["show_widgets"] = {}},
+					{["text"] = "worst_values_yellow", ["value"] = 6, ["show_widgets"] = {}},
+					{["text"] = "worst_values_pink", ["value"] = 7, ["show_widgets"] = {}},
 				},
 			},
 			{["setting_id"] = "dev_mode",

@@ -13,11 +13,11 @@ local settings_value_height = 64
 local base_z = 0
 
 local settings_ = {
-    width = 1000,
+    width = 1480, -- Increased for 6th column (300 + 180*6 = 1380, rounded up to 1480)
     height = 580,
     header_row = 50,
     header_column = 300,
-    column = 170,
+    column = 180,
 }
 
 local list_button_hotspot_default_style = {
@@ -193,7 +193,89 @@ local blueprints = {
                 },
                 custom = true,
             },
-            {value_id = "bg", -- 12 = Row background
+            {value_id = "bg4", -- 12 = Column background 4
+                value = "",
+                pass_type = "texture",
+                style = {
+                    horizontal_alignment = "left",
+                    color = Color.terminal_frame(100, true),
+                    disabled_color = Color.terminal_frame(100, true),
+                    default_color = Color.terminal_frame(100, true),
+                    hover_color = Color.terminal_frame(100, true),
+                    offset = {ScoreboardViewSettings.scoreboard_column_header_width + ScoreboardViewSettings.scoreboard_column_width*3, 0, base_z},
+		            size = {ScoreboardViewSettings.scoreboard_column_width, ScoreboardViewSettings.scoreboard_row_height},
+                }
+            },
+			{value_id = "icon_5", -- 13 = Icon 5
+				value = "content/ui/materials/icons/currencies/marks_big",
+				style_id = "icon_5",
+				pass_type = "texture",
+				style = {
+					offset = {ScoreboardViewSettings.scoreboard_column_header_width + ScoreboardViewSettings.scoreboard_column_width*4, 2, base_z + 1},
+					size = {ScoreboardViewSettings.scoreboard_row_height, ScoreboardViewSettings.scoreboard_row_height - 4},
+					visible = false,
+				},
+			},
+            {value_id = "text5", -- 14 = Text 5 (TOTAL COLUMN)
+                value = "text5",
+                pass_type = "text",
+                style = {
+		            offset = {ScoreboardViewSettings.scoreboard_column_header_width + ScoreboardViewSettings.scoreboard_column_width*4, 0, base_z + 1},
+		            size = {ScoreboardViewSettings.scoreboard_column_width, ScoreboardViewSettings.scoreboard_row_height},
+		            font_size = 16,
+		            text_horizontal_alignment = "center",
+		            text_vertical_alignment = "center",
+		            text_color = Color.terminal_text_header(255, true),
+		            color = Color.white(200, true),
+		            default_color = Color.white(200, true),
+		            hover_color = Color.white(200, true),
+		            disabled_color = Color.white(200, true),
+		            visible = true
+                },
+                custom = true,
+            },
+            {value_id = "bg5", -- 15 = Column background 5
+                value = "",
+                pass_type = "texture",
+                style = {
+                    horizontal_alignment = "left",
+                    color = Color.terminal_frame(100, true),
+                    disabled_color = Color.terminal_frame(100, true),
+                    default_color = Color.terminal_frame(100, true),
+                    hover_color = Color.terminal_frame(100, true),
+                    offset = {ScoreboardViewSettings.scoreboard_column_header_width + ScoreboardViewSettings.scoreboard_column_width*4, 0, base_z},
+		            size = {ScoreboardViewSettings.scoreboard_column_width, ScoreboardViewSettings.scoreboard_row_height},
+                }
+            },
+			{value_id = "icon_6", -- 16 = Icon 6
+				value = "content/ui/materials/icons/currencies/marks_big",
+				style_id = "icon_6",
+				pass_type = "texture",
+				style = {
+					offset = {ScoreboardViewSettings.scoreboard_column_header_width + ScoreboardViewSettings.scoreboard_column_width*5, 2, base_z + 1},
+					size = {ScoreboardViewSettings.scoreboard_row_height, ScoreboardViewSettings.scoreboard_row_height - 4},
+					visible = false,
+				},
+			},
+            {value_id = "text6", -- 17 = Text 6 (PERCENTAGE COLUMN)
+                value = "text6",
+                pass_type = "text",
+                style = {
+		            offset = {ScoreboardViewSettings.scoreboard_column_header_width + ScoreboardViewSettings.scoreboard_column_width*5, 0, base_z + 1},
+		            size = {ScoreboardViewSettings.scoreboard_column_width, ScoreboardViewSettings.scoreboard_row_height},
+		            font_size = 16,
+		            text_horizontal_alignment = "center",
+		            text_vertical_alignment = "center",
+		            text_color = Color.terminal_text_header(255, true),
+		            color = Color.white(200, true),
+		            default_color = Color.white(200, true),
+		            hover_color = Color.white(200, true),
+		            disabled_color = Color.white(200, true),
+		            visible = true
+                },
+                custom = true,
+            },
+            {value_id = "bg", -- 18 = Row background
                 value = "",
                 pass_type = "texture",
                 style = {

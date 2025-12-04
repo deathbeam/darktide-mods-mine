@@ -546,7 +546,7 @@ mod:hook(CLASS.InteracteeExtension, "stopped", function(func, self, result, ...)
 					-- Update scoreboard
 					mod:update_stat(material, account_id, count)
 
-				elseif type == "ammunition_" then
+				elseif type == "ammunition" then
 					-- Get pick up data
 					local ammo = mod.ammunition[self._override_contexts.ammunition.description]
 					-- Get components
@@ -554,12 +554,23 @@ mod:hook(CLASS.InteracteeExtension, "stopped", function(func, self, result, ...)
 					local unit_data_extension = ScriptUnit.extension(unit, "unit_data_system")
 					local wieldable_component = unit_data_extension:read_component("slot_secondary")
 					-- Get ammo numbers
-					local ammo_clip = wieldable_component.current_ammunition_clip
-					local max_ammo_clip = wieldable_component.max_ammunition_clip
-					local max_ammo_reserve = wieldable_component.max_ammunition_reserve
-					local current_ammo_reserve = mod.current_ammo[unit]
-					local max_ammo = max_ammo_reserve + max_ammo_clip
-					local current_ammo = current_ammo_reserve + ammo_clip
+						local function n(val)
+							local tv = _G.type(val)
+							if tv == "table" then
+								return tonumber(val[1]) or 0
+							end
+							if tv == "number" or tv == "string" then
+								return tonumber(val) or 0
+							end
+							return 0
+						end
+
+						local ammo_clip = n(wieldable_component.current_ammunition_clip)
+						local max_ammo_clip = n(wieldable_component.max_ammunition_clip)
+						local max_ammo_reserve = n(wieldable_component.max_ammunition_reserve)
+						local current_ammo_reserve = n(mod.current_ammo[unit])
+						local max_ammo = max_ammo_reserve + max_ammo_clip
+						local current_ammo = current_ammo_reserve + ammo_clip
 					local max_take = max_ammo - current_ammo
 					if ammo == "small_clip" then
 						mod:update_stat("ammo_small_picked_up", account_id, 1)
