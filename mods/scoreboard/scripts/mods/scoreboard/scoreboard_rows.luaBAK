@@ -1,16 +1,5 @@
 local mod = get_mod("scoreboard")
 
--- ##### ┌─┐┌─┐┬─┐┌─┐┌─┐┬─┐┌┬┐┌─┐┌┐┌┌─┐┌─┐ ############################################################################
--- ##### ├─┘├┤ ├┬┘├┤ │ │├┬┘│││├─┤││││  ├┤  ############################################################################
--- ##### ┴  └─┘┴└─└  └─┘┴└─┴ ┴┴ ┴┘└┘└─┘└─┘ ############################################################################
-
-local math = math
-local type = type
-local pairs = pairs
-local get_mod = get_mod
-local math_max = math.max
-local table_insert = table.insert
-
 -- ##### ██████╗  █████╗ ████████╗ █████╗  ############################################################################
 -- ##### ██╔══██╗██╔══██╗╚══██╔══╝██╔══██╗ ############################################################################
 -- ##### ██║  ██║███████║   ██║   ███████║ ############################################################################
@@ -419,7 +408,7 @@ mod.scoreboard_rows = {
 		group = "offense",
 		setting = "plugin_lesser_enemies",
 	},
-	{name = "chaos_newly_infected",
+		{name = "chaos_newly_infected",
 		text = "chaos_newly_infected",
 		validation = "ASC",
 		iteration = "ADD",
@@ -638,9 +627,7 @@ mod.scoreboard_rows = {
 		iteration = "ADD",
 		summary = {
 			"chaos_hound",
-			"chaos_hound_mutator",
 			"cultist_mutant",
-			"cultist_mutant_mutator",
 			"renegade_netgunner",
 		},
 		group = "offense",
@@ -654,23 +641,7 @@ mod.scoreboard_rows = {
 		group = "offense",
 		setting = "plugin_disabler_threats",
 	},
-	{name = "chaos_hound_mutator",
-		text = "Pox Hound",
-		validation = "ASC",
-		iteration = "ADD",
-		visible = false,
-		group = "offense",
-		setting = "plugin_disabler_threats",
-	},
 	{name = "cultist_mutant",
-		text = "Mutant",
-		validation = "ASC",
-		iteration = "ADD",
-		visible = false,
-		group = "offense",
-		setting = "plugin_disabler_threats",
-	},
-	{name = "cultist_mutant_mutator",
 		text = "Mutant",
 		validation = "ASC",
 		iteration = "ADD",
@@ -761,7 +732,6 @@ mod.scoreboard_rows = {
 			"chaos_plague_ogryn",
 			"chaos_plague_ogryn_sprayer",
 			"renegade_captain",
-			"cultist_captain",
 			"chaos_spawn",
 			"renegade_twin_captain",
 			"renegade_twin_captain_two",
@@ -802,14 +772,6 @@ mod.scoreboard_rows = {
 		setting = "plugin_boss_threats",
 	},
 	{name = "renegade_captain",
-		text = "Captain",
-		validation = "ASC",
-		iteration = "ADD",
-		visible = false,
-		group = "offense",
-		setting = "plugin_boss_threats",
-	},
-	{name = "cultist_captain",
 		text = "Captain",
 		validation = "ASC",
 		iteration = "ADD",
@@ -867,7 +829,7 @@ mod.collect_scoreboard_rows = function(self, loaded_rows)
 		for _, template in pairs(mod.scoreboard_rows) do
 			local entry = self:register_scoreboard_row(mod, template)
 			local index = #self.registered_scoreboard_rows + 1
-			table_insert(self.registered_scoreboard_rows, index, entry)
+			table.insert(self.registered_scoreboard_rows, index, entry)
 		end
 		-- Add rows from other mods
 		for _, this_mod in pairs(DMF.mods) do
@@ -875,7 +837,7 @@ mod.collect_scoreboard_rows = function(self, loaded_rows)
 				for _, template in pairs(this_mod.scoreboard_rows) do
 					local entry = self:register_scoreboard_row(this_mod, template)
 					local index = #self.registered_scoreboard_rows + 1
-					table_insert(self.registered_scoreboard_rows, index, entry)
+					table.insert(self.registered_scoreboard_rows, index, entry)
 				end
 			end
 		end
@@ -944,7 +906,7 @@ end
 mod.update_row_value = function(self, row_name, account_id, value)
 	if self:is_numeric(value) then
 		-- Normalize value
-		local value = value and math_max(0, value) or 0
+		local value = value and math.max(0, value) or 0
 		-- Get row
 		local row = self:get_scoreboard_row(row_name)
 		if row then

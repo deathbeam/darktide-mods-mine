@@ -38,6 +38,13 @@ local ScoreboardData = mod:io_dofile("scoreboard/scripts/mods/scoreboard/scorebo
 function mod.on_game_state_changed(status, state_name)
 	-- Clear row values on game state enter
 	if state_name == "StateGameplay" and status == "enter" then mod:clear() end
+	if state_name == "GameplayStateRun" and status == "enter" and Managers.state.mission:mission().name ~= "hub_ship" then
+		in_match = true
+		havoc_manager = Managers.state.havoc
+		is_playing_havoc = havoc_manager:is_havoc()
+		if is_playing_havoc then
+		mission_resistance =.. "Havoc"
+	else end
 end
 
 function mod.on_all_mods_loaded()

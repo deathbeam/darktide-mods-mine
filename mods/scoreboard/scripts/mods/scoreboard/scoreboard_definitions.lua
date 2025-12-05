@@ -30,10 +30,9 @@ local base_validation_types = {
         if data[account_id] then
             local score = data[account_id].score or 0
             for name, values in pairs(data) do
-                local values_score = values.score or 0
-                if values_score > score then
+                if values.score > score then
                     best = name
-                    score = values_score
+                    score = values.score
                 end
             end
         end
@@ -44,10 +43,9 @@ local base_validation_types = {
         if data[account_id] then
             local score = data[account_id].score or 0
             for name, values in pairs(data) do
-                local values_score = values.score or 0
-                if values_score < score then
+                if values.score < score then
                     worst = name
-                    score = values_score
+                    score = values.score
                 end
             end
         end

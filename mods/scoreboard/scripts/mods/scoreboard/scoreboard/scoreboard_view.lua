@@ -8,6 +8,7 @@ local DMF = get_mod("DMF")
 -- ##### ██████╔╝██║  ██║   ██║   ██║  ██║ ############################################################################
 -- ##### ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝ ############################################################################
 
+local UISettings = mod:original_require("scripts/settings/ui/ui_settings")
 local TextUtilities = mod:original_require("scripts/utilities/ui/text")
 local UIFonts = mod:original_require("scripts/managers/ui/ui_fonts")
 local UIRenderer = mod:original_require("scripts/managers/ui/ui_renderer")
@@ -385,15 +386,15 @@ mod.create_row_widget = function(self, index, current_offset, visible_rows, this
         end
     end
 
-    local player_pass_map = {3, 6, 8, 11, 14, 17} -- Added 6th column (index 17) for percentage
-    local icon_pass_map = {["3"] = 2, ["6"] = 5, ["8"] = 7, ["11"] = 10, ["14"] = 13, ["17"] = 16} -- Added 6th icon
-    local background_pass_map = {["3"] = 4, ["8"] = 9, ["14"] = 12, ["17"] = 15} -- Added 6th background
+    local player_pass_map = {3, 6, 8, 11}
+    local icon_pass_map = {["3"] = 2, ["6"] = 5, ["8"] = 7, ["11"] = 10}
+    local background_pass_map = {["3"] = 4, ["8"] = 9}
     local players = loaded_players or player_manager:players()
 
     -- Fill rows
     local player_num = 1
     for _, player in pairs(players) do
-        if player_num < 6 then -- Changed from 5 to 6 to support 5 players/columns
+        if player_num < 5 then
             local account_id = player:account_id() or player:name()
             for _, group in pairs(sorted_rows) do
                 for _, row in pairs(group) do
@@ -414,19 +415,23 @@ mod.create_row_widget = function(self, index, current_offset, visible_rows, this
         pass_template[1].value = ""
         pass_template[1].style.font_size = font_size
         local num_players = 0
-        for i = 1, 4, 1 do -- Keep this at 4 since only first 4 columns are for players
+        for i = 1, 4, 1 do
             pass_template[player_pass_map[i]].value = ""
         end
         for _, player in pairs(players) do
             num_players = num_players + 1
-            if num_players <= 4 then -- Keep this at 4 since only first 4 columns are for players
+            if num_players <= 4 then
                 if player.name then
                     local name = player:name()
                     local account_id = player:account_id() or player:name()
                     if mod:is_me(account_id) then
                         name = TextUtilities.apply_color_to_text(name, Color.ui_orange_light(255, true))
                     end
-                    local symbol = player.string_symbol or player._profile and player._profile.archetype.string_symbol
+                    local symbol = player.string_symbol --or player._profile and player._profile.archetype.string_symbol
+                    local profile = player.profile and player:profile()
+			        local archetype_name = profile and profile.archetype and profile.archetype.name
+                    -- local archetype_name = player._profile.archetype and player._profile.archetype.name
+			        symbol = symbol or (archetype_name and UISettings.archetype_font_icon[archetype_name])
                     if symbol then
                         name = symbol.." "..name
                     end
@@ -434,15 +439,6 @@ mod.create_row_widget = function(self, index, current_offset, visible_rows, this
                 end
             end
         end
-        
-        -- Set headers for total and percentage columns
-        local total_pass_index = player_pass_map[5]
-        pass_template[total_pass_index].value = "TOTAL"
-        pass_template[total_pass_index].style.text_color = Color.ui_grey_light(255, true)
-        
-        local percentage_pass_index = player_pass_map[6]
-        pass_template[percentage_pass_index].value = "MY %"
-        pass_template[percentage_pass_index].style.text_color = Color.ui_grey_light(255, true)
     end
 
     -- Localize row name
@@ -618,13 +614,13 @@ mod.create_row_widget = function(self, index, current_offset, visible_rows, this
     -- Set row texts
     if not header and #children == 0 then
         local player_num = 1
-        for i = 1, 6, 1 do -- Changed from 5 to 6 for 6th column
+        for i = 1, 4, 1 do
             local pass_index = player_pass_map[i]
             pass_template[pass_index].value = ""
             pass_template[icon_pass_map[tostring(pass_index)]].style.visible = false
         end
         for _, player in pairs(players) do
-            if player_num < 5 then -- Keep this at 4+1=5 since only first 4 columns are for players
+            if player_num < 5 then
                 local account_id = player:account_id() or player:name()
                 local pass_index = player_pass_map[player_num]
 
@@ -666,17 +662,7 @@ mod.create_row_widget = function(self, index, current_offset, visible_rows, this
                             color = Color.ui_orange_light(255, true)
                         elseif row_data and row_data.is_worst then
                             if worst_setting == 2 then
-                                color = Color.ui_grey_light(255, true)      -- Grey (original)
-                            elseif worst_setting == 3 then
-                                color = Color.ui_red_light(255, true)       -- Red
-                            elseif worst_setting == 4 then
-                                color = Color.ui_blue_light(255, true)      -- Blue
-                            elseif worst_setting == 5 then
-                                color = Color.ui_purple_light(255, true)    -- Purple
-                            elseif worst_setting == 6 then
-                                color = Color.ui_yellow_light(255, true)    -- Yellow
-                            elseif worst_setting == 7 then
-                                color = Color.ui_pink_light(255, true)      -- Pink
+                                color = Color.ui_grey_light(255, true)
                             end
                         end
                     end
@@ -722,71 +708,6 @@ mod.create_row_widget = function(self, index, current_offset, visible_rows, this
                 pass_template[pass_index].value = score
             end
             player_num = player_num + 1
-        end
-        
-        -- Calculate and display total in 5th column and percentage in 6th column
-        if not this_row.is_text and not has_mytext and this_row.data then
-            local total_score = 0
-            local has_data = false
-            local player_scores = {}
-            
-            -- First pass: collect all scores and calculate total
-            local player_num_calc = 1
-            for _, player in pairs(players) do
-                if player_num_calc <= 4 then -- Only first 4 players
-                    local account_id = player:account_id() or player:name()
-                    local row_data = this_row.data and this_row.data[account_id]
-                    if row_data and row_data.score then
-                        local score = row_data.score or 0
-                        total_score = total_score + score
-                        player_scores[account_id] = score
-                        has_data = true
-                    end
-                    player_num_calc = player_num_calc + 1
-                end
-            end
-            
-            if has_data then
-                local decimals = this_row.decimals or 0
-                decimals = this_row.is_time and 1 or decimals
-                local total_text = this_row.is_time and mod:shorten_time(total_score, decimals) or mod:shorten_value(total_score, decimals)
-                
-                -- Set total in 5th column
-                local total_pass_index = player_pass_map[5]
-                pass_template[total_pass_index].value = total_text
-                pass_template[total_pass_index].style.text_color = Color.terminal_text_header(255, true) -- Different color for totals
-                
-                -- Calculate and display percentage for current player in 6th column
-                if total_score > 0 then
-                    local current_player = Managers.player:local_player(1)
-                    if current_player then
-                        local current_account_id = current_player:account_id() or current_player:name()
-                        local current_score = player_scores[current_account_id] or 0
-                        local percentage = (current_score / total_score) * 100
-                        local percentage_text = string.format("%.1f%%", percentage)
-                        
-                        -- Set percentage in 6th column
-                        local percentage_pass_index = player_pass_map[6]
-                        pass_template[percentage_pass_index].value = percentage_text
-                        
-                        -- Color code the percentage
-                        if percentage >= 40 then
-                            pass_template[percentage_pass_index].style.text_color = Color.ui_green_light(255, true) -- Green for high %
-                        elseif percentage >= 25 then
-                            pass_template[percentage_pass_index].style.text_color = Color.terminal_text_header(255, true) -- Normal for average %
-                        else
-                            pass_template[percentage_pass_index].style.text_color = Color.ui_red_light(255, true) -- Red for low %
-                        end
-                    end
-                end
-            end
-        elseif this_row.is_text then
-            -- For regular text rows, leave the total and percentage columns empty
-            local total_pass_index = player_pass_map[5]
-            pass_template[total_pass_index].value = ""
-            
-            local percentage_pass_index = player_pass_map[6]
-            pass_template[percentage_pass_index].value = ""
         end
     end
 
@@ -837,9 +758,13 @@ mod.create_row_widget = function(self, index, current_offset, visible_rows, this
             local num_players = 0
             for _, player in pairs(players) do
                 num_players = num_players + 1
-                if num_players <= 4 and ui_renderer then -- Keep at 4 since only first 4 columns are for players
+                if num_players <= 4 and ui_renderer then
                     local player_name = player:name()
-                    local symbol = player.string_symbol or player._profile and player._profile.archetype.string_symbol
+                    local symbol = player.string_symbol --or player._profile and player._profile.archetype.string_symbol
+                    local profile = player.profile and player:profile()
+			        local archetype_name = profile and profile.archetype and profile.archetype.name
+                    -- local archetype_name = player._profile.archetype and player._profile.archetype.name
+			        symbol = symbol or (archetype_name and UISettings.archetype_font_icon[archetype_name])
                     if symbol then
                         player_name = symbol.." "..player_name
                     end
@@ -850,7 +775,7 @@ mod.create_row_widget = function(self, index, current_offset, visible_rows, this
             local num_players = 0
             for _, player in pairs(players) do
                 num_players = num_players + 1
-                if num_players <= 4 and ui_renderer then -- Keep at 4 since only first 4 columns are for players
+                if num_players <= 4 and ui_renderer then
                     local account_id = player:account_id() or player:name()
                     local score = this_row.data[account_id].text
                     if score == nil then score = "lol" end
@@ -863,7 +788,7 @@ mod.create_row_widget = function(self, index, current_offset, visible_rows, this
             local num_players = 0
             for _, player in pairs(players) do
                 num_players = num_players + 1
-                if num_players <= 4 and ui_renderer then -- Keep at 4 since only first 4 columns are for players
+                if num_players <= 4 and ui_renderer then
                     local account_id = player:account_id() or player:name()
                     local score = this_row.data[account_id].text_data
                     if score == nil then score = "lol" end
