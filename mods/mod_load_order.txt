@@ -7,15 +7,16 @@
 -- ################################################################
 
 -- Gameplay
-Skitarius
 QuickDeploy
 AutoBlitz
-BrokerAutoStim
 guarantee_weapon_swap
+BrokerAutoStim
+Skitarius
 
 -- General HUD
 how_did_I_get_that
 Enhanced_descriptions
+hub_hotkey_menus
 scoreboard
 
 -- In Game HUD
