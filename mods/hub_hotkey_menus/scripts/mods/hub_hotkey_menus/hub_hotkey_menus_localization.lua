@@ -5,14 +5,14 @@ return {
     ru = "Горячие клавиши меню для Хаба",
   },
   mod_description = {
-    en = "Open various menus from the Main Hub with hotkeys or from the main menu with buttons.",
+    en = "Open various menus from the Main Hub and Meat Grinder with hotkeys.",
     ["zh-cn"] = "通过快捷键打开哀星号上的各种菜单。",
     ru = "Hub Hotkey Menus - Открывайте различные меню в Хабе с помощью горячих клавиш.",
   },
-  enable_buttons = {
-    en = "Enable Menu Buttons (Main Menu)",
-    ru = "Включить кнопки меню (Главное меню)",
-    ["zh-cn"] = "启用菜单按钮（主菜单）",
+  show_hotkey_list = {
+    en = "Show Hotkey List",
+    ru = "Показать список горячих клавиш",
+    ["zh-cn"] = "显示快捷键列表",
   },
   enable_in_pykhanium = {
     en = "Enable Hotkeys in the Psykhanium",

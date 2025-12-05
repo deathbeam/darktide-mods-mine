@@ -7,9 +7,9 @@ return {
   options = {
     widgets = {
       {
-        setting_id    = "enable_buttons",
+        setting_id    = "show_hotkey_list",
         type          = "checkbox",
-        default_value = false,
+        default_value = true,
       },
       {
         setting_id    = "enable_in_pykhanium",
