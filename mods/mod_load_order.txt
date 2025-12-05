@@ -30,6 +30,7 @@ Spidey Sense
 -- In Game overlay HUD
 SpawnFeed
 Killfeed Details
+kill_tracker
 
 -- Enemies HUD
 Healthbars
