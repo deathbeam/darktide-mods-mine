@@ -10,7 +10,7 @@
 QuickDeploy
 AutoBlitz
 guarantee_weapon_swap
-BrokerAutoStim
+ChemicalAutoStim
 Skitarius
 
 -- General HUD
