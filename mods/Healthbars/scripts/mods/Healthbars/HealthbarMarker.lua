@@ -372,8 +372,8 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				position = { 0, 0, 0 },
 				offset = {
 					-(template.size[1] / 2) + 20,
-					-20,
-					4,
+					-40,
+					10,
 				},
 				size = {
 					25,
@@ -398,15 +398,17 @@ template.create_widget_defintion = function(template, scenegraph_id)
 			style = {
 				vertical_alignment = "center",
 				horizontal_alignment = "right",
+				text_vertical_alignment = "center",
+				text_horizontal_alignment = "right",
 				position = { 0, 0, 0 },
 				offset = {
-					-(template.size[1] / 2) + 20 + 20,
-					-20,
-					4,
+					-(template.size[1] / 2) + 20 + 10,
+					-40,
+					10,
 				},
 				size = {
-					20,
-					20,
+					25,
+					25,
 				},
 				font_type = header_font_settings.font_type,
 				font_size = 14,
@@ -428,9 +430,9 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				horizontal_alignment = "right",
 				position = { 0, 0, 0 },
 				offset = {
-					-(template.size[1] / 2) + 20 + 20 + 20,
-					-20,
-					4,
+					-(template.size[1] / 2) + 20 + 10 + 20 + 10,
+					-40,
+					10,
 				},
 				size = {
 					25,
@@ -455,43 +457,17 @@ template.create_widget_defintion = function(template, scenegraph_id)
 			style = {
 				vertical_alignment = "center",
 				horizontal_alignment = "right",
+				text_vertical_alignment = "center",
+				text_horizontal_alignment = "right",
 				position = { 0, 0, 0 },
 				offset = {
-					-(template.size[1] / 2) + 20 + 20 + 20 + 20,
-					-20,
-					4,
+					-(template.size[1] / 2) + 20 + 10 + 20 + 10 + 10,
+					-40,
+					10,
 				},
 				size = {
-					20,
-					20,
-				},
-				font_type = header_font_settings.font_type,
-				font_size = 14,
-				text_color = {
-					255,
-					255,
-					102,
-					0,
-				},
-			},
-		},
-		{
-			pass_type = "text",
-			style_id = "status_stacks_2",
-			value_id = "status_stacks_2",
-			value = "",
-			style = {
-				vertical_alignment = "center",
-				horizontal_alignment = "right",
-				position = { 0, 0, 0 },
-				offset = {
-					-(template.size[1] / 2) + 20 + 20 + 20 + 20,
-					-20,
-					4,
-				},
-				size = {
-					20,
-					20,
+					25,
+					25,
 				},
 				font_type = header_font_settings.font_type,
 				font_size = 14,
@@ -513,9 +489,9 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				horizontal_alignment = "right",
 				position = { 0, 0, 0 },
 				offset = {
-					-(template.size[1] / 2) + 20 + 20 + 20 + 20 + 20 + 20,
-					-20,
-					4,
+					-(template.size[1] / 2) + 20 + 10 + 20 + 10 + 10 + 20 + 10,
+					-40,
+					10,
 				},
 				size = {
 					25,
@@ -540,15 +516,17 @@ template.create_widget_defintion = function(template, scenegraph_id)
 			style = {
 				vertical_alignment = "center",
 				horizontal_alignment = "right",
+				text_vertical_alignment = "center",
+				text_horizontal_alignment = "right",
 				position = { 0, 0, 0 },
 				offset = {
-					-(template.size[1] / 2) + 20 + 20 + 20 + 20 + 20 + 20 + 20,
-					-20,
-					4,
+					-(template.size[1] / 2) + 20 + 10 + 20 + 10 + 10 + 20 + 10 + 10,
+					-40,
+					10,
 				},
 				size = {
-					20,
-					20,
+					25,
+					25,
 				},
 				font_type = header_font_settings.font_type,
 				font_size = 14,
