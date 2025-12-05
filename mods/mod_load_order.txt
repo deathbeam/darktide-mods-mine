@@ -22,6 +22,7 @@ scoreboard
 custom_hud
 crosshair_hud
 markers_aio
+show_crit_chance
 DynamicCrosshair
 Spidey Sense
 
