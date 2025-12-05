@@ -15,6 +15,7 @@ guarantee_weapon_swap
 
 -- General HUD
 how_did_I_get_that
+Enhanced_descriptions
 scoreboard
 
 -- In Game HUD

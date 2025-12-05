@@ -790,24 +790,18 @@ function feature.update(parent, dt, t)
       local player = PlayerCompositions.player_from_unique_id(feature._player_composition_name, unique_id)
       if not player or player.__deleted then
         ally_content.visible = false
-        
-        -- Clean up wounds widgets for this player BEFORE removing from table
-        if unique_id then
-          local old_player = feature._players[i]
-          local wounds_widgets = feature._wounds_widgets_by_player[old_player]
-          if wounds_widgets then
-            for _, wounds_widget in pairs(wounds_widgets) do
-              local index = table.index_of(parent._widgets, wounds_widget)
-              if index then
-                parent:_unregister_widget_name(wounds_widget.name)
-                table.remove(parent._widgets, index)
-              end
-            end
-            feature._wounds_widgets_by_player[old_player] = nil
+        table.remove(feature._players, i)
+
+        local wounds_widgets = feature._wounds_widgets_by_player[player] or {}
+        for _, wounds_widget in pairs(wounds_widgets) do
+          local index = table.index_of(parent._widgets, wounds_widget)
+          if index then
+            parent:_unregister_widget_name(wounds_widget.name)
+            table.remove(parent._widgets, index)
           end
         end
-        
-        table.remove(feature._players, i)
+
+        table.clear(wounds_widgets)
 
         break
       end

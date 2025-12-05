@@ -1,6 +1,5 @@
 local mod = get_mod("crosshair_hud")
-local mods_settings = Application.user_setting("mods_settings") or {}
-local mod_settings = mods_settings.crosshair_hud or {}
+local mod_settings = Application.user_setting("mods_settings").crosshair_hud or {}
 
 local migrations = {
   {

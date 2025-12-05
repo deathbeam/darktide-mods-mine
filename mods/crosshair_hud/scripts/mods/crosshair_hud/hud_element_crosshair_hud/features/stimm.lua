@@ -43,7 +43,7 @@ local _stimm_colors = {
     syringe_ability_boost_pocketable = { 255, 230, 192, 13 },
     syringe_power_boost_pocketable = { 255, 205, 51, 26 },
     syringe_speed_boost_pocketable = { 255, 0, 127, 218 },
-    syringe_broker_pocketable = { 255, 178, 102, 255 }, -- syringe_broker_buff buff name
+    syringe_broker_pocketable = { 255, 178, 102, 255 },
 }
 
 local _stimm_icons = {
@@ -145,14 +145,12 @@ function feature.update(parent)
     local ability_ext = player_extensions.ability
     local visual_loadout_extension = player_extensions.visual_loadout
     
-    -- Calculate stimm buff and cooldown times
     local stimm_countdown = ""
     local countdown_color = UIHudSettings.color_tint_1
     local active_stimm_name = nil
     local has_active_buff = false
 
     if buff_ext and ability_ext then
-        -- Check for active stimm buff (syringe_)
         local buffs_by_index = buff_ext._buffs_by_index
         if buffs_by_index then
             local max_buff_time = 0
@@ -164,13 +162,11 @@ function feature.update(parent)
                     local buff_time = duration * remaining
                     if buff_time > max_buff_time then
                         max_buff_time = buff_time
-                        -- Extract stimm name from buff (e.g., syringe_broker_buff -> syringe_broker_pocketable)
                         active_stimm_name = string.gsub(template.name, "_buff$", "_pocketable")
                     end
                 end
             end
 
-            -- Show active buff time (green)
             if max_buff_time >= 0.05 then
                 stimm_countdown = string.format("%.0f", math.ceil(max_buff_time))
                 countdown_color = { 255, 0, 255, 0 }
@@ -178,10 +174,8 @@ function feature.update(parent)
             end
         end
 
-        -- If no active buff, check for cooldown
         if stimm_countdown == "" then
             local cooldown = ability_ext:remaining_ability_cooldown("pocketable_ability") or 0
-            -- Show cooldown time (red)
             if cooldown >= 0.05 then
                 stimm_countdown = string.format("%.0f", math.ceil(cooldown))
                 countdown_color = { 255, 255, 0, 0 }
@@ -189,7 +183,6 @@ function feature.update(parent)
         end
     end
 
-    -- Get current pocketable or use active buff name
     local weapon_template = visual_loadout_extension:weapon_template_from_slot("slot_pocketable_small")
     local stimm_name = nil
     
@@ -199,7 +192,6 @@ function feature.update(parent)
         stimm_name = active_stimm_name
     end
 
-    -- Hide if no pocketable and no active buff
     if not stimm_name then
         content.visible = false
         return
@@ -211,11 +203,9 @@ function feature.update(parent)
         color = RecolorStimms.get_stimm_argb_255(stimm_name)
     end
 
-    -- Use weapon template icon if available, otherwise use generic icon based on stimm name
     if weapon_template then
         content.stimm_icon = weapon_template.hud_icon_small
     else
-        -- Fallback icon when pocketable is consumed but buff is active
         content.stimm_icon = _stimm_icons[stimm_name]
     end
     
