@@ -30,4 +30,3 @@ Killfeed Details
 
 -- Enemies HUD
 Healthbars
-debuff_indicator

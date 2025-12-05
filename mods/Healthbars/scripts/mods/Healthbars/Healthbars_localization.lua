@@ -66,6 +66,11 @@ local localization = {
 		["zh-cn"] = "显示燃烧层数",
 		ru = "Заряды горения",
 	},
+	toxin = {
+		en = "Show toxin stacks",
+		["zh-cn"] = "显示毒素层数",
+		ru = "Заряды токсина",
+	},
 }
 
 for breed_name, breed in pairs(Breeds) do
