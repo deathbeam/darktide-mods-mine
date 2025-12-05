@@ -10,18 +10,24 @@
 Skitarius
 QuickDeploy
 AutoBlitz
+BrokerAutoStim
 guarantee_weapon_swap
 
 -- General HUD
-custom_hud
 how_did_I_get_that
 scoreboard
 
 -- In Game HUD
-markers_aio
+custom_hud
 crosshair_hud
-Healthbars
-debuff_indicator
+markers_aio
+DynamicCrosshair
+Spidey Sense
+
+-- In Game overlay HUD
 SpawnFeed
 Killfeed Details
-Spidey Sense
+
+-- Enemies HUD
+Healthbars
+debuff_indicator
