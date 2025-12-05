@@ -5,6 +5,7 @@ local horde_and_roamers = {}
 local elites = {}
 local specials = {}
 local monsters = {}
+local ritualists = {}
 
 local function add(tbl, breed_name, default_value)
 	tbl[#tbl + 1] = {
@@ -17,7 +18,7 @@ end
 for breed_name, breed in pairs(Breeds) do
 	if breed.tags.minion then
 		local default_value = false
-		if breed.tags.elite or breed.tags.special then
+		if breed.tags.elite or breed.tags.special or breed.tags.ritualist then
 			default_value = true
 		end
 
@@ -29,6 +30,8 @@ for breed_name, breed in pairs(Breeds) do
 			add(specials, breed_name, default_value)
 		elseif breed.tags.monster or breed.tags.captain or breed.tags.cultist_captain then
 			add(monsters, breed_name, default_value)
+		elseif breed.tags.ritualist then
+			add(ritualists, breed_name, default_value)
 		end
 	end
 end
@@ -94,6 +97,11 @@ local widgets = {
 		setting_id = "monster_breeds",
 		type = "group",
 		sub_widgets = monsters,
+	},
+	{
+		setting_id = "ritualist_breeds",
+		type = "group",
+		sub_widgets = ritualists,
 	},
 }
 
