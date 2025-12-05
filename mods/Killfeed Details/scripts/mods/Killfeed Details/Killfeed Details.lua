@@ -55,6 +55,7 @@ local ICON_TABLE = {
     electricity                            = "content/ui/materials/icons/presets/preset_11",
     psyker_heavy_swings_shock              = "content/ui/materials/icons/presets/preset_11",
     powermaul_p2_stun_interval             = "content/ui/materials/icons/presets/preset_11",
+    powermaul_p2_stun_interval_basic       = "content/ui/materials/icons/presets/preset_11",
     shockmaul_stun_interval_damage         = "content/ui/materials/icons/presets/preset_11",
     shock_grenade_stun_interval            = "content/ui/materials/icons/presets/preset_11",
     protectorate_force_field               = "content/ui/materials/icons/presets/preset_11",
@@ -383,7 +384,7 @@ mod:hook("AttackReportManager", "_process_attack_result", function(func, self, b
 
 	if attacking_player then
 		local tags = breed_or_nil and breed_or_nil.tags
-		local allowed_breed = tags and (tags.monster or tags.special or tags.elite)
+		local allowed_breed = tags and (tags.captain or tags.monster or tags.special or tags.elite)
 
 		if allowed_breed and attack_result == AttackSettings.attack_results.died then
 			table.insert(MOD.BUFFER, {
@@ -394,6 +395,10 @@ mod:hook("AttackReportManager", "_process_attack_result", function(func, self, b
                 is_critical = is_critical_strike,
                 hit_weakspot = hit_weakspot
             })
+            -- Add Captains
+            if tags.captain then
+                Managers.event:trigger("event_combat_feed_kill", attacking_unit, attacked_unit)
+            end
 		end
 	end
     return func(self, buffer_data)
