@@ -415,7 +415,7 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				text_color = {
 					255,
 					255,
-					0,
+					255,
 					0,
 				},
 			},
@@ -474,7 +474,7 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				text_color = {
 					255,
 					255,
-					102,
+					255,
 					0,
 				},
 			},
@@ -532,7 +532,7 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				font_size = 14,
 				text_color = {
 					255,
-					0,
+					255,
 					255,
 					0,
 				},
@@ -639,7 +639,6 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 		if marker.debuffs[1] then
 			content.status_icon_1 = mod.textures[marker.debuffs[1].type]
 			style.status_icon_1.color = mod.colors[marker.debuffs[1].type]
-			style.status_stacks_1.text_color = mod.colors[marker.debuffs[1].type]
 			content.status_stacks_1 = marker.debuffs[1].stacks
 		else
 			content.status_icon_1 = nil
@@ -649,7 +648,6 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 		if marker.debuffs[2] then
 			content.status_icon_2 = mod.textures[marker.debuffs[2].type]
 			style.status_icon_2.color = mod.colors[marker.debuffs[2].type]
-			style.status_stacks_2.text_color = mod.colors[marker.debuffs[2].type]
 			content.status_stacks_2 = marker.debuffs[2].stacks
 		else
 			content.status_icon_2 = nil
@@ -659,7 +657,6 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 		if marker.debuffs[3] then
 			content.status_icon_3 = mod.textures[marker.debuffs[3].type]
 			style.status_icon_3.color = mod.colors[marker.debuffs[3].type]
-			style.status_stacks_3.text_color = mod.colors[marker.debuffs[3].type]
 			content.status_stacks_3 = marker.debuffs[3].stacks
 		else
 			content.status_icon_3 = nil
