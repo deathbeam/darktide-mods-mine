@@ -13,6 +13,10 @@ guarantee_weapon_swap
 ChemicalAutoStim
 Skitarius
 
+-- Debugging
+creature_spawner
+show_crit_chance
+
 -- General HUD
 how_did_I_get_that
 Enhanced_descriptions
@@ -23,7 +27,6 @@ scoreboard
 custom_hud
 crosshair_hud
 markers_aio
-show_crit_chance
 DynamicCrosshair
 Spidey Sense
 
