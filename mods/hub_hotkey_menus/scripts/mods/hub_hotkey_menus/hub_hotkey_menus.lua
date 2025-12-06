@@ -31,14 +31,44 @@ end
 
 local activate_hub_view = function(view)
 	local ui_manager = Managers.ui
-
 	if ui_manager and close_views(view, ui_manager) and can_activate_view(ui_manager, view) then
-		local context = {
+		ui_manager:open_view(view, nil, nil, nil, nil, {
 			hub_interaction = true
-		}
-
-		ui_manager:open_view(view, nil, nil, nil, nil, context)
+		})
 	end
+end
+
+local function insert_after(list, predicate, item)
+	local new_list = table.clone(list)
+	
+	for i, entry in ipairs(new_list) do
+		if predicate(entry) then
+			table.insert(new_list, i + 1, item)
+			return new_list
+		end
+	end
+	
+	table.insert(new_list, item)
+	return new_list
+end
+
+local function is_in_hub()
+	if Managers and Managers.state and Managers.state.game_mode then
+		local game_mode_name = Managers.state.game_mode:game_mode_name()
+		return game_mode_name == "hub" or (game_mode_name == "shooting_range" and mod:get("enable_in_pykhanium"))
+	end
+	return false
+end
+
+local function is_social_button(item)
+	return item.text == "loc_social_view_display_name"
+end
+
+local function open_view_from_system_menu(view_name)
+	Managers.ui:close_view("system_view")
+	Managers.ui:open_view(view_name, nil, nil, nil, nil, {
+		hub_interaction = true
+	})
 end
 
 mod.activate_barber_vendor_background_view = function(self)
@@ -89,32 +119,6 @@ mod.activate_havoc_background_view = function(self)
 	activate_hub_view("havoc_background_view")
 end
 
-local function insert_after(list, predicate, item)
-	local new_list = table.clone(list)
-	
-	for i, entry in ipairs(new_list) do
-		if predicate(entry) then
-			table.insert(new_list, i + 1, item)
-			return new_list
-		end
-	end
-	
-	table.insert(new_list, item)
-	return new_list
-end
-
-local function is_in_hub()
-	if Managers and Managers.state and Managers.state.game_mode then
-		local game_mode_name = Managers.state.game_mode:game_mode_name()
-		return game_mode_name == "hub" or (game_mode_name == "shooting_range" and mod:get("enable_in_pykhanium"))
-	end
-	return false
-end
-
-local function is_social_button(item)
-	return item.text == "loc_social_view_display_name"
-end
-
 local hub_menu_definitions = {
 	{
 		dev_text = mod:localize("open_contracts_view_key"),
@@ -124,11 +128,7 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			Managers.ui:close_view("system_view")
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("contracts_background_view", nil, nil, nil, nil, context)
+            open_view_from_system_menu("contracts_background_view")
 		end,
 	},
 	{
@@ -139,11 +139,7 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			Managers.ui:close_view("system_view")
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("crafting_view", nil, nil, nil, nil, context)
+            open_view_from_system_menu("crafting_view")
 		end,
 	},
 	{
@@ -154,11 +150,7 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			Managers.ui:close_view("system_view")
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("cosmetics_vendor_background_view", nil, nil, nil, nil, context)
+            open_view_from_system_menu("cosmetics_vendor_background_view")
 		end,
 	},
 	{
@@ -169,11 +161,7 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			Managers.ui:close_view("system_view")
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("credits_vendor_background_view", nil, nil, nil, nil, context)
+            open_view_from_system_menu("credits_vendor_background_view")
 		end,
 	},
 	{
@@ -184,11 +172,7 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			Managers.ui:close_view("system_view")
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("barber_vendor_background_view", nil, nil, nil, nil, context)
+            open_view_from_system_menu("barber_vendor_background_view")
 		end,
 	},
 	{
@@ -199,11 +183,7 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			Managers.ui:close_view("system_view")
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("mission_board_view", nil, nil, nil, nil, context)
+            open_view_from_system_menu("mission_board_view")
 		end,
 	},
 	{
@@ -214,11 +194,7 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			Managers.ui:close_view("system_view")
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("training_grounds_view", nil, nil, nil, nil, context)
+            open_view_from_system_menu("training_grounds_view")
 		end,
 	},
 	{
@@ -229,11 +205,7 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			Managers.ui:close_view("system_view")
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("havoc_background_view", nil, nil, nil, nil, context)
+            open_view_from_system_menu("havoc_background_view")
 		end,
 	},
 }
