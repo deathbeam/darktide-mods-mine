@@ -133,23 +133,178 @@ end
 -- ##########################################################
 -- ################### Hooks ################################
 
+local function insert_after(list, predicate, item)
+	local new_list = table.clone(list)
+	
+	for i, entry in ipairs(new_list) do
+		if predicate(entry) then
+			table.insert(new_list, i + 1, item)
+			return new_list
+		end
+	end
+	
+	table.insert(new_list, item)
+	return new_list
+end
+
+local function is_in_hub()
+	if Managers and Managers.state and Managers.state.game_mode then
+		local game_mode_name = Managers.state.game_mode:game_mode_name()
+		return game_mode_name == "hub" or (game_mode_name == "shooting_range" and mod:get("enable_in_pykhanium"))
+	end
+	return false
+end
+
+local function is_social_button(item)
+	return item.text == "loc_social_view_display_name"
+end
+
+local hub_menu_definitions = {
+	{
+		dev_text = mod:localize("open_contracts_view_key"),
+		type = "button",
+		hide_icon = true,
+		validation_function = function()
+			return is_in_hub()
+		end,
+		trigger_function = function()
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("contracts_background_view", nil, nil, nil, nil, context)
+		end,
+	},
+	{
+		dev_text = mod:localize("open_crafting_view_key"),
+		type = "button",
+		hide_icon = true,
+		validation_function = function()
+			return is_in_hub()
+		end,
+		trigger_function = function()
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("crafting_view", nil, nil, nil, nil, context)
+		end,
+	},
+	{
+		dev_text = mod:localize("open_commissary_view_key"),
+		type = "button",
+		hide_icon = true,
+		validation_function = function()
+			return is_in_hub()
+		end,
+		trigger_function = function()
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("cosmetics_vendor_background_view", nil, nil, nil, nil, context)
+		end,
+	},
+	{
+		dev_text = mod:localize("open_credits_vendor_view_key"),
+		type = "button",
+		hide_icon = true,
+		validation_function = function()
+			return is_in_hub()
+		end,
+		trigger_function = function()
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("credits_vendor_background_view", nil, nil, nil, nil, context)
+		end,
+	},
+	{
+		dev_text = mod:localize("open_barber_view_key"),
+		type = "button",
+		hide_icon = true,
+		validation_function = function()
+			return is_in_hub()
+		end,
+		trigger_function = function()
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("barber_vendor_background_view", nil, nil, nil, nil, context)
+		end,
+	},
+	{
+		dev_text = mod:localize("open_mission_board_view_key"),
+		type = "button",
+		hide_icon = true,
+		validation_function = function()
+			return is_in_hub()
+		end,
+		trigger_function = function()
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("mission_board_view", nil, nil, nil, nil, context)
+		end,
+	},
+	{
+		dev_text = mod:localize("open_training_grounds_view_key"),
+		type = "button",
+		hide_icon = true,
+		validation_function = function()
+			return is_in_hub()
+		end,
+		trigger_function = function()
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("training_grounds_view", nil, nil, nil, nil, context)
+		end,
+	},
+	{
+		dev_text = mod:localize("open_havoc_background_view"),
+		type = "button",
+		hide_icon = true,
+		validation_function = function()
+			return is_in_hub()
+		end,
+		trigger_function = function()
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("havoc_background_view", nil, nil, nil, nil, context)
+		end,
+	},
+}
+
+mod:hook_require("scripts/ui/views/system_view/system_view_content_list", function(instance)
+	if not mod:get("show_in_system_menu") then
+		return
+	end
+	
+	for _, menu_def in ipairs(hub_menu_definitions) do
+		if not table.find_by_key(instance.default, "dev_text", menu_def.dev_text) then
+			instance.default = insert_after(instance.default, is_social_button, menu_def)
+		end
+	end
+	
+	for _, menu_def in ipairs(hub_menu_definitions) do
+		if not table.find_by_key(instance.StateMainMenu, "dev_text", menu_def.dev_text) then
+			instance.StateMainMenu = insert_after(instance.StateMainMenu, is_social_button, menu_def)
+		end
+	end
+end)
+
+mod:hook_require("scripts/ui/views/system_view/system_view_content_blueprints", function(blueprints)
+	local original_button_init = blueprints.button.init
+	
+	blueprints.button.init = function(parent, widget, element, callback_name, disabled)
+		original_button_init(parent, widget, element, callback_name, disabled)
+		
+		if element.hide_icon and widget.style.icon then
+			widget.style.icon.visible = false
+		end
+	end
+end)
+
 -- ##########################################################
 -- ################### Script ###############################
-
-local class_name = "HudElementHubHotkeys"
-local filename = "hub_hotkey_menus/scripts/mods/hub_hotkey_menus/hud_element_hub_hotkeys/hud_element_hub_hotkeys"
-
-mod:register_hud_element({
-    class_name = class_name,
-    filename = filename,
-    use_hud_scale = true,
-    use_retained_mode = false,
-    visibility_groups = {
-        "alive",
-        "communication_wheel",
-        "dead",
-        "tactical_overlay"
-    }
-})
 
 -- ##########################################################

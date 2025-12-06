@@ -7,7 +7,7 @@ return {
   options = {
     widgets = {
       {
-        setting_id    = "show_hotkey_list",
+        setting_id    = "show_in_system_menu",
         type          = "checkbox",
         default_value = true,
       },

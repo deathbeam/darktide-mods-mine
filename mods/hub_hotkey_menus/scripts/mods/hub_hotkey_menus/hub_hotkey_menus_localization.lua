@@ -9,10 +9,10 @@ return {
     ["zh-cn"] = "通过快捷键打开哀星号上的各种菜单。",
     ru = "Hub Hotkey Menus - Открывайте различные меню в Хабе с помощью горячих клавиш.",
   },
-  show_hotkey_list = {
-    en = "Show Hotkey List",
-    ru = "Показать список горячих клавиш",
-    ["zh-cn"] = "显示快捷键列表",
+  show_in_system_menu = {
+    en = "Show in Escape Menu",
+    ru = "Показать в меню Escape",
+    ["zh-cn"] = "在系统菜单显示",
   },
   enable_in_pykhanium = {
     en = "Enable Hotkeys in the Psykhanium",
