@@ -29,7 +29,7 @@ return {
     ru = "Позволяет закрывать меню с помощью соответствующих горячих клавиш.",
     ["zh-cn"] = "允许用对应的快捷键关闭菜单。",
   },
-  -- barber_vendor_background_view
+
   open_barber_view_key = {
     en = "Barber",
     ["zh-cn"] = "理发师",
@@ -40,7 +40,7 @@ return {
     ["zh-cn"] = "打开理发师兼外科医生界面。",
     ru = "Открывает меню изменения Внешности персонажа.",
   },
-  -- contracts_background_view
+
   open_contracts_view_key = {
     en = "Contracts",
     ["zh-cn"] = "协议",
@@ -51,7 +51,7 @@ return {
     ["zh-cn"] = "打开梅尔克大人的采购店界面。",
     ru = "Открывает меню управления Контрактами.",
   },
-  -- crafting_view
+
   open_crafting_view_key = {
     en = "Crafting",
     ["zh-cn"] = "锻造",
@@ -62,7 +62,7 @@ return {
     ["zh-cn"] = "打开 O-7-7 海德昂界面。",
     ru = "Открывает меню Создания и улучшения предметов.",
   },
-  -- credits_vendor_background_view
+
   open_credits_vendor_view_key = {
     en = "Credits Vendor",
     ["zh-cn"] = "商店",
@@ -73,7 +73,7 @@ return {
     ["zh-cn"] = "打开军械交易所界面。",
     ru = "Открывает меню покупки Снаряжения.",
   },
-  -- inbox_view
+
   open_inbox_view_key = {
     en = "Inbox",
     ["zh-cn"] = "信件",
@@ -84,7 +84,7 @@ return {
     ["zh-cn"] = "打开信件界面。",
     ru = "Открывает меню Выкупить любой лишний предмет.",
   },
-  -- mission_board_view
+
   open_mission_board_view_key = {
     en = "Mission Board",
     ["zh-cn"] = "任务面板",
@@ -95,7 +95,7 @@ return {
     ["zh-cn"] = "打开任务面板。",
     ru = "Открывает меню выбора Миссий.",
   },
-  -- store_view
+
   open_premium_store_view_key = {
     en = "Premium Store",
     ["zh-cn"] = "高级商店",
@@ -106,7 +106,7 @@ return {
     ["zh-cn"] = "打开准将的服装界面。",
     ru = "Открывает магазин с Премиумным снаряжением.",
   },
-  -- training_grounds_view
+
   open_training_grounds_view_key = {
     en = "Training Grounds",
     ["zh-cn"] = "训练场",
@@ -117,8 +117,8 @@ return {
     ["zh-cn"] = "打开灵能室界面。",
     ru = "Открывает меню входа на Стрельбище.",
   },
-  -- social_view
-  open_social_view_key = {
+
+  oen_social_view_key = {
     en = "Social",
     ["zh-cn"] = "社交",
     ru = "Социальное меню",
@@ -148,13 +148,13 @@ return {
     ["zh-cn"] = "打开苦修界面。",
     ru = "Открывает меню Искуплений.",
   },
-  -- havoc_background
-  open_havoc_background_view = {
+
+  open_havoc_background_view_key = {
     en = "Havoc Mode",
     ["zh-cn"] = "Havoc Mode",
     ru = "Havoc Mode",
   },
-  open_havoc_background_view_description = {
+  open_havoc_background_view_key_description = {
     en = "Opens the Havoc Menu.",
     ["zh-cn"] = "Opens the Havoc Menu.",
     ru = "Opens the Havoc Menu.",

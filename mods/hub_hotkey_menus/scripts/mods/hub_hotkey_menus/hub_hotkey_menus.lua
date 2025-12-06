@@ -1,41 +1,9 @@
---[[
-    author: dalo_kraff
-	
-	-----
- 
-	Copyright 2022 dalo_kraff
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-  documentation files (the "Software"), to deal in the Software without restriction, including without limitation
-  the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and
-  to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in all copies or
-  substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-  TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-  THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
-  CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-  OTHER DEALINGS IN THE SOFTWARE.
- 
-	-----
-
-	Description: Open various menus from the hub world with hotkeys
---]]
-
 local mod = get_mod("hub_hotkey_menus")
-
--- ##########################################################
--- ################## Variables #############################
 
 local valid_lvls = {
 	shooting_range = true,
 	hub = true,
 }
-
--- ##########################################################
--- ############## Internal Functions ########################
 
 local is_in_valid_lvl = function()
 	if Managers and Managers.state and Managers.state.game_mode then
@@ -72,9 +40,6 @@ local activate_hub_view = function(view)
 		ui_manager:open_view(view, nil, nil, nil, nil, context)
 	end
 end
-
--- ##########################################################
--- ################## Functions #############################
 
 mod.activate_barber_vendor_background_view = function(self)
   activate_hub_view("barber_vendor_background_view")
@@ -124,15 +89,6 @@ mod.activate_havoc_background_view = function(self)
 	activate_hub_view("havoc_background_view")
 end
 
--- mod.activate_main_menu_view = function(self)
--- 	activate_hub_view("main_menu_background_view")
--- end
-
-
-
--- ##########################################################
--- ################### Hooks ################################
-
 local function insert_after(list, predicate, item)
 	local new_list = table.clone(list)
 	
@@ -168,10 +124,7 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("contracts_background_view", nil, nil, nil, nil, context)
+			mod:activate_contracts_background_view()
 		end,
 	},
 	{
@@ -182,10 +135,7 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("crafting_view", nil, nil, nil, nil, context)
+			mod:activate_crafting_view()
 		end,
 	},
 	{
@@ -196,10 +146,7 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("cosmetics_vendor_background_view", nil, nil, nil, nil, context)
+			mod:activate_commissary_view()
 		end,
 	},
 	{
@@ -210,10 +157,7 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("credits_vendor_background_view", nil, nil, nil, nil, context)
+			mod:activate_credits_vendor_background_view()
 		end,
 	},
 	{
@@ -224,10 +168,7 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("barber_vendor_background_view", nil, nil, nil, nil, context)
+			mod:activate_barber_vendor_background_view()
 		end,
 	},
 	{
@@ -238,10 +179,7 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("mission_board_view", nil, nil, nil, nil, context)
+			mod:activate_mission_board_view()
 		end,
 	},
 	{
@@ -252,24 +190,18 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("training_grounds_view", nil, nil, nil, nil, context)
+			mod:activate_training_grounds_view()
 		end,
 	},
 	{
-		dev_text = mod:localize("open_havoc_background_view"),
+		dev_text = mod:localize("open_havoc_background_view_key"),
 		type = "button",
 		hide_icon = true,
 		validation_function = function()
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			local context = {
-				hub_interaction = true
-			}
-			Managers.ui:open_view("havoc_background_view", nil, nil, nil, nil, context)
+			mod:activate_havoc_background_view()
 		end,
 	},
 }
@@ -303,8 +235,3 @@ mod:hook_require("scripts/ui/views/system_view/system_view_content_blueprints", 
 		end
 	end
 end)
-
--- ##########################################################
--- ################### Script ###############################
-
--- ##########################################################
