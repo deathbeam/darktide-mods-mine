@@ -20,7 +20,7 @@ show_crit_chance
 -- General HUD
 how_did_I_get_that
 Enhanced_descriptions
-hub_hotkey_menus
+modular_menu_buttons
 scoreboard
 
 -- In Game HUD
