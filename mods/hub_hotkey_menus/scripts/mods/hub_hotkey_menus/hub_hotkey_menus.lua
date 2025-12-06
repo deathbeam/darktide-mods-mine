@@ -124,7 +124,11 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			mod:activate_contracts_background_view()
+			Managers.ui:close_view("system_view")
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("contracts_background_view", nil, nil, nil, nil, context)
 		end,
 	},
 	{
@@ -135,7 +139,11 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			mod:activate_crafting_view()
+			Managers.ui:close_view("system_view")
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("crafting_view", nil, nil, nil, nil, context)
 		end,
 	},
 	{
@@ -146,7 +154,11 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			mod:activate_commissary_view()
+			Managers.ui:close_view("system_view")
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("cosmetics_vendor_background_view", nil, nil, nil, nil, context)
 		end,
 	},
 	{
@@ -157,7 +169,11 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			mod:activate_credits_vendor_background_view()
+			Managers.ui:close_view("system_view")
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("credits_vendor_background_view", nil, nil, nil, nil, context)
 		end,
 	},
 	{
@@ -168,7 +184,11 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			mod:activate_barber_vendor_background_view()
+			Managers.ui:close_view("system_view")
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("barber_vendor_background_view", nil, nil, nil, nil, context)
 		end,
 	},
 	{
@@ -179,7 +199,11 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			mod:activate_mission_board_view()
+			Managers.ui:close_view("system_view")
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("mission_board_view", nil, nil, nil, nil, context)
 		end,
 	},
 	{
@@ -190,7 +214,11 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			mod:activate_training_grounds_view()
+			Managers.ui:close_view("system_view")
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("training_grounds_view", nil, nil, nil, nil, context)
 		end,
 	},
 	{
@@ -201,7 +229,11 @@ local hub_menu_definitions = {
 			return is_in_hub()
 		end,
 		trigger_function = function()
-			mod:activate_havoc_background_view()
+			Managers.ui:close_view("system_view")
+			local context = {
+				hub_interaction = true
+			}
+			Managers.ui:open_view("havoc_background_view", nil, nil, nil, nil, context)
 		end,
 	},
 }
