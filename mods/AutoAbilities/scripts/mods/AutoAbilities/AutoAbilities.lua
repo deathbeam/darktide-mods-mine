@@ -288,7 +288,7 @@ mod:hook_safe(CLASS.ActionHandler, "start_action", function(self, id, action_obj
     if _get_player_unit() == self._unit then
         if current_stage == ACTION_STAGES.WAITING_FOR_USE and (action_name == "action_use_self" or action_name == "action_place_complete" or action_name == "action_throw_grenade") then
             _reset_state()
-            last_injection_time = current_time
+            last_injection_time = _get_gameplay_time()
         end
     end
 end)

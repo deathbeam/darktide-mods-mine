@@ -7,8 +7,8 @@
 -- ################################################################
 
 -- Gameplay
-Skitarius
 AutoAbilities
+Skitarius
 guarantee_weapon_swap
 guarantee_special_action
 
