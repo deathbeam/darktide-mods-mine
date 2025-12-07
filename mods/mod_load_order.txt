@@ -30,11 +30,9 @@ DynamicCrosshair
 Spidey Sense
 ScanHelper
 GasOutline
+Healthbars
 
--- In Game overlay HUD
+-- In Game overlays
 SpawnFeed
 Killfeed Details
 kill_tracker
-
--- Enemies HUD
-Healthbars
