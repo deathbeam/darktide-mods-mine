@@ -149,34 +149,19 @@ function feature.update(parent)
   end
 
   local player_extensions = parent._parent:player_extensions()
-  if not player_extensions or not player_extensions.unit_data then
-    return
-  end
-  
   local unit_data_extension = player_extensions.unit_data
-  local secondary_component = unit_data_extension:read_component("slot_secondary")
+  local inventory_component = unit_data_extension:read_component("slot_secondary")
 
-  if not secondary_component then
-    content.visible = false
-    return
-  end
-
-  -- Check if ranged weapon uses ammo
-  local slot_secondary_template = player_extensions.visual_loadout and player_extensions.visual_loadout:weapon_template_from_slot("slot_secondary")
-  
-  if not slot_secondary_template
-    or not slot_secondary_template.hud_configuration
-    or not slot_secondary_template.hud_configuration.uses_ammunition
-  then
+  if not inventory_component then
     content.visible = false
     return
   end
 
   -- Use Ammo utility functions
-  local max_reserve = Ammo.max_ammo_in_reserve(secondary_component) or 0
-  local current_reserve = Ammo.current_ammo_in_reserve(secondary_component) or 0
-  local max_clip = Ammo.max_ammo_in_clips(secondary_component) or 0
-  local current_clip = Ammo.current_ammo_in_clips(secondary_component) or 0
+  local max_reserve = Ammo.max_ammo_in_reserve(inventory_component) or 0
+  local current_reserve = Ammo.current_ammo_in_reserve(inventory_component) or 0
+  local max_clip = Ammo.max_ammo_in_clips(inventory_component) or 0
+  local current_clip = Ammo.current_ammo_in_clips(inventory_component) or 0
 
   local max_ammo = max_clip + max_reserve
   if max_ammo == 0 then

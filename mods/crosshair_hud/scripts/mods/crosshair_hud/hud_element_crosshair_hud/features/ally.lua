@@ -586,22 +586,17 @@ end
 
 local function update_ammo(parent, dt, t, widget, player)
   local unit_data_extension = ScriptUnit.has_extension(player.player_unit, "unit_data_system")
-  if not unit_data_extension then
+  local inventory_component = unit_data_extension and unit_data_extension:read_component("slot_secondary")
+  if not inventory_component then
     widget.style.ammo_icon.visible = false
     return
   end
 
-  local secondary_component = unit_data_extension:read_component("slot_secondary")
-  if not secondary_component then
-    widget.style.ammo_icon.visible = false
-    return
-  end
-
-  -- Use Ammo utility functions (work for both local and remote players)
-  local max_reserve = Ammo.max_ammo_in_reserve(secondary_component) or 0
-  local current_reserve = Ammo.current_ammo_in_reserve(secondary_component) or 0
-  local max_clip = Ammo.max_ammo_in_clips(secondary_component) or 0
-  local current_clip = Ammo.current_ammo_in_clips(secondary_component) or 0
+  -- Use Ammo utility functions
+  local max_reserve = Ammo.max_ammo_in_reserve(inventory_component) or 0
+  local current_reserve = Ammo.current_ammo_in_reserve(inventory_component) or 0
+  local max_clip = Ammo.max_ammo_in_clips(inventory_component) or 0
+  local current_clip = Ammo.current_ammo_in_clips(inventory_component) or 0
 
   local max_ammo = max_clip + max_reserve
   widget.style.ammo_icon.visible = max_ammo > 0
