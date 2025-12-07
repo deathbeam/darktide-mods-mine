@@ -14,27 +14,20 @@ local ACTION_STAGES = {
 
 local CHECK_INTERVAL = 0.5
 local DEPLOY_TIMEOUT = 2.0
-
-local current_stage = ACTION_STAGES.NONE
-local target_slot = nil
-local current_wield_slot = nil
-local stage_start_time = 0
-
--- Chemical AutoStim specific
-local chemical_autostim_enabled = false
-local last_check_time = 0
-local last_injection_time = 0
-
--- QuickDeploy specific
-local quick_deploy_enabled = false
-
--- AutoBlitz specific
-local auto_blitz_enabled = false
-
--- Slot names
 local SLOT_POCKETABLE = "slot_pocketable"
 local SLOT_POCKETABLE_SMALL = "slot_pocketable_small"
 local SLOT_GRENADE = "slot_grenade_ability"
+
+local current_stage = ACTION_STAGES.NONE
+local target_slot = nil
+local stage_start_time = 0
+local current_wield_slot = nil
+local last_check_time = 0
+local last_injection_time = 0
+
+local chemical_autostim_enabled = false
+local quick_deploy_enabled = false
+local auto_blitz_enabled = false
 
 -- ┌────────────────────────────┐
 -- │            LOGIC           │
@@ -287,17 +280,18 @@ mod:hook(CLASS.PlayerUnitWeaponExtension, "on_slot_wielded", function(func, self
         -- Start auto throw for grenades if enabled
         if auto_blitz_enabled and slot_name == SLOT_GRENADE and not _is_quick_throw_grenade() then
             switch_to_waiting = true
+            skip_wield_action = true
         end
         
         -- Start auto use for pocketables if enabled
         if quick_deploy_enabled and (slot_name == SLOT_POCKETABLE or slot_name == SLOT_POCKETABLE_SMALL) and current_stage == ACTION_STAGES.NONE then
             switch_to_waiting = true
+            skip_wield_action = true
         end
 
         if switch_to_waiting then
             current_stage = ACTION_STAGES.WAITING_FOR_USE
             target_slot = slot_name
-            skip_wield_action = true
             stage_start_time = _get_gameplay_time()
         end
         
@@ -314,6 +308,7 @@ mod:hook_safe(CLASS.ActionHandler, "start_action", function(self, id, action_obj
     if _get_player_unit() == self._unit then
         if current_stage == ACTION_STAGES.WAITING_FOR_USE and (action_name == "action_use_self" or action_name == "action_place_complete" or action_name == "action_throw_grenade") then
             _reset_state()
+            last_injection_time = current_time
         end
     end
 end)
