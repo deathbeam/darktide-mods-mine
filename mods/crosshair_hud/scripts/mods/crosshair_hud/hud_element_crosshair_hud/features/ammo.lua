@@ -154,7 +154,6 @@ function feature.update(parent)
   end
   
   local unit_data_extension = player_extensions.unit_data
-  local inventory_component = unit_data_extension:read_component("inventory")
   local secondary_component = unit_data_extension:read_component("slot_secondary")
 
   if not secondary_component then
@@ -162,44 +161,22 @@ function feature.update(parent)
     return
   end
 
-  -- Check if we're wielding a weapon that uses ammo
-  local weapon_ext = player_extensions.weapon
-  local wielded_slot = inventory_component and inventory_component.wielded_slot
-  local weapon_uses_ammo = false
-  local current_clip, max_clip = 0, 0
-  local current_reserve, max_reserve = 0, 0
-
-  -- Reserve is always from slot_secondary
-  current_reserve = secondary_component.current_ammunition_reserve or 0
-  max_reserve = secondary_component.max_ammunition_reserve or 0
-
-  -- Check if ranged weapon uses ammo (to determine if we should show anything)
-  local wielded_template = weapon_ext and weapon_ext:weapon_template()
+  -- Check if ranged weapon uses ammo
   local slot_secondary_template = player_extensions.visual_loadout and player_extensions.visual_loadout:weapon_template_from_slot("slot_secondary")
   
-  -- Check slot_secondary weapon for ammo usage
-  if slot_secondary_template
-    and slot_secondary_template.hud_configuration
-    and slot_secondary_template.hud_configuration.uses_ammunition
+  if not slot_secondary_template
+    or not slot_secondary_template.hud_configuration
+    or not slot_secondary_template.hud_configuration.uses_ammunition
   then
-    weapon_uses_ammo = true
-
-    -- Always show clip ammo from slot_secondary (even if wielding melee)
-    local max_num_clips = NetworkConstants and NetworkConstants.ammunition_clip_array and NetworkConstants.ammunition_clip_array.max_size
-    if max_num_clips then
-      for i = 1, max_num_clips do
-        if Ammo.clip_in_use(secondary_component, i) then
-          max_clip = max_clip + (secondary_component.max_ammunition_clip[i] or 0)
-          current_clip = current_clip + (secondary_component.current_ammunition_clip[i] or 0)
-        end
-      end
-    end
-  end
-
-  if not weapon_uses_ammo then
     content.visible = false
     return
   end
+
+  -- Use Ammo utility functions
+  local max_reserve = Ammo.max_ammo_in_reserve(secondary_component) or 0
+  local current_reserve = Ammo.current_ammo_in_reserve(secondary_component) or 0
+  local max_clip = Ammo.max_ammo_in_clips(secondary_component) or 0
+  local current_clip = Ammo.current_ammo_in_clips(secondary_component) or 0
 
   local max_ammo = max_clip + max_reserve
   if max_ammo == 0 then

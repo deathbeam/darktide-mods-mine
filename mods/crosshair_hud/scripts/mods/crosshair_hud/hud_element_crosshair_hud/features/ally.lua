@@ -597,29 +597,11 @@ local function update_ammo(parent, dt, t, widget, player)
     return
   end
 
-  -- For allies, read raw ammunition values directly (Ammo.clip_in_use may not work for remote players)
-  -- This matches RingHud's approach for team ammo
-  local current_clip = secondary_component.current_ammunition_clip or 0
-  local max_clip = secondary_component.max_ammunition_clip or 0
-  local current_reserve = secondary_component.current_ammunition_reserve or 0
-  local max_reserve = secondary_component.max_ammunition_reserve or 0
-
-  -- Handle multi-clip arrays
-  if type(current_clip) == "table" then
-    local clip_sum = 0
-    for i = 1, #current_clip do
-      clip_sum = clip_sum + (current_clip[i] or 0)
-    end
-    current_clip = clip_sum
-  end
-
-  if type(max_clip) == "table" then
-    local max_clip_sum = 0
-    for i = 1, #max_clip do
-      max_clip_sum = max_clip_sum + (max_clip[i] or 0)
-    end
-    max_clip = max_clip_sum
-  end
+  -- Use Ammo utility functions (work for both local and remote players)
+  local max_reserve = Ammo.max_ammo_in_reserve(secondary_component) or 0
+  local current_reserve = Ammo.current_ammo_in_reserve(secondary_component) or 0
+  local max_clip = Ammo.max_ammo_in_clips(secondary_component) or 0
+  local current_clip = Ammo.current_ammo_in_clips(secondary_component) or 0
 
   local max_ammo = max_clip + max_reserve
   widget.style.ammo_icon.visible = max_ammo > 0
