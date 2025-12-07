@@ -36,6 +36,10 @@ local SLOT_POCKETABLE = "slot_pocketable"
 local SLOT_POCKETABLE_SMALL = "slot_pocketable_small"
 local SLOT_GRENADE = "slot_grenade_ability"
 
+-- ┌────────────────────────────┐
+-- │            LOGIC           │
+-- └────────────────────────────┘
+
 local function _get_player_unit()
     local player = Managers.player and Managers.player:local_player_safe(1)
     return player and player.player_unit
@@ -104,10 +108,6 @@ local function _reset_state()
     target_slot = nil
     stage_start_time = 0
 end
-
--- ┌────────────────────────────┐
--- │   CHEMICAL AUTOSTIM LOGIC  │
--- └────────────────────────────┘
 
 local function _has_chemical_dependency()
     local player_unit = _get_player_unit()
@@ -254,7 +254,6 @@ end
 -- │          HOOKS             │
 -- └────────────────────────────┘
 
--- Input interception
 local _input_action_hook = function(func, self, action_name)
     -- Switch to target slot
     if current_stage == ACTION_STAGES.SWITCH_TO and target_slot then
@@ -272,30 +271,30 @@ local _input_action_hook = function(func, self, action_name)
     
     return func(self, action_name)
 end
-
 mod:hook(CLASS.InputService, "_get", _input_action_hook)
 mod:hook(CLASS.InputService, "_get_simulate", _input_action_hook)
 
 mod:hook(CLASS.PlayerUnitWeaponExtension, "on_slot_wielded", function(func, self, slot_name, t, skip_wield_action)
     if _get_player_unit() == self._unit then
         current_wield_slot = slot_name
+        local switch_to_waiting = false
         
-        -- ChemicalAutoStim: When we wield the target slot, wait for use
+        -- Proceed to use after switching to target slot
         if current_stage == ACTION_STAGES.SWITCH_TO and slot_name == target_slot then
-            current_stage = ACTION_STAGES.WAITING_FOR_USE
-            stage_start_time = _get_gameplay_time()
+            switch_to_waiting = true
         end
         
-        -- AutoBlitz: Start auto-throw when wielding grenade
+        -- Start auto throw for grenades if enabled
         if auto_blitz_enabled and slot_name == SLOT_GRENADE and not _is_quick_throw_grenade() then
-            current_stage = ACTION_STAGES.WAITING_FOR_USE
-            target_slot = slot_name
-            skip_wield_action = true
-            stage_start_time = _get_gameplay_time()
+            switch_to_waiting = true
         end
         
-        -- QuickDeploy: Start auto-use when wielding pocketable
+        -- Start auto use for pocketables if enabled
         if quick_deploy_enabled and (slot_name == SLOT_POCKETABLE or slot_name == SLOT_POCKETABLE_SMALL) and current_stage == ACTION_STAGES.NONE then
+            switch_to_waiting = true
+        end
+
+        if switch_to_waiting then
             current_stage = ACTION_STAGES.WAITING_FOR_USE
             target_slot = slot_name
             skip_wield_action = true
