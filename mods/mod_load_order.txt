@@ -7,9 +7,10 @@
 -- ################################################################
 
 -- Gameplay
+Skitarius
 AutoAbilities
 guarantee_weapon_swap
-Skitarius
+guarantee_special_action
 
 -- Debugging
 creature_spawner
