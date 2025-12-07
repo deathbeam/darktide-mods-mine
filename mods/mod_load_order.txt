@@ -28,6 +28,7 @@ markers_aio
 DynamicCrosshair
 Spidey Sense
 ScanHelper
+GasOutline
 
 -- In Game overlay HUD
 SpawnFeed
