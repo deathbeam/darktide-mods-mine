@@ -13,7 +13,7 @@ local ACTION_STAGES = {
 }
 
 local CHECK_INTERVAL = 0.5
-local DEPLOY_TIMEOUT = 2.0
+local DEPLOY_TIMEOUT = 5.0
 local SLOT_POCKETABLE = "slot_pocketable"
 local SLOT_POCKETABLE_SMALL = "slot_pocketable_small"
 local SLOT_GRENADE = "slot_grenade_ability"
@@ -23,7 +23,6 @@ local target_slot = nil
 local stage_start_time = 0
 local current_wield_slot = nil
 local last_check_time = 0
-local last_injection_time = 0
 
 local chemical_autostim_enabled = false
 local quick_deploy_enabled = false
@@ -163,10 +162,10 @@ local function _start_chemical_autostim()
         current_stage = ACTION_STAGES.WAITING_FOR_USE
     else
         current_stage = ACTION_STAGES.SWITCH_TO
-        target_slot = SLOT_POCKETABLE_SMALL
     end
    
-    last_injection_time = current_time
+    target_slot = SLOT_POCKETABLE_SMALL
+    stage_start_time = _get_gameplay_time()
     return true
 end
 
@@ -212,8 +211,8 @@ mod.update = function(dt)
     
     -- Chemical AutoStim check
     if chemical_autostim_enabled and current_stage == ACTION_STAGES.NONE then
-        if last_injection_time then
-            local time_since_last = current_time - last_injection_time
+        if stage_start_time > 0 then
+            local time_since_last = current_time - stage_start_time
             if time_since_last < 1.0 then
                 return
             end
@@ -231,14 +230,18 @@ local _input_action_hook = function(func, self, action_name)
     -- Switch to target slot
     if current_stage == ACTION_STAGES.SWITCH_TO and target_slot then
         if target_slot == SLOT_POCKETABLE_SMALL and action_name == "wield_4" then
+            mod:echo("AutoAbilities: Switching to pocketable small slot.")
             return true
         elseif target_slot == SLOT_POCKETABLE and (action_name == "wield_3" or action_name == "wield_3_gamepad") then
+            mod:echo("AutoAbilities: Switching to pocketable slot.")
             return true
         end
     end
 
     -- Auto use when wielded
     if current_stage == ACTION_STAGES.WAITING_FOR_USE and action_name == "action_one_pressed" then
+        mod:echo("AutoAbilities: Triggering auto use for slot '" .. tostring(target_slot) .. "'.")
+        _reset_state()
         return true
     end
     
@@ -288,7 +291,6 @@ mod:hook_safe(CLASS.ActionHandler, "start_action", function(self, id, action_obj
     if _get_player_unit() == self._unit then
         if current_stage == ACTION_STAGES.WAITING_FOR_USE and (action_name == "action_use_self" or action_name == "action_place_complete" or action_name == "action_throw_grenade") then
             _reset_state()
-            last_injection_time = _get_gameplay_time()
         end
     end
 end)
@@ -316,7 +318,6 @@ end
 mod.on_game_state_changed = function(status, state_name)
     if state_name == "StateLoading" or state_name == "StateGameplay" then
         last_check_time = 0
-        last_injection_time = 0
         current_wield_slot = nil
         _reset_state()
     end
