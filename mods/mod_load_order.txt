@@ -7,10 +7,8 @@
 -- ################################################################
 
 -- Gameplay
-QuickDeploy
-AutoBlitz
+AutoAbilities
 guarantee_weapon_swap
-ChemicalAutoStim
 Skitarius
 
 -- Debugging
