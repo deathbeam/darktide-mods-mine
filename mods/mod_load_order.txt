@@ -27,6 +27,7 @@ crosshair_hud
 markers_aio
 DynamicCrosshair
 Spidey Sense
+ScanHelper
 
 -- In Game overlay HUD
 SpawnFeed
