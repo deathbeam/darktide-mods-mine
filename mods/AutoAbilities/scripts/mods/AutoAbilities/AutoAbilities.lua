@@ -242,9 +242,11 @@ mod.update = function(dt)
     
     -- Chemical AutoStim check
     if chemical_autostim_enabled and current_stage == ACTION_STAGES.NONE then
-        local time_since_last = current_time - last_injection_time
-        if time_since_last < 1.0 then
-            return
+        if last_injection_time then
+            local time_since_last = current_time - last_injection_time
+            if time_since_last < 1.0 then
+                return
+            end
         end
 
         _start_chemical_autostim()
