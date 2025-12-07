@@ -3,7 +3,7 @@ local mod = get_mod("AutoAbilities")
 local PlayerUnitVisualLoadout = require("scripts/extension_systems/visual_loadout/utilities/player_unit_visual_loadout")
 
 -- ┌────────────────────────────┐
--- │   SHARED STATE & CONFIG    │
+-- │       STATE & CONFIG       │
 -- └────────────────────────────┘
 
 local ACTION_STAGES = {
@@ -11,6 +11,9 @@ local ACTION_STAGES = {
     SWITCH_TO = 1,
     WAITING_FOR_USE = 2,  -- Waiting for pocketable/grenade to be used
 }
+
+local CHECK_INTERVAL = 0.5
+local DEPLOY_TIMEOUT = 2.0
 
 local current_stage = ACTION_STAGES.NONE
 local target_slot = nil
@@ -21,11 +24,9 @@ local stage_start_time = 0
 local chemical_autostim_enabled = false
 local last_check_time = 0
 local last_injection_time = 0
-local CHECK_INTERVAL = 0.5
 
 -- QuickDeploy specific
 local quick_deploy_enabled = false
-local DEPLOY_TIMEOUT = 2.0
 
 -- AutoBlitz specific
 local auto_blitz_enabled = false
@@ -158,32 +159,50 @@ local function _start_chemical_autostim()
     if _is_weapon_switching() then 
         return false 
     end
-    if not _is_weapon_template_valid(SLOT_POCKETABLE_SMALL) then 
-        return false 
-    end
-    
-    -- Get current slot if we don't have it cached
     if not current_wield_slot then
         current_wield_slot = _get_current_wielded_slot()
+    end
+    if not _is_weapon_template_valid(current_wield_slot) then 
+        return false 
     end
     
     if current_wield_slot == SLOT_POCKETABLE_SMALL then
         current_stage = ACTION_STAGES.WAITING_FOR_USE
     else
-        if current_wield_slot and not _is_weapon_template_valid(current_wield_slot) then 
-            return false 
-        end
         current_stage = ACTION_STAGES.SWITCH_TO
         target_slot = SLOT_POCKETABLE_SMALL
     end
-    
+   
     last_injection_time = current_time
     return true
 end
 
 local function _is_quick_throw_grenade()
-    local archetype = mod.check_archetype()
-    local grenade = mod.check_grenade()
+    local player = Managers.player:local_player_safe(1)
+    if not player then
+        return false
+    end
+
+    local player_unit = player.player_unit
+    if not player_unit then
+        return false
+    end
+
+    local profile = player:profile()
+    if not profile then
+        return false
+    end
+
+    local weapon_extension = ScriptUnit.has_extension(player_unit, "weapon_system")
+    local weapons = weapon_extension and weapon_extension._weapons
+    local weapon = weapons and weapons.slot_grenade_ability
+    local weapon_template = weapon and weapon.weapon_template
+    if not weapon_template then
+        return false
+    end
+
+    local archetype = profile.archetype and profile.archetype.name
+    local grenade = weapon_template.name
     
     if archetype == "zealot" and grenade == "zealot_throwing_knives" then
         return true
@@ -191,28 +210,6 @@ local function _is_quick_throw_grenade()
         return true
     end
     return false
-end
-
-mod.check_archetype = function()
-    local player = Managers.player:local_player_safe(1)
-    if player then
-        local profile = player:profile()
-        if profile then
-            return profile.archetype and profile.archetype.name
-        end
-    end
-    return nil
-end
-
-mod.check_grenade = function()
-    local player = Managers.player:local_player_safe(1)
-    if not player then return nil end
-    local player_unit = player.player_unit
-    local weapon_extension = player_unit and ScriptUnit.has_extension(player_unit, "weapon_system")
-    local weapons = weapon_extension and weapon_extension._weapons
-    local weapon = weapons and weapons.slot_grenade_ability
-    local weapon_template = weapon and weapon.weapon_template
-    return weapon_template and weapon_template.name
 end
 
 -- ┌────────────────────────────┐
@@ -233,7 +230,7 @@ mod.update = function(dt)
     end
     last_check_time = current_time
     
-    -- Timeout check for QuickDeploy
+    -- Deploy timeout check
     if target_slot and current_stage ~= ACTION_STAGES.NONE then
         if current_time - stage_start_time > DEPLOY_TIMEOUT then
             _reset_state()
@@ -259,7 +256,7 @@ end
 
 -- Input interception
 local _input_action_hook = function(func, self, action_name)
-    -- Simulate switching to target slot
+    -- Switch to target slot
     if current_stage == ACTION_STAGES.SWITCH_TO and target_slot then
         if target_slot == SLOT_POCKETABLE_SMALL and action_name == "wield_4" then
             return true
@@ -268,7 +265,7 @@ local _input_action_hook = function(func, self, action_name)
         end
     end
 
-    -- All features: Auto-use when wielded
+    -- Auto use when wielded
     if current_stage == ACTION_STAGES.WAITING_FOR_USE and action_name == "action_one_pressed" then
         return true
     end
@@ -316,10 +313,8 @@ end)
 
 mod:hook_safe(CLASS.ActionHandler, "start_action", function(self, id, action_objects, action_name, action_params, action_settings, used_input)
     if _get_player_unit() == self._unit then
-        -- When use/placement happens, reset (game auto-switches back)
-        if current_stage == ACTION_STAGES.WAITING_FOR_USE and (action_name == "action_use_self" or action_name == "action_place_complete") then
+        if current_stage == ACTION_STAGES.WAITING_FOR_USE and (action_name == "action_use_self" or action_name == "action_place_complete" or action_name == "action_throw_grenade") then
             _reset_state()
-            last_injection_time = _get_gameplay_time()
         end
     end
 end)
@@ -348,7 +343,7 @@ mod.on_game_state_changed = function(status, state_name)
     if state_name == "StateLoading" or state_name == "StateGameplay" then
         last_check_time = 0
         last_injection_time = 0
-        _reset_state()
         current_wield_slot = nil
+        _reset_state()
     end
 end
