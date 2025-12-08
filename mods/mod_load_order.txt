@@ -1,10 +1,4 @@
 -- vim: set filetype=lua :
--- ################################################################
--- Enter user mod names below, separated by line.
--- Order in the list determines the order in which mods are loaded.
--- Do not rename a mod's folders.
--- You do not need to include 'base' or 'dmf' mod folders.
--- ################################################################
 
 -- Gameplay
 AutoAbilities
@@ -17,22 +11,24 @@ creature_spawner
 show_crit_chance
 
 -- General HUD
+custom_hud
 how_did_I_get_that
 Enhanced_descriptions
 modular_menu_buttons
-scoreboard
+InventoryStats
 
 -- In Game HUD
-custom_hud
 crosshair_hud
 markers_aio
 DynamicCrosshair
 Spidey Sense
-ScanHelper
 GasOutline
 Healthbars
+danger_zone
+ScanHelper
 
 -- In Game overlays
 SpawnFeed
 Killfeed Details
 kill_tracker
+scoreboard

@@ -230,17 +230,14 @@ local _input_action_hook = function(func, self, action_name)
     -- Switch to target slot
     if current_stage == ACTION_STAGES.SWITCH_TO and target_slot then
         if target_slot == SLOT_POCKETABLE_SMALL and action_name == "wield_4" then
-            mod:echo("AutoAbilities: Switching to pocketable small slot.")
             return true
         elseif target_slot == SLOT_POCKETABLE and (action_name == "wield_3" or action_name == "wield_3_gamepad") then
-            mod:echo("AutoAbilities: Switching to pocketable slot.")
             return true
         end
     end
 
     -- Auto use when wielded
     if current_stage == ACTION_STAGES.WAITING_FOR_USE and action_name == "action_one_pressed" then
-        mod:echo("AutoAbilities: Triggering auto use for slot '" .. tostring(target_slot) .. "'.")
         _reset_state()
         return true
     end
