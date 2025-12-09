@@ -763,18 +763,6 @@ mod:hook(
                 local unit_data_extension = ScriptUnit.has_extension(attacked_unit, "unit_data_system")
                 local breed = unit_data_extension and unit_data_extension:breed()
                 if breed then
-                    mod:echo(
-                        string.format(
-                            "Damage dealt to %s: %d (Result: %s, Type: %s, Crit: %s, Weakspot: %s)",
-                            breed.name,
-                            damage,
-                            attack_result,
-                            attack_type,
-                            tostring(is_critical_strike),
-                            tostring(hit_weakspot)
-                        )
-                    )
-
                     tracker:_start_enemy_engagement(attacked_unit, breed)
 
                     tracker:_track_enemy_damage(
