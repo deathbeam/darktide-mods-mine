@@ -26,6 +26,13 @@ return {
 				decimals_number = 0,
 			},
 			{
+				setting_id = "max_kill_history",
+				type = "numeric",
+				default_value = 10,
+				range = { 5, 50 },
+				decimals_number = 0,
+			},
+			{
 				setting_id = "toggle_stats_keybind",
 				type = "keybind",
 				default_value = {},
