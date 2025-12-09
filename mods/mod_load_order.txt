@@ -1,6 +1,7 @@
 -- vim: set filetype=lua :
 
 -- Gameplay
+DefaultSprint
 AutoAbilities
 Skitarius
 guarantee_weapon_swap
