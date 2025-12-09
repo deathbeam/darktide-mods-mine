@@ -17,6 +17,8 @@ how_did_I_get_that
 Enhanced_descriptions
 modular_menu_buttons
 InventoryStats
+ShowMeRealWeaponStats
+TalentRefundBelow
 
 -- In Game HUD
 crosshair_hud
