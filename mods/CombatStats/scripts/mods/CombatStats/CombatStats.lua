@@ -1,10 +1,26 @@
-local mod = get_mod("KillStats")
+local mod = get_mod("CombatStats")
 
 local Breed = mod:original_require("scripts/utilities/breed")
 local BuffTemplates = mod:original_require("scripts/settings/buff/buff_templates")
 
 local function _get_gameplay_time()
     return Managers.time and Managers.time:has_timer("gameplay") and Managers.time:time("gameplay") or 0
+end
+
+local function _is_enabled()
+    local only_in_psykanium = mod:get("only_in_psykanium")
+    if not only_in_psykanium then
+        return true
+    end
+
+    local game_mode_manager = Managers.state.game_mode
+    local gamemode_name = game_mode_manager and game_mode_manager:game_mode_name() or "unknown"
+
+    if gamemode_name == "training_grounds" then
+        return true
+    end
+
+    return false
 end
 
 local function _get_buff_icon(buff_template_name)
@@ -24,10 +40,10 @@ local function _get_buff_icon(buff_template_name)
     return nil
 end
 
-local function _should_show_buff(buff_template_name, uptime_percent, duration, min_uptime_pct)
+local function _should_show_buff(buff_template_name, uptime_percent, duration)
     local template = BuffTemplates[buff_template_name]
     if not template then
-        return uptime_percent < 99.9 and uptime_percent >= min_uptime_pct
+        return uptime_percent < 99.9 and uptime_percent >= 0
     end
 
     if not template.hud_icon then
@@ -39,10 +55,10 @@ local function _should_show_buff(buff_template_name, uptime_percent, duration, m
     end
 
     if template.max_duration or template.duration then
-        return uptime_percent >= min_uptime_pct
+        return uptime_percent >= 0
     end
 
-    if uptime_percent < 99.9 and uptime_percent >= min_uptime_pct then
+    if uptime_percent < 99.9 and uptime_percent >= 0 then
         return true
     end
 
@@ -269,12 +285,10 @@ local function _show_complete_stats(stats, duration, buff_uptime, title_prefix)
         if Imgui.collapsing_header(title_prefix .. "Buff Uptime") then
             Imgui.indent()
 
-            local min_uptime_pct = mod:get("min_buff_uptime") or 0
-
             local sorted_buffs = {}
             for buff_name, uptime in pairs(buff_uptime) do
                 local uptime_percent = (uptime / duration) * 100
-                if _should_show_buff(buff_name, uptime_percent, duration, min_uptime_pct) then
+                if _should_show_buff(buff_name, uptime_percent, duration) then
                     local icon = _get_buff_icon(buff_name)
                     table.insert(sorted_buffs, {
                         name = buff_name,
@@ -314,9 +328,9 @@ local function _show_complete_stats(stats, duration, buff_uptime, title_prefix)
     end
 end
 
-local KillStatsTracker = class("KillStatsTracker")
+local CombatStatsTracker = class("CombatStatsTracker")
 
-function KillStatsTracker:init()
+function CombatStatsTracker:init()
     self._is_open = false
     self._active_buffs = {}
     self._buff_uptime = {}
@@ -324,7 +338,7 @@ function KillStatsTracker:init()
     self._engagements_by_unit = {}
 end
 
-function KillStatsTracker:open()
+function CombatStatsTracker:open()
     local input_manager = Managers.input
     local name = self.__class_name
 
@@ -336,7 +350,7 @@ function KillStatsTracker:open()
     Imgui.open_imgui()
 end
 
-function KillStatsTracker:close()
+function CombatStatsTracker:close()
     local input_manager = Managers.input
     local name = self.__class_name
 
@@ -348,14 +362,14 @@ function KillStatsTracker:close()
     Imgui.close_imgui()
 end
 
-function KillStatsTracker:reset_stats()
+function CombatStatsTracker:reset_stats()
     self._active_buffs = {}
     self._buff_uptime = {}
     self._engagements = {}
     self._engagements_by_unit = {}
 end
 
-function KillStatsTracker:_get_session_duration()
+function CombatStatsTracker:_get_session_duration()
     if #self._engagements == 0 then
         return 0
     end
@@ -365,7 +379,7 @@ function KillStatsTracker:_get_session_duration()
     return last_end - first_start
 end
 
-function KillStatsTracker:_calculate_session_stats()
+function CombatStatsTracker:_calculate_session_stats()
     local stats = {
         total_damage = 0,
         melee_damage = 0,
@@ -422,7 +436,7 @@ function KillStatsTracker:_calculate_session_stats()
     return stats
 end
 
-function KillStatsTracker:_start_enemy_engagement(unit, breed)
+function CombatStatsTracker:_start_enemy_engagement(unit, breed)
     local engagement = self:_find_engagement(unit)
     if engagement and engagement.in_progress then
         return
@@ -480,7 +494,7 @@ function KillStatsTracker:_start_enemy_engagement(unit, breed)
     self._engagements_by_unit[unit] = engagement
 end
 
-function KillStatsTracker:_find_engagement(unit)
+function CombatStatsTracker:_find_engagement(unit)
     local engagement = self._engagements_by_unit[unit]
     if engagement and engagement.in_progress then
         return engagement
@@ -488,7 +502,7 @@ function KillStatsTracker:_find_engagement(unit)
     return nil
 end
 
-function KillStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_critical, is_weakspot, damage_profile)
+function CombatStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_critical, is_weakspot, damage_profile)
     local engagement = self:_find_engagement(unit)
     if not engagement then
         return
@@ -538,7 +552,7 @@ function KillStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_crit
     end
 end
 
-function KillStatsTracker:_finish_enemy_engagement(unit)
+function CombatStatsTracker:_finish_enemy_engagement(unit)
     local engagement = self:_find_engagement(unit)
     if not engagement then
         return
@@ -551,7 +565,7 @@ function KillStatsTracker:_finish_enemy_engagement(unit)
     engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
 end
 
-function KillStatsTracker:_update_enemy_buffs(dt)
+function CombatStatsTracker:_update_enemy_buffs(dt)
     local current_time = _get_gameplay_time()
 
     for _, engagement in ipairs(self._engagements) do
@@ -576,7 +590,7 @@ function KillStatsTracker:_update_enemy_buffs(dt)
     end
 end
 
-function KillStatsTracker:_update_buffs(dt)
+function CombatStatsTracker:_update_buffs(dt)
     local player = Managers.player:local_player_safe(1)
     if not player then
         return
@@ -621,7 +635,7 @@ function KillStatsTracker:_update_buffs(dt)
     self:_update_enemy_buffs(dt)
 end
 
-function KillStatsTracker:update(dt)
+function CombatStatsTracker:update(dt)
     local current_time = _get_gameplay_time()
     if current_time == 0 then
         return
@@ -717,9 +731,13 @@ function KillStatsTracker:update(dt)
     Imgui.end_window()
 end
 
-local tracker = KillStatsTracker:new()
+local tracker = CombatStatsTracker:new()
 
 function mod.update(dt)
+    if not _is_enabled() then
+        return
+    end
+
     tracker:update(dt)
 end
 
@@ -756,26 +774,28 @@ mod:hook(
         is_critical_strike,
         ...
     )
-        local player = Managers.player:local_player_safe(1)
-        if player then
-            local player_unit = player.player_unit
-            if player_unit and attacking_unit == player_unit then
-                local unit_data_extension = ScriptUnit.has_extension(attacked_unit, "unit_data_system")
-                local breed = unit_data_extension and unit_data_extension:breed()
-                if breed then
-                    tracker:_start_enemy_engagement(attacked_unit, breed)
+        if _is_enabled() then
+            local player = Managers.player:local_player_safe(1)
+            if player then
+                local player_unit = player.player_unit
+                if player_unit and attacking_unit == player_unit then
+                    local unit_data_extension = ScriptUnit.has_extension(attacked_unit, "unit_data_system")
+                    local breed = unit_data_extension and unit_data_extension:breed()
+                    if breed then
+                        tracker:_start_enemy_engagement(attacked_unit, breed)
 
-                    tracker:_track_enemy_damage(
-                        attacked_unit,
-                        damage,
-                        attack_type,
-                        is_critical_strike,
-                        hit_weakspot,
-                        damage_profile and damage_profile.name
-                    )
+                        tracker:_track_enemy_damage(
+                            attacked_unit,
+                            damage,
+                            attack_type,
+                            is_critical_strike,
+                            hit_weakspot,
+                            damage_profile and damage_profile.name
+                        )
 
-                    if attack_result == "died" then
-                        tracker:_finish_enemy_engagement(attacked_unit)
+                        if attack_result == "died" then
+                            tracker:_finish_enemy_engagement(attacked_unit)
+                        end
                     end
                 end
             end

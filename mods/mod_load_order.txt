@@ -9,7 +9,7 @@ guarantee_special_action
 -- Debugging
 creature_spawner
 show_crit_chance
-KillStats
+CombatStats
 
 -- General HUD
 custom_hud

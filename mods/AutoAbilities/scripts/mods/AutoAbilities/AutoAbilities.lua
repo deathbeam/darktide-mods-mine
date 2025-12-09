@@ -28,10 +28,6 @@ local chemical_autostim_enabled = false
 local quick_deploy_enabled = false
 local auto_blitz_enabled = false
 
--- ┌────────────────────────────┐
--- │            LOGIC           │
--- └────────────────────────────┘
-
 local function _get_player_unit()
     local player = Managers.player and Managers.player:local_player_safe(1)
     return player and player.player_unit
@@ -230,10 +226,6 @@ local function _is_quick_throw_grenade()
     return false
 end
 
--- ┌────────────────────────────┐
--- │        UPDATE LOOP         │
--- └────────────────────────────┘
-
 mod.update = function(dt)
     local game_mode_manager = Managers.state and Managers.state.game_mode
     local game_mode_name = game_mode_manager and game_mode_manager:game_mode_name()
@@ -267,10 +259,6 @@ mod.update = function(dt)
         _start_chemical_autostim()
     end
 end
-
--- ┌────────────────────────────┐
--- │          HOOKS             │
--- └────────────────────────────┘
 
 local _input_action_hook = function(func, self, action_name)
     -- Switch to target slot
@@ -352,10 +340,6 @@ mod:hook_safe(
         end
     end
 )
-
--- ┌────────────────────────────┐
--- │      DMF CALLBACKS         │
--- └────────────────────────────┘
 
 mod.on_setting_changed = function(id)
     if id == "auto_blitz_enabled" then

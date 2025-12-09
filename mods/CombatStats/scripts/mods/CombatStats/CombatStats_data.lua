@@ -1,4 +1,4 @@
-local mod = get_mod("KillStats")
+local mod = get_mod("CombatStats")
 
 return {
     name = mod:localize("mod_name"),
@@ -7,11 +7,9 @@ return {
     options = {
         widgets = {
             {
-                setting_id = "min_buff_uptime",
-                type = "numeric",
-                default_value = 0,
-                range = { 0, 90 },
-                decimals_number = 0,
+                setting_id = "only_in_psykanium",
+                type = "checkbox",
+                default_value = true,
             },
             {
                 setting_id = "max_kill_history",
