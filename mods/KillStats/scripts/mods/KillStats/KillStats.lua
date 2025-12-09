@@ -422,10 +422,29 @@ function KillStatsTracker:_calculate_session_stats()
     return stats
 end
 
-function KillStatsTracker:_start_enemy_engagement(unit, breed_name)
-    for _, engagement in ipairs(self._engagements) do
-        if engagement.unit == unit and engagement.in_progress then
-            return
+function KillStatsTracker:_start_enemy_engagement(unit, breed)
+    local engagement = self:_find_engagement(unit)
+    if engagement and engagement.in_progress then
+        return
+    end
+
+    local breed_name = breed.name
+    local breed_type = "unknown"
+    if breed.tags then
+        if
+            breed.tags.monster
+            or breed.tags.captain
+            or breed.tags.cultist_captain
+        then
+            breed_type = "monster"
+        elseif breed.tags.ritualist then
+            breed_type = "ritualist"
+        elseif breed.tags.special then
+            breed_type = "special"
+        elseif breed.tags.elite then
+            breed_type = "elite"
+        elseif breed.tags.horde or breed.tags.roamer then
+            breed_type = "horde"
         end
     end
 
@@ -433,7 +452,7 @@ function KillStatsTracker:_start_enemy_engagement(unit, breed_name)
     local engagement = {
         unit = unit,
         breed_name = breed_name,
-        breed_type = nil,
+        breed_type = breed_type,
         start_time = current_time,
         end_time = nil,
         duration = 0,
@@ -469,10 +488,26 @@ function KillStatsTracker:_find_engagement(unit)
     return nil
 end
 
-function KillStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_critical, is_weakspot, damage_type)
+function KillStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_critical, is_weakspot, damage_profile)
     local engagement = self:_find_engagement(unit)
     if not engagement then
         return
+    end
+
+    local damage_type = nil
+    if damage_profile then
+        if string.find(damage_profile:lower(), "bleed") then
+            damage_type = "bleed"
+        elseif
+            string.find(damage_profile:lower(), "burn")
+            or string.find(damage_profile:lower(), "fire")
+            or string.find(damage_profile:lower(), "flame")
+        then
+            damage_type = "burn"
+        elseif string.find(damage_profile:lower(), "toxin")
+        then
+            damage_type = "toxin"
+        end
     end
 
     engagement.total_damage = engagement.total_damage + damage
@@ -503,7 +538,7 @@ function KillStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_crit
     end
 end
 
-function KillStatsTracker:_finish_enemy_engagement(unit, breed_type)
+function KillStatsTracker:_finish_enemy_engagement(unit)
     local engagement = self:_find_engagement(unit)
     if not engagement then
         return
@@ -512,7 +547,6 @@ function KillStatsTracker:_finish_enemy_engagement(unit, breed_type)
     local current_time = _get_gameplay_time()
     engagement.end_time = current_time
     engagement.duration = current_time - engagement.start_time
-    engagement.breed_type = breed_type
     engagement.in_progress = false
     engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
 end
@@ -727,31 +761,21 @@ mod:hook(
             local player_unit = player.player_unit
             if player_unit and attacking_unit == player_unit then
                 local unit_data_extension = ScriptUnit.has_extension(attacked_unit, "unit_data_system")
-                local breed_or_nil = unit_data_extension and unit_data_extension:breed()
+                local breed = unit_data_extension and unit_data_extension:breed()
+                if breed then
+                    mod:echo(
+                        string.format(
+                            "Damage dealt to %s: %d (Result: %s, Type: %s, Crit: %s, Weakspot: %s)",
+                            breed.name,
+                            damage,
+                            attack_result,
+                            attack_type,
+                            tostring(is_critical_strike),
+                            tostring(hit_weakspot)
+                        )
+                    )
 
-                if breed_or_nil then
-                    tracker:_start_enemy_engagement(attacked_unit, breed_or_nil.name)
-
-                    local damage_type_str = nil
-                    if damage_profile then
-                        local profile_name = damage_profile.name
-                        if profile_name then
-                            if string.find(profile_name:lower(), "bleed") then
-                                damage_type_str = "bleed"
-                            elseif
-                                string.find(profile_name:lower(), "burn")
-                                or string.find(profile_name:lower(), "fire")
-                                or string.find(profile_name:lower(), "flamer")
-                            then
-                                damage_type_str = "burn"
-                            elseif
-                                string.find(profile_name:lower(), "toxin")
-                                or string.find(profile_name:lower(), "neurotoxin")
-                            then
-                                damage_type_str = "toxin"
-                            end
-                        end
-                    end
+                    tracker:_start_enemy_engagement(attacked_unit, breed)
 
                     tracker:_track_enemy_damage(
                         attacked_unit,
@@ -759,32 +783,11 @@ mod:hook(
                         attack_type,
                         is_critical_strike,
                         hit_weakspot,
-                        damage_type_str
+                        damage_profile and damage_profile.name
                     )
-                end
 
-                if attack_result == "died" then
-                    if breed_or_nil then
-                        local breed_type = "unknown"
-                        if breed_or_nil.tags then
-                            if
-                                breed_or_nil.tags.monster
-                                or breed_or_nil.tags.captain
-                                or breed_or_nil.tags.cultist_captain
-                            then
-                                breed_type = "monster"
-                            elseif breed_or_nil.tags.ritualist then
-                                breed_type = "ritualist"
-                            elseif breed_or_nil.tags.special then
-                                breed_type = "special"
-                            elseif breed_or_nil.tags.elite then
-                                breed_type = "elite"
-                            elseif breed_or_nil.tags.horde or breed_or_nil.tags.roamer then
-                                breed_type = "horde"
-                            end
-                        end
-
-                        tracker:_finish_enemy_engagement(attacked_unit, breed_type)
+                    if attack_result == "died" then
+                        tracker:_finish_enemy_engagement(attacked_unit)
                     end
                 end
             end
