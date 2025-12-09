@@ -115,30 +115,6 @@ local function _show_hit_stats(stats, prefix)
 	end
 end
 
-local function _engagement_to_stats(engagement)
-	return {
-		total_damage = engagement.damage_dealt,
-		melee_damage = engagement.melee_damage,
-		ranged_damage = engagement.ranged_damage,
-		crit_damage = engagement.crit_damage,
-		weakspot_damage = engagement.weakspot_damage,
-		bleed_damage = engagement.bleed_damage,
-		burn_damage = engagement.burn_damage,
-		toxin_damage = engagement.toxin_damage,
-		total_hits = engagement.hits,
-		crit_hits = engagement.crit_hits,
-		weakspot_hits = engagement.weakspot_hits,
-	}
-end
-
-local function _engagement_buff_uptime(engagement)
-	local uptime_table = {}
-	for buff_name, buff_data in pairs(engagement.buffs or {}) do
-		uptime_table[buff_name] = buff_data.uptime or 0
-	end
-	return uptime_table
-end
-
 local function _show_complete_stats(stats, duration, buff_uptime, title_prefix)
 	title_prefix = title_prefix or ""
 	
@@ -298,27 +274,6 @@ function KillStatsTracker:init()
 	self._engagements = {}
 end
 
-function KillStatsTracker:_create_empty_stats()
-	return {
-		total_damage = 0,
-		melee_damage = 0,
-		ranged_damage = 0,
-		crit_damage = 0,
-		weakspot_damage = 0,
-		bleed_damage = 0,
-		burn_damage = 0,
-		toxin_damage = 0,
-		kills = 0,
-		crit_kills = 0,
-		weakspot_kills = 0,
-		elite_kills = 0,
-		special_kills = 0,
-		total_hits = 0,
-		crit_hits = 0,
-		weakspot_hits = 0,
-	}
-end
-
 function KillStatsTracker:open()
 	local input_manager = Managers.input
 	local name = self.__class_name
@@ -376,24 +331,21 @@ function KillStatsTracker:_calculate_session_stats()
 		bleed_damage = 0,
 		burn_damage = 0,
 		toxin_damage = 0,
-		kills = 0,
-		crit_kills = 0,
-		weakspot_kills = 0,
-		elite_kills = 0,
-		special_kills = 0,
+		total_kills = 0,
+        kills = {},
 		total_hits = 0,
 		crit_hits = 0,
 		weakspot_hits = 0,
 	}
 	
 	for _, engagement in ipairs(self._engagements) do
-		stats.total_damage = stats.total_damage + engagement.damage_dealt
-		stats.total_hits = stats.total_hits + engagement.hits
+		stats.total_damage = stats.total_damage + engagement.total_damage
+		stats.total_hits = stats.total_hits + engagement.total_hits
 		stats.crit_hits = stats.crit_hits + engagement.crit_hits
 		stats.weakspot_hits = stats.weakspot_hits + engagement.weakspot_hits
 		
 		if not engagement.in_progress then
-			stats.kills = stats.kills + 1
+			stats.total_kills = stats.total_kills + 1
 		end
 		
 		if engagement.melee_damage then
@@ -419,18 +371,7 @@ function KillStatsTracker:_calculate_session_stats()
 		end
 		
 		if not engagement.in_progress then
-			if engagement.had_crit then
-				stats.crit_kills = stats.crit_kills + 1
-			end
-			if engagement.had_weakspot then
-				stats.weakspot_kills = stats.weakspot_kills + 1
-			end
-			
-			if engagement.breed_type == "elite" then
-				stats.elite_kills = stats.elite_kills + 1
-			elseif engagement.breed_type == "special" then
-				stats.special_kills = stats.special_kills + 1
-			end
+            stats.kills[engagement.breed_type] = (stats.kills[engagement.breed_type] or 0) + 1
 		end
 	end
 	
@@ -453,7 +394,7 @@ function KillStatsTracker:_start_enemy_engagement(unit, breed_name)
 		end_time = nil,
 		duration = 0,
 		in_progress = true,
-		damage_dealt = 0,
+		total_damage = 0,
 		melee_damage = 0,
 		ranged_damage = 0,
 		crit_damage = 0,
@@ -461,20 +402,15 @@ function KillStatsTracker:_start_enemy_engagement(unit, breed_name)
 		bleed_damage = 0,
 		burn_damage = 0,
 		toxin_damage = 0,
-		hits = 0,
+		total_hits = 0,
 		crit_hits = 0,
 		weakspot_hits = 0,
-		had_crit = false,
-		had_weakspot = false,
 		dps = 0,
 		buffs = {}
 	}
 	
 	for buff_name, _ in pairs(self._active_buffs) do
-		engagement.buffs[buff_name] = {
-			uptime = 0,
-			uptime_percent = 0
-		}
+		engagement.buffs[buff_name] = 0
 	end
 	
 	table.insert(self._engagements, engagement)
@@ -495,8 +431,8 @@ function KillStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_crit
 		return
 	end
 	
-	engagement.damage_dealt = engagement.damage_dealt + damage
-	engagement.hits = engagement.hits + 1
+	engagement.total_damage = engagement.total_damage + damage
+	engagement.total_hits = engagement.total_hits + 1
 	
 	if attack_type == "melee" then
 		engagement.melee_damage = engagement.melee_damage + damage
@@ -507,13 +443,11 @@ function KillStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_crit
 	if is_critical then
 		engagement.crit_damage = engagement.crit_damage + damage
 		engagement.crit_hits = engagement.crit_hits + 1
-		engagement.had_crit = true
 	end
 	
 	if is_weakspot then
 		engagement.weakspot_damage = engagement.weakspot_damage + damage
 		engagement.weakspot_hits = engagement.weakspot_hits + 1
-		engagement.had_weakspot = true
 	end
 	
 	if damage_type == "bleed" then
@@ -536,13 +470,7 @@ function KillStatsTracker:_finish_enemy_engagement(unit, breed_type)
 	engagement.duration = current_time - engagement.start_time
 	engagement.breed_type = breed_type
 	engagement.in_progress = false
-	engagement.dps = engagement.duration > 0 and engagement.damage_dealt / engagement.duration or 0
-	
-	for buff_name, buff_data in pairs(engagement.buffs) do
-		if buff_data.uptime > 0 then
-			buff_data.uptime_percent = engagement.duration > 0 and (buff_data.uptime / engagement.duration * 100) or 0
-		end
-	end
+	engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
 end
 
 function KillStatsTracker:_update_enemy_buffs(dt)
@@ -552,23 +480,19 @@ function KillStatsTracker:_update_enemy_buffs(dt)
 		if engagement.in_progress then
 			if ALIVE[engagement.unit] then
 				engagement.duration = current_time - engagement.start_time
-				engagement.dps = engagement.duration > 0 and engagement.damage_dealt / engagement.duration or 0
+				engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
 				
 				for buff_name, _ in pairs(self._active_buffs) do
 					if not engagement.buffs[buff_name] then
-						engagement.buffs[buff_name] = {
-							uptime = 0,
-							uptime_percent = 0
-						}
+						engagement.buffs[buff_name] = 0
 					end
-					engagement.buffs[buff_name].uptime = engagement.buffs[buff_name].uptime + dt
-					engagement.buffs[buff_name].uptime_percent = engagement.duration > 0 and (engagement.buffs[buff_name].uptime / engagement.duration * 100) or 0
+					engagement.buffs[buff_name] = engagement.buffs[buff_name] + dt
 				end
 			else
 				engagement.in_progress = false
 				engagement.end_time = current_time
 				engagement.duration = current_time - engagement.start_time
-				engagement.dps = engagement.duration > 0 and engagement.damage_dealt / engagement.duration or 0
+				engagement.dps = engagement.duration > 0 and engagement.total_damage / engagement.duration or 0
 			end
 		end
 	end
@@ -645,10 +569,18 @@ function KillStatsTracker:update(dt)
 	Imgui.same_line()
 	if Imgui.button("Reset Stats") then
 		self:reset_stats()
-	end
+    end
+
+    local kill_text = "Kills: " .. stats.total_kills
+    if next(stats.kills) then
+        local kill_details = {}
+        for breed_type, count in pairs(stats.kills) do
+            table.insert(kill_details, string.format("%s: %d", breed_type, count))
+        end
+        kill_text = kill_text .. " (" .. table.concat(kill_details, ", ") .. ")"
+    end
 	
-	Imgui.text(string.format("Kills: %d (Elite: %d, Special: %d)", 
-		stats.kills, stats.elite_kills, stats.special_kills))
+	Imgui.text(kill_text)
 	
 	if duration > 0 and stats.total_damage > 0 then
 		Imgui.text_colored(0, 255, 0, 255, string.format("Session DPS: %.0f", stats.total_damage / duration))
@@ -678,14 +610,10 @@ function KillStatsTracker:update(dt)
 				local status = engagement.in_progress and "IN PROGRESS" or "KILLED"
 				local breed_type_str = engagement.breed_type or "unknown"
 				local header_text = string.format("#%d: %s [%s] (%s) - %.1fs - %d dmg (%.0f DPS)", 
-					i, engagement.breed_name, status, breed_type_str, engagement.duration, engagement.damage_dealt, engagement.dps)
+					i, engagement.breed_name, status, breed_type_str, engagement.duration, engagement.total_damage, engagement.dps)
 				
 				if Imgui.tree_node(header_text) then
-					local eng_stats = _engagement_to_stats(engagement)
-					local eng_buffs = _engagement_buff_uptime(engagement)
-					
-					_show_complete_stats(eng_stats, engagement.duration, eng_buffs, "")
-					
+					_show_complete_stats(engagement, engagement.duration, engagement.buffs, "")
 					Imgui.tree_pop()
 				end
 				
@@ -756,12 +684,20 @@ function(func, self, damage_profile, attacked_unit, attacking_unit, attack_direc
 			
 			if attack_result == "died" then
 				if breed_or_nil then
-					local breed_type = "normal"
-					if breed_or_nil.tags and breed_or_nil.tags.elite then
-						breed_type = "elite"
-					elseif breed_or_nil.tags and breed_or_nil.tags.special then
-						breed_type = "special"
-					end
+                    local breed_type = "unknown"
+                    if breed_or_nil.tags then
+                        if breed_or_nil.tags.monster or breed_or_nil.tags.captain or breed_or_nil.tags.cultist_captain then
+                            breed_type = "monster"
+                        elseif breed_or_nil.tags.ritualist then
+                            breed_type = "ritualist"
+                        elseif breed_or_nil.tags.special then
+                            breed_type = "special"
+                        elseif breed_or_nil.tags.elite then
+                            breed_type = "elite"
+                        elseif breed_or_nil.tags.horde or breed_or_nil.tags.roamer then
+                            breed_type = "horde"
+                        end
+                    end
 					
 					tracker:_finish_enemy_engagement(attacked_unit, breed_type)
 				end
