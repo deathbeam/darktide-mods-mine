@@ -610,12 +610,13 @@ function CombatStatsTracker:_update_buffs(dt)
     local buffs = buff_extension:buffs()
     for i = 1, #buffs do
         local buff = buffs[i]
-        if buff and buff:template_name() then
+        if buff then
             local buff_name = buff:template_name()
-            current_buffs[buff_name] = true
-
-            if not self._buff_uptime[buff_name] then
-                self._buff_uptime[buff_name] = 0
+            if buff_name then
+                current_buffs[buff_name] = true
+                if not self._buff_uptime[buff_name] then
+                    self._buff_uptime[buff_name] = 0
+                end
             end
         end
     end
@@ -648,7 +649,7 @@ function CombatStatsTracker:update(dt)
     end
 
     Imgui.set_next_window_size(700, 800, "FirstUseEver")
-    local _, closed = Imgui.begin_window("Kill Stats Tracker", "always_auto_resize")
+    local _, closed = Imgui.begin_window("Combat Stats Tracker", "always_auto_resize")
 
     if closed then
         self:close()
