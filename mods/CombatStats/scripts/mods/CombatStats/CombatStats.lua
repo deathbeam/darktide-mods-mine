@@ -15,8 +15,7 @@ local function _is_enabled()
 
     local game_mode_manager = Managers.state.game_mode
     local gamemode_name = game_mode_manager and game_mode_manager:game_mode_name() or "unknown"
-
-    if gamemode_name == "training_grounds" then
+    if gamemode_name == "shooting_range" then
         return true
     end
 
