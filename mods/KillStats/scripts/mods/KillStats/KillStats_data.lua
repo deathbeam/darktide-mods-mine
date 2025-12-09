@@ -7,18 +7,6 @@ return {
 	options = {
 		widgets = {
 			{
-				setting_id = "show_after_kill",
-				type = "checkbox",
-				default_value = true,
-			},
-			{
-				setting_id = "kill_display_duration",
-				type = "numeric",
-				default_value = 5,
-				range = { 1, 30 },
-				decimals_number = 0,
-			},
-			{
 				setting_id = "min_buff_uptime",
 				type = "numeric",
 				default_value = 0,

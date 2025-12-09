@@ -5,18 +5,6 @@ return {
 	mod_description = {
 		en = "Track detailed combat statistics including damage, kills, buff uptime, and more. Shows stats window after kills.",
 	},
-	show_after_kill = {
-		en = "Show After Kill",
-	},
-	show_after_kill_tooltip = {
-		en = "Automatically show stats window after getting a kill.",
-	},
-	kill_display_duration = {
-		en = "Display Duration (seconds)",
-	},
-	kill_display_duration_tooltip = {
-		en = "How long to show stats after getting a kill.",
-	},
 	min_buff_uptime = {
 		en = "Min Buff Uptime %%",
 	},

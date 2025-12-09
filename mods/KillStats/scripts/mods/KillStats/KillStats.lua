@@ -295,7 +295,6 @@ function KillStatsTracker:init()
 	self._is_open = false
 	self._active_buffs = {}
 	self._buff_uptime = {}
-	self._last_kill_time = 0
 	self._engagements = {}
 end
 
@@ -347,7 +346,6 @@ end
 function KillStatsTracker:reset_stats()
 	self._active_buffs = {}
 	self._buff_uptime = {}
-	self._last_kill_time = 0
 	self._engagements = {}
 end
 
@@ -545,8 +543,6 @@ function KillStatsTracker:_finish_enemy_engagement(unit, breed_type)
 			buff_data.uptime_percent = engagement.duration > 0 and (buff_data.uptime / engagement.duration * 100) or 0
 		end
 	end
-	
-	self._last_kill_time = current_time
 end
 
 function KillStatsTracker:_update_enemy_buffs(dt)
@@ -629,15 +625,9 @@ function KillStatsTracker:update(dt)
 		return
 	end
 	
-	local show_after_kill = mod:get("show_after_kill")
-	local kill_display_duration = mod:get("kill_display_duration") or 5
-	local show_on_kill = show_after_kill and (current_time - self._last_kill_time) < kill_display_duration
-
 	self:_update_buffs(dt)
 
-	local show_stats = self._is_open or show_on_kill
-	
-	if not show_stats then
+	if not self._is_open then
 		return
 	end
 
