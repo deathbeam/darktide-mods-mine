@@ -272,6 +272,7 @@ function KillStatsTracker:init()
 	self._active_buffs = {}
 	self._buff_uptime = {}
 	self._engagements = {}
+    self._engagements_by_unit = {}
 end
 
 function KillStatsTracker:open()
@@ -302,6 +303,7 @@ function KillStatsTracker:reset_stats()
 	self._active_buffs = {}
 	self._buff_uptime = {}
 	self._engagements = {}
+    self._engagements_by_unit = {}
 end
 
 function KillStatsTracker:_get_session_duration()
@@ -311,13 +313,6 @@ function KillStatsTracker:_get_session_duration()
 	
 	local first_start = self._engagements[1].start_time
 	local last_end = _get_gameplay_time()
-	
-	for _, engagement in ipairs(self._engagements) do
-		if engagement.end_time and engagement.end_time > last_end then
-			last_end = engagement.end_time
-		end
-	end
-	
 	return last_end - first_start
 end
 
@@ -414,14 +409,14 @@ function KillStatsTracker:_start_enemy_engagement(unit, breed_name)
 	end
 	
 	table.insert(self._engagements, engagement)
+    self._engagements_by_unit[unit] = engagement
 end
 
 function KillStatsTracker:_find_engagement(unit)
-	for _, engagement in ipairs(self._engagements) do
-		if engagement.unit == unit and engagement.in_progress then
-			return engagement
-		end
-	end
+    local engagement = self._engagements_by_unit[unit]
+    if engagement and engagement.in_progress then
+        return engagement
+    end
 	return nil
 end
 
