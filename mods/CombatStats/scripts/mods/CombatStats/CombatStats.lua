@@ -8,18 +8,19 @@ local function _get_gameplay_time()
 end
 
 local function _is_enabled()
+    local game_mode_manager = Managers.state and Managers.state.game_mode
+    local gamemode_name = game_mode_manager and game_mode_manager:game_mode_name()
+
+    if not gamemode_name or gamemode_name == "hub" or gamemode_name == "prologue_hub" then
+        return false
+    end
+
     local only_in_psykanium = mod:get("only_in_psykanium")
-    if not only_in_psykanium then
-        return true
+    if only_in_psykanium and gamemode_name ~= "shooting_range" then
+        return false
     end
 
-    local game_mode_manager = Managers.state.game_mode
-    local gamemode_name = game_mode_manager and game_mode_manager:game_mode_name() or "unknown"
-    if gamemode_name == "shooting_range" then
-        return true
-    end
-
-    return false
+    return true
 end
 
 local function _get_buff_icon(buff_template_name)
@@ -188,66 +189,69 @@ local function _show_complete_stats(stats, duration, buff_uptime, title_prefix)
         end
 
         Imgui.spacing()
-        local melee_pct = stats.total_damage > 0 and (stats.melee_damage / stats.total_damage * 100) or 0
-        local ranged_pct = stats.total_damage > 0 and (stats.ranged_damage / stats.total_damage * 100) or 0
 
         if stats.melee_damage > 0 then
+            local melee_pct = stats.total_damage > 0 and (stats.melee_damage / stats.total_damage * 100) or 0
             Imgui.text(string.format("Melee: %d", stats.melee_damage))
             Imgui.same_line()
             Imgui.progress_bar(melee_pct / 100, 150, 20, string.format("%.1f%%", melee_pct))
+
+            Imgui.indent()
+            if stats.melee_crit_damage and stats.melee_crit_damage > 0 then
+                local melee_crit_pct = stats.melee_damage > 0 and (stats.melee_crit_damage / stats.melee_damage * 100)
+                    or 0
+                Imgui.text(string.format("Crit: %d (%.1f%%)", stats.melee_crit_damage, melee_crit_pct))
+            end
+            if stats.melee_weakspot_damage and stats.melee_weakspot_damage > 0 then
+                local melee_ws_pct = stats.melee_damage > 0 and (stats.melee_weakspot_damage / stats.melee_damage * 100)
+                    or 0
+                Imgui.text(string.format("Weakspot: %d (%.1f%%)", stats.melee_weakspot_damage, melee_ws_pct))
+            end
+            Imgui.unindent()
         end
 
         if stats.ranged_damage > 0 then
+            local ranged_pct = stats.total_damage > 0 and (stats.ranged_damage / stats.total_damage * 100) or 0
             Imgui.text(string.format("Ranged: %d", stats.ranged_damage))
             Imgui.same_line()
             Imgui.progress_bar(ranged_pct / 100, 150, 20, string.format("%.1f%%", ranged_pct))
+
+            Imgui.indent()
+            if stats.ranged_crit_damage and stats.ranged_crit_damage > 0 then
+                local ranged_crit_pct = stats.ranged_damage > 0
+                        and (stats.ranged_crit_damage / stats.ranged_damage * 100)
+                    or 0
+                Imgui.text(string.format("Crit: %d (%.1f%%)", stats.ranged_crit_damage, ranged_crit_pct))
+            end
+            if stats.ranged_weakspot_damage and stats.ranged_weakspot_damage > 0 then
+                local ranged_ws_pct = stats.ranged_damage > 0
+                        and (stats.ranged_weakspot_damage / stats.ranged_damage * 100)
+                    or 0
+                Imgui.text(string.format("Weakspot: %d (%.1f%%)", stats.ranged_weakspot_damage, ranged_ws_pct))
+            end
+            Imgui.unindent()
         end
 
-        Imgui.spacing()
-        local crit_pct = stats.total_damage > 0 and (stats.crit_damage / stats.total_damage * 100) or 0
-        local weakspot_pct = stats.total_damage > 0 and (stats.weakspot_damage / stats.total_damage * 100) or 0
-
-        if stats.crit_damage > 0 then
-            Imgui.text(string.format("Critical: %d", stats.crit_damage))
+        if stats.buff_damage and stats.buff_damage > 0 then
+            local buff_pct = stats.total_damage > 0 and (stats.buff_damage / stats.total_damage * 100) or 0
+            Imgui.text(string.format("Buff: %d", stats.buff_damage))
             Imgui.same_line()
-            Imgui.progress_bar(crit_pct / 100, 150, 20, string.format("%.1f%%", crit_pct))
-        end
+            Imgui.progress_bar(buff_pct / 100, 150, 20, string.format("%.1f%%", buff_pct))
 
-        if stats.weakspot_damage > 0 then
-            Imgui.text(string.format("Weakspot: %d", stats.weakspot_damage))
-            Imgui.same_line()
-            Imgui.progress_bar(weakspot_pct / 100, 150, 20, string.format("%.1f%%", weakspot_pct))
-        end
-
-        Imgui.unindent()
-    end
-
-    Imgui.spacing()
-
-    local total_dot = stats.bleed_damage + stats.burn_damage + stats.toxin_damage
-    if total_dot > 0 and Imgui.collapsing_header(title_prefix .. "DOT Damage", "default_open") then
-        Imgui.indent()
-
-        local bleed_pct = total_dot > 0 and (stats.bleed_damage / total_dot * 100) or 0
-        local burn_pct = total_dot > 0 and (stats.burn_damage / total_dot * 100) or 0
-        local toxin_pct = total_dot > 0 and (stats.toxin_damage / total_dot * 100) or 0
-
-        if stats.bleed_damage > 0 then
-            Imgui.text(string.format("Bleed: %d", stats.bleed_damage))
-            Imgui.same_line()
-            Imgui.progress_bar(bleed_pct / 100, 150, 20, string.format("%.1f%%", bleed_pct))
-        end
-
-        if stats.burn_damage > 0 then
-            Imgui.text(string.format("Burn: %d", stats.burn_damage))
-            Imgui.same_line()
-            Imgui.progress_bar(burn_pct / 100, 150, 20, string.format("%.1f%%", burn_pct))
-        end
-
-        if stats.toxin_damage > 0 then
-            Imgui.text(string.format("Toxin: %d", stats.toxin_damage))
-            Imgui.same_line()
-            Imgui.progress_bar(toxin_pct / 100, 150, 20, string.format("%.1f%%", toxin_pct))
+            Imgui.indent()
+            if stats.bleed_damage > 0 then
+                local bleed_pct = stats.buff_damage > 0 and (stats.bleed_damage / stats.buff_damage * 100) or 0
+                Imgui.text(string.format("Bleed: %d (%.1f%%)", stats.bleed_damage, bleed_pct))
+            end
+            if stats.burn_damage > 0 then
+                local burn_pct = stats.buff_damage > 0 and (stats.burn_damage / stats.buff_damage * 100) or 0
+                Imgui.text(string.format("Burn: %d (%.1f%%)", stats.burn_damage, burn_pct))
+            end
+            if stats.toxin_damage > 0 then
+                local toxin_pct = stats.buff_damage > 0 and (stats.toxin_damage / stats.buff_damage * 100) or 0
+                Imgui.text(string.format("Toxin: %d (%.1f%%)", stats.toxin_damage, toxin_pct))
+            end
+            Imgui.unindent()
         end
 
         Imgui.unindent()
@@ -260,19 +264,46 @@ local function _show_complete_stats(stats, duration, buff_uptime, title_prefix)
 
         Imgui.text(string.format("Total Hits: %d", stats.total_hits))
 
-        local crit_hit_rate = stats.total_hits > 0 and (stats.crit_hits / stats.total_hits * 100) or 0
-        local weakspot_hit_rate = stats.total_hits > 0 and (stats.weakspot_hits / stats.total_hits * 100) or 0
-
-        if stats.crit_hits > 0 then
-            Imgui.text("Crit Rate:")
+        if stats.melee_hits and stats.melee_hits > 0 then
+            Imgui.spacing()
+            local melee_hit_pct = stats.total_hits > 0 and (stats.melee_hits / stats.total_hits * 100) or 0
+            Imgui.text(string.format("Melee Hits: %d", stats.melee_hits))
             Imgui.same_line()
-            Imgui.progress_bar(crit_hit_rate / 100, 200, 20, string.format("%.1f%%", crit_hit_rate))
+            Imgui.progress_bar(melee_hit_pct / 100, 150, 20, string.format("%.1f%%", melee_hit_pct))
+
+            Imgui.indent()
+            if stats.melee_crit_hits and stats.melee_crit_hits > 0 then
+                local melee_crit_rate = stats.melee_hits > 0 and (stats.melee_crit_hits / stats.melee_hits * 100) or 0
+                Imgui.text(string.format("Crit: %d (%.1f%%)", stats.melee_crit_hits, melee_crit_rate))
+            end
+
+            if stats.melee_weakspot_hits and stats.melee_weakspot_hits > 0 then
+                local melee_ws_rate = stats.melee_hits > 0 and (stats.melee_weakspot_hits / stats.melee_hits * 100) or 0
+                Imgui.text(string.format("Weakspot: %d (%.1f%%)", stats.melee_weakspot_hits, melee_ws_rate))
+            end
+            Imgui.unindent()
         end
 
-        if stats.weakspot_hits > 0 then
-            Imgui.text("Weakspot Rate:")
+        if stats.ranged_hits and stats.ranged_hits > 0 then
+            Imgui.spacing()
+            local ranged_hit_pct = stats.total_hits > 0 and (stats.ranged_hits / stats.total_hits * 100) or 0
+            Imgui.text(string.format("Ranged Hits: %d", stats.ranged_hits))
             Imgui.same_line()
-            Imgui.progress_bar(weakspot_hit_rate / 100, 200, 20, string.format("%.1f%%", weakspot_hit_rate))
+            Imgui.progress_bar(ranged_hit_pct / 100, 150, 20, string.format("%.1f%%", ranged_hit_pct))
+
+            Imgui.indent()
+            if stats.ranged_crit_hits and stats.ranged_crit_hits > 0 then
+                local ranged_crit_rate = stats.ranged_hits > 0 and (stats.ranged_crit_hits / stats.ranged_hits * 100)
+                    or 0
+                Imgui.text(string.format("Crit: %d (%.1f%%)", stats.ranged_crit_hits, ranged_crit_rate))
+            end
+
+            if stats.ranged_weakspot_hits and stats.ranged_weakspot_hits > 0 then
+                local ranged_ws_rate = stats.ranged_hits > 0 and (stats.ranged_weakspot_hits / stats.ranged_hits * 100)
+                    or 0
+                Imgui.text(string.format("Weakspot: %d (%.1f%%)", stats.ranged_weakspot_hits, ranged_ws_rate))
+            end
+            Imgui.unindent()
         end
 
         Imgui.unindent()
@@ -350,6 +381,10 @@ function CombatStatsTracker:open()
 end
 
 function CombatStatsTracker:close()
+    if not self._is_open then
+        return
+    end
+
     local input_manager = Managers.input
     local name = self.__class_name
 
@@ -383,23 +418,34 @@ function CombatStatsTracker:_calculate_session_stats()
         total_damage = 0,
         melee_damage = 0,
         ranged_damage = 0,
-        crit_damage = 0,
-        weakspot_damage = 0,
+        buff_damage = 0,
+        melee_crit_damage = 0,
+        melee_weakspot_damage = 0,
+        ranged_crit_damage = 0,
+        ranged_weakspot_damage = 0,
         bleed_damage = 0,
         burn_damage = 0,
         toxin_damage = 0,
         total_kills = 0,
         kills = {},
         total_hits = 0,
-        crit_hits = 0,
-        weakspot_hits = 0,
+        melee_hits = 0,
+        ranged_hits = 0,
+        melee_crit_hits = 0,
+        melee_weakspot_hits = 0,
+        ranged_crit_hits = 0,
+        ranged_weakspot_hits = 0,
     }
 
     for _, engagement in ipairs(self._engagements) do
         stats.total_damage = stats.total_damage + engagement.total_damage
         stats.total_hits = stats.total_hits + engagement.total_hits
-        stats.crit_hits = stats.crit_hits + engagement.crit_hits
-        stats.weakspot_hits = stats.weakspot_hits + engagement.weakspot_hits
+        stats.melee_hits = stats.melee_hits + (engagement.melee_hits or 0)
+        stats.ranged_hits = stats.ranged_hits + (engagement.ranged_hits or 0)
+        stats.melee_crit_hits = stats.melee_crit_hits + (engagement.melee_crit_hits or 0)
+        stats.melee_weakspot_hits = stats.melee_weakspot_hits + (engagement.melee_weakspot_hits or 0)
+        stats.ranged_crit_hits = stats.ranged_crit_hits + (engagement.ranged_crit_hits or 0)
+        stats.ranged_weakspot_hits = stats.ranged_weakspot_hits + (engagement.ranged_weakspot_hits or 0)
 
         if not engagement.in_progress then
             stats.total_kills = stats.total_kills + 1
@@ -411,11 +457,20 @@ function CombatStatsTracker:_calculate_session_stats()
         if engagement.ranged_damage then
             stats.ranged_damage = stats.ranged_damage + engagement.ranged_damage
         end
-        if engagement.crit_damage then
-            stats.crit_damage = stats.crit_damage + engagement.crit_damage
+        if engagement.buff_damage then
+            stats.buff_damage = stats.buff_damage + engagement.buff_damage
         end
-        if engagement.weakspot_damage then
-            stats.weakspot_damage = stats.weakspot_damage + engagement.weakspot_damage
+        if engagement.melee_crit_damage then
+            stats.melee_crit_damage = stats.melee_crit_damage + engagement.melee_crit_damage
+        end
+        if engagement.melee_weakspot_damage then
+            stats.melee_weakspot_damage = stats.melee_weakspot_damage + engagement.melee_weakspot_damage
+        end
+        if engagement.ranged_crit_damage then
+            stats.ranged_crit_damage = stats.ranged_crit_damage + engagement.ranged_crit_damage
+        end
+        if engagement.ranged_weakspot_damage then
+            stats.ranged_weakspot_damage = stats.ranged_weakspot_damage + engagement.ranged_weakspot_damage
         end
         if engagement.bleed_damage then
             stats.bleed_damage = stats.bleed_damage + engagement.bleed_damage
@@ -444,11 +499,7 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
     local breed_name = breed.name
     local breed_type = "unknown"
     if breed.tags then
-        if
-            breed.tags.monster
-            or breed.tags.captain
-            or breed.tags.cultist_captain
-        then
+        if breed.tags.monster or breed.tags.captain or breed.tags.cultist_captain then
             breed_type = "monster"
         elseif breed.tags.ritualist then
             breed_type = "ritualist"
@@ -473,14 +524,21 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
         total_damage = 0,
         melee_damage = 0,
         ranged_damage = 0,
-        crit_damage = 0,
-        weakspot_damage = 0,
+        buff_damage = 0,
+        melee_crit_damage = 0,
+        melee_weakspot_damage = 0,
+        ranged_crit_damage = 0,
+        ranged_weakspot_damage = 0,
         bleed_damage = 0,
         burn_damage = 0,
         toxin_damage = 0,
         total_hits = 0,
-        crit_hits = 0,
-        weakspot_hits = 0,
+        melee_hits = 0,
+        ranged_hits = 0,
+        melee_crit_hits = 0,
+        melee_weakspot_hits = 0,
+        ranged_crit_hits = 0,
+        ranged_weakspot_hits = 0,
         dps = 0,
         buffs = {},
     }
@@ -517,29 +575,43 @@ function CombatStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_cr
             or string.find(damage_profile:lower(), "flame")
         then
             damage_type = "burn"
-        elseif string.find(damage_profile:lower(), "toxin")
-        then
+        elseif string.find(damage_profile:lower(), "toxin") then
             damage_type = "toxin"
         end
     end
 
     engagement.total_damage = engagement.total_damage + damage
-    engagement.total_hits = engagement.total_hits + 1
 
     if attack_type == "melee" then
         engagement.melee_damage = engagement.melee_damage + damage
+        engagement.melee_hits = engagement.melee_hits + 1
+        engagement.total_hits = engagement.total_hits + 1
+
+        if is_critical then
+            engagement.melee_crit_damage = engagement.melee_crit_damage + damage
+            engagement.melee_crit_hits = engagement.melee_crit_hits + 1
+        end
+
+        if is_weakspot then
+            engagement.melee_weakspot_damage = engagement.melee_weakspot_damage + damage
+            engagement.melee_weakspot_hits = engagement.melee_weakspot_hits + 1
+        end
     elseif attack_type == "ranged" then
         engagement.ranged_damage = engagement.ranged_damage + damage
-    end
+        engagement.ranged_hits = engagement.ranged_hits + 1
+        engagement.total_hits = engagement.total_hits + 1
 
-    if is_critical then
-        engagement.crit_damage = engagement.crit_damage + damage
-        engagement.crit_hits = engagement.crit_hits + 1
-    end
+        if is_critical then
+            engagement.ranged_crit_damage = engagement.ranged_crit_damage + damage
+            engagement.ranged_crit_hits = engagement.ranged_crit_hits + 1
+        end
 
-    if is_weakspot then
-        engagement.weakspot_damage = engagement.weakspot_damage + damage
-        engagement.weakspot_hits = engagement.weakspot_hits + 1
+        if is_weakspot then
+            engagement.ranged_weakspot_damage = engagement.ranged_weakspot_damage + damage
+            engagement.ranged_weakspot_hits = engagement.ranged_weakspot_hits + 1
+        end
+    elseif attack_type == "buff" then
+        engagement.buff_damage = engagement.buff_damage + damage
     end
 
     if damage_type == "bleed" then
@@ -647,8 +719,7 @@ function CombatStatsTracker:update(dt)
         return
     end
 
-    Imgui.set_next_window_size(700, 800, "FirstUseEver")
-    local _, closed = Imgui.begin_window("Combat Stats Tracker", "always_auto_resize")
+    local _, closed = Imgui.begin_window("Combat Stats Tracker")
 
     if closed then
         self:close()
@@ -742,7 +813,7 @@ function mod.update(dt)
 end
 
 function mod.toggle_kill_stats()
-    if tracker._is_open then
+    if tracker._is_open or not _is_enabled() then
         tracker:close()
     else
         tracker:open()
@@ -752,6 +823,8 @@ end
 function mod.on_game_state_changed(status, state_name)
     if status == "enter" and state_name == "StateGameplay" then
         tracker:reset_stats()
+    elseif status == "exit" and state_name == "StateGameplay" then
+        tracker:close()
     end
 end
 
