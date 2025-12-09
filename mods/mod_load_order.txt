@@ -14,12 +14,12 @@ CombatStats
 
 -- General HUD
 custom_hud
+Enhanced_descriptions
 how_did_I_get_that
 modular_menu_buttons
 InventoryStats
-ShowMeRealWeaponStats
 TalentRefundBelow
-Enhanced_descriptions
+FilterTrash
 
 -- In Game HUD
 crosshair_hud
