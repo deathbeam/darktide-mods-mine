@@ -23,6 +23,7 @@ FilterTrash
 
 -- In Game HUD
 crosshair_hud
+-- RingHud
 markers_aio
 DynamicCrosshair
 Spidey Sense
