@@ -34,5 +34,4 @@ ScanHelper
 -- In Game overlays
 SpawnFeed
 Killfeed Details
-kill_tracker
 scoreboard
