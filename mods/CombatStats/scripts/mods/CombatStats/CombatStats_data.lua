@@ -7,6 +7,11 @@ return {
     options = {
         widgets = {
             {
+                setting_id = 'show_hud_overlay',
+                type = 'checkbox',
+                default_value = true,
+            },
+            {
                 setting_id = 'only_in_psykanium',
                 type = 'checkbox',
                 default_value = true,
@@ -24,7 +29,15 @@ return {
                 default_value = {},
                 keybind_trigger = 'pressed',
                 keybind_type = 'function_call',
-                function_name = 'toggle_kill_stats',
+                function_name = 'toggle_combat_stats',
+            },
+            {
+                setting_id = 'toggle_focus_stats_keybind',
+                type = 'keybind',
+                default_value = {},
+                keybind_trigger = 'pressed',
+                keybind_type = 'function_call',
+                function_name = 'toggle_focus_combat_stats',
             },
         },
     },
