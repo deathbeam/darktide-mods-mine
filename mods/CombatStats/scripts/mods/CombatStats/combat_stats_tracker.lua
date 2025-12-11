@@ -79,6 +79,7 @@ function CombatStatsTracker:get_engagement_stats()
 
         engagements[i] = {
             name = engagement.breed_name,
+            breed_type = engagement.breed_type,
             start_time = engagement.start_time,
             end_time = engagement.end_time,
             stats = stats,
@@ -140,6 +141,8 @@ function CombatStatsTracker:_calculate_session_stats()
         total_damage = 0,
         melee_damage = 0,
         ranged_damage = 0,
+        explosion_damage = 0,
+        companion_damage = 0,
         buff_damage = 0,
         melee_crit_damage = 0,
         melee_weakspot_damage = 0,
@@ -150,6 +153,7 @@ function CombatStatsTracker:_calculate_session_stats()
         toxin_damage = 0,
         total_kills = 0,
         kills = {},
+        damage_by_type = {},
         total_hits = 0,
         melee_hits = 0,
         ranged_hits = 0,
@@ -179,6 +183,12 @@ function CombatStatsTracker:_calculate_session_stats()
         if engagement.ranged_damage then
             stats.ranged_damage = stats.ranged_damage + engagement.ranged_damage
         end
+        if engagement.explosion_damage then
+            stats.explosion_damage = stats.explosion_damage + engagement.explosion_damage
+        end
+        if engagement.companion_damage then
+            stats.companion_damage = stats.companion_damage + engagement.companion_damage
+        end
         if engagement.buff_damage then
             stats.buff_damage = stats.buff_damage + engagement.buff_damage
         end
@@ -207,6 +217,12 @@ function CombatStatsTracker:_calculate_session_stats()
         if engagement.end_time then
             stats.kills[engagement.breed_type] = (stats.kills[engagement.breed_type] or 0) + 1
         end
+
+        -- Track damage by breed type
+        if engagement.total_damage and engagement.total_damage > 0 then
+            stats.damage_by_type[engagement.breed_type] = (stats.damage_by_type[engagement.breed_type] or 0)
+                + engagement.total_damage
+        end
     end
 
     -- Cache the result
@@ -221,6 +237,8 @@ function CombatStatsTracker:_calculate_engagement_stats(engagement)
         total_damage = engagement.total_damage or 0,
         melee_damage = engagement.melee_damage or 0,
         ranged_damage = engagement.ranged_damage or 0,
+        explosion_damage = engagement.explosion_damage or 0,
+        companion_damage = engagement.companion_damage or 0,
         buff_damage = engagement.buff_damage or 0,
         melee_crit_damage = engagement.melee_crit_damage or 0,
         melee_weakspot_damage = engagement.melee_weakspot_damage or 0,
@@ -260,6 +278,8 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
             breed_type = 'monster'
         elseif breed.tags.ritualist then
             breed_type = 'ritualist'
+        elseif breed.tags.disabler then
+            breed_type = 'disabler'
         elseif breed.tags.special then
             breed_type = 'special'
         elseif breed.tags.elite then
@@ -267,6 +287,10 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
         elseif breed.tags.horde or breed.tags.roamer then
             breed_type = 'horde'
         end
+    end
+
+    if not mod:get('breed_' .. breed_type) then
+        return
     end
 
     engagement = {
@@ -278,6 +302,8 @@ function CombatStatsTracker:_start_enemy_engagement(unit, breed)
         total_damage = 0,
         melee_damage = 0,
         ranged_damage = 0,
+        explosion_damage = 0,
+        companion_damage = 0,
         buff_damage = 0,
         melee_crit_damage = 0,
         melee_weakspot_damage = 0,
@@ -371,6 +397,10 @@ function CombatStatsTracker:_track_enemy_damage(unit, damage, attack_type, is_cr
             engagement.ranged_weakspot_damage = engagement.ranged_weakspot_damage + damage
             engagement.ranged_weakspot_hits = engagement.ranged_weakspot_hits + 1
         end
+    elseif attack_type == 'explosion' then
+        engagement.explosion_damage = engagement.explosion_damage + damage
+    elseif attack_type == 'companion_dog' then
+        engagement.companion_damage = engagement.companion_damage + damage
     elseif attack_type == 'buff' then
         engagement.buff_damage = engagement.buff_damage + damage
     end

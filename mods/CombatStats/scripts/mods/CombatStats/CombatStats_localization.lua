@@ -14,6 +14,8 @@ return {
     mod_description = {
         en = 'Track detailed combat statistics including damage, kills, buff uptime, and more.',
     },
+
+    -- Config
     show_hud_overlay = {
         en = 'Show Overlay',
     },
@@ -34,6 +36,9 @@ return {
     },
     toggle_view_keybind = {
         en = 'Toggle Stats View',
+    },
+    enemy_types_to_track = {
+        en = 'Enemy Types to Track',
     },
 
     -- Common Stats
@@ -61,6 +66,12 @@ return {
     ranged = {
         en = 'Ranged',
     },
+    explosion = {
+        en = 'Explosion',
+    },
+    companion = {
+        en = 'Companion',
+    },
     buff = {
         en = 'Buff',
     },
@@ -82,6 +93,9 @@ return {
     enemy = {
         en = 'Enemy',
     },
+    enemy_type = {
+        en = 'Enemy Type',
+    },
 
     -- View
     combat_stats_view_title = {
@@ -96,19 +110,14 @@ return {
     damage_stats = {
         en = 'Damage Stats',
     },
+    damage_by_enemy_type = {
+        en = 'Damage by Enemy Type',
+    },
     hit_stats = {
         en = 'Hit Stats',
     },
     buff_uptime = {
         en = 'Buff Uptime',
-    },
-
-    -- Status
-    in_progress = {
-        en = 'IN PROGRESS',
-    },
-    killed = {
-        en = 'KILLED',
     },
 
     -- Breed Types
@@ -117,6 +126,9 @@ return {
     },
     breed_ritualist = {
         en = 'ritualist',
+    },
+    breed_disabler = {
+        en = 'disabler',
     },
     breed_special = {
         en = 'special',
