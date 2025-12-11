@@ -25,7 +25,25 @@ function CombatStatsView:on_enter()
     CombatStatsView.super.on_enter(self)
 
     self:_setup_input_legend()
+    self:_setup_search()
     self:_setup_entries()
+end
+
+function CombatStatsView:_setup_search()
+    local search_widget = self._widgets_by_name.combat_stats_search
+    if search_widget then
+        search_widget.content.input_text = ''
+        search_widget.content.placeholder_text = mod:localize('search_placeholder')
+
+        -- Adjust colors to match the view better
+        local style = search_widget.style
+        if style then
+            -- Make background slightly lighter
+            style.background.color = { 255, 30, 30, 30 }
+            -- Make baseline more subtle
+            style.baseline.color = Color.terminal_text_body(100, true)
+        end
+    end
 end
 
 function CombatStatsView:_setup_input_legend()
@@ -62,27 +80,55 @@ function CombatStatsView:_setup_entries()
     end
 
     local entries = {}
+    local current_time = Managers.time:time('gameplay')
+
+    -- Get search filter
+    local search_widget = self._widgets_by_name.combat_stats_search
+    local search_text = search_widget and search_widget.content.input_text or ''
+    search_text = search_text:lower()
 
     -- Get all engagement stats
     local engagements = tracker:get_engagement_stats()
-    engagements[#engagements + 1] = tracker:get_session_stats()
+    local session = tracker:get_session_stats()
 
-    -- Add all entries in reverse order (newest first, overall last)
+    -- Always add session stats (overall) first
+    local overall_name = mod:localize('overall_stats')
+    entries[#entries + 1] = {
+        widget_type = 'stats_entry',
+        name = overall_name,
+        start_time = nil,
+        end_time = nil,
+        duration = session.duration,
+        stats = session.stats,
+        buffs = session.buffs,
+        is_session = true,
+        pressed_function = function(parent, widget, entry)
+            parent:_select_entry(widget, entry)
+        end,
+    }
+
+    -- Add all engagements in reverse order (newest first) if they match search
     for i = #engagements, 1, -1 do
-        local data = engagements[i]
-        entries[#entries + 1] = {
-            widget_type = 'stats_entry',
-            display_name = data.display_name,
-            subtext = data.subtext,
-            stats = data.stats,
-            duration = data.duration,
-            buff_uptime = data.buff_uptime,
-            is_overall = data.is_overall,
-            in_progress = data.in_progress,
-            pressed_function = function(parent, widget, entry)
-                parent:_select_entry(widget, entry)
-            end,
-        }
+        local engagement = engagements[i]
+        local duration = (engagement.end_time or current_time) - engagement.start_time
+        local name = engagement.name or (mod:localize('enemy') .. ' ' .. i)
+
+        -- Filter by search text
+        if search_text == '' or name:lower():find(search_text, 1, true) then
+            entries[#entries + 1] = {
+                widget_type = 'stats_entry',
+                name = name,
+                start_time = engagement.start_time,
+                end_time = engagement.end_time,
+                duration = duration,
+                stats = engagement.stats,
+                buffs = engagement.buffs,
+                is_session = false,
+                pressed_function = function(parent, widget, entry)
+                    parent:_select_entry(widget, entry)
+                end,
+            }
+        end
     end
 
     local scenegraph_id = 'combat_stats_list_pivot'
@@ -146,8 +192,17 @@ end
 function CombatStatsView:_setup_grid(widgets, alignment_list, grid_scenegraph_id, spacing)
     local ui_scenegraph = self._ui_scenegraph
     local direction = 'down'
-    local grid =
-        UIWidgetGrid:new(widgets, alignment_list, ui_scenegraph, grid_scenegraph_id, direction, spacing, nil, true)
+
+    local grid = UIWidgetGrid:new(
+        widgets,
+        alignment_list,
+        ui_scenegraph,
+        grid_scenegraph_id,
+        direction,
+        spacing,
+        nil, -- fill_section_spacing
+        true -- use_is_focused_for_navigation
+    )
     local render_scale = self._render_scale
 
     grid:set_render_scale(render_scale)
@@ -176,20 +231,19 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
 
     local stats = entry.stats
     local duration = entry.duration
-    local buff_uptime = entry.buff_uptime or {}
+    local buffs = entry.buffs or {}
 
     local detail_scenegraph = self._ui_scenegraph.combat_stats_detail_content
     local detail_content_width = detail_scenegraph.size[1]
 
-    local line_height = 25
-    local header_height = 35
     local bar_height = 20
     local text_width = detail_content_width
 
     -- Helper to create text widget
     local function create_text(text, color, font_size)
-        local is_header = font_size and font_size >= 20
-        local height = is_header and header_height or line_height
+        font_size = font_size or 18
+        -- Calculate height based on font size with some padding
+        local height = font_size + 10
 
         local widget_def = UIWidget.create_definition({
             {
@@ -198,7 +252,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
                 value = text,
                 style = {
                     font_type = 'proxima_nova_bold',
-                    font_size = font_size or 18,
+                    font_size = font_size,
                     text_horizontal_alignment = 'left',
                     text_vertical_alignment = 'top',
                     text_color = color or Color.terminal_text_body(255, true),
@@ -213,71 +267,123 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
         return widget
     end
 
-    -- Helper to create progress bar
-    local function create_progress_bar(label, value, max_value, color)
+    -- Helper to create progress bar with optional icon
+    local function create_progress_bar(label, value, max_value, color, icon, gradient_map)
         local pct = max_value > 0 and (value / max_value) or 0
         pct = math.min(pct, 1.0)
 
-        -- 50/50 split for label and bar
-        local label_width = text_width * 0.5
+        -- Layout: [icon] label | bar
+        local icon_size = icon and 24 or 0
+        local icon_spacing = icon and 5 or 0
+        local label_width = text_width * 0.5 - icon_size - icon_spacing
         local bar_width = text_width * 0.5 - 20
-        local widget_height = bar_height + 5
+        local widget_height = bar_height + 10 -- Increased padding to prevent overlap
 
-        local widget_def = UIWidget.create_definition({
-            {
-                pass_type = 'text',
-                value_id = 'label',
-                value = label,
+        local passes = {}
+
+        -- Icon pass (if icon exists)
+        if icon then
+            passes[#passes + 1] = {
+                pass_type = 'texture',
+                style_id = 'icon',
+                value = 'content/ui/materials/icons/buffs/hud/buff_container_with_background',
                 style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 16,
-                    text_horizontal_alignment = 'left',
-                    text_vertical_alignment = 'center',
-                    text_color = Color.terminal_text_body(255, true),
+                    horizontal_alignment = 'left',
+                    vertical_alignment = 'center',
                     offset = { 0, 0, 2 },
-                    size = { label_width, bar_height },
+                    size = { icon_size, icon_size },
+                    color = Color.white(255, true),
+                    material_values = {
+                        talent_icon = icon,
+                        gradient_map = gradient_map,
+                    },
                 },
+            }
+        end
+
+        -- Label pass
+        passes[#passes + 1] = {
+            pass_type = 'text',
+            value_id = 'label',
+            value = label,
+            style = {
+                font_type = 'proxima_nova_bold',
+                font_size = 16,
+                text_horizontal_alignment = 'left',
+                text_vertical_alignment = 'center',
+                text_color = Color.terminal_text_body(255, true),
+                offset = { icon_size + icon_spacing, 0, 2 },
+                size = { label_width, bar_height },
+                text_overflow_mode = 'truncate',
             },
-            {
-                pass_type = 'rect',
-                style = {
-                    offset = { label_width + 10, 0, 1 },
-                    size = { bar_width, bar_height },
-                    color = { 100, 50, 50, 50 },
-                },
+        }
+
+        -- Background bar
+        passes[#passes + 1] = {
+            pass_type = 'rect',
+            style = {
+                offset = { text_width * 0.5 + 10, 0, 1 },
+                size = { bar_width, bar_height },
+                color = { 100, 50, 50, 50 },
             },
-            {
-                pass_type = 'rect',
-                style_id = 'bar',
-                style = {
-                    offset = { label_width + 10, 0, 2 },
-                    size = { bar_width * pct, bar_height },
-                    color = color or Color.ui_terminal(255, true),
-                },
+        }
+
+        -- Progress bar
+        passes[#passes + 1] = {
+            pass_type = 'rect',
+            style_id = 'bar',
+            style = {
+                offset = { text_width * 0.5 + 10, 0, 2 },
+                size = { bar_width * pct, bar_height },
+                color = color or Color.ui_terminal(255, true),
             },
-            {
-                pass_type = 'text',
-                value_id = 'percentage',
-                value = string.format('%.1f%%', pct * 100),
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = 14,
-                    text_horizontal_alignment = 'center',
-                    text_vertical_alignment = 'center',
-                    text_color = Color.white(255, true),
-                    offset = { label_width + 10, 0, 3 },
-                    size = { bar_width, bar_height },
-                },
+        }
+
+        -- Percentage text
+        passes[#passes + 1] = {
+            pass_type = 'text',
+            value_id = 'percentage',
+            value = string.format('%.1f%%', pct * 100),
+            style = {
+                font_type = 'proxima_nova_bold',
+                font_size = 14,
+                text_horizontal_alignment = 'center',
+                text_vertical_alignment = 'center',
+                text_color = Color.white(255, true),
+                offset = { text_width * 0.5 + 10, 0, 3 },
+                size = { bar_width, bar_height },
             },
-        }, 'combat_stats_detail_pivot', nil, { text_width, widget_height })
+        }
+
+        local widget_def =
+            UIWidget.create_definition(passes, 'combat_stats_detail_pivot', nil, { text_width, widget_height })
 
         local widget = self:_create_widget('detail_bar_' .. #self._detail_widgets, widget_def)
         self._detail_widgets[#self._detail_widgets + 1] = widget
         return widget
     end
 
+    -- Helper to create spacer widget
+    local function create_spacer(height)
+        local widget_def = UIWidget.create_definition({
+            {
+                pass_type = 'rect',
+                style = {
+                    color = { 0, 0, 0, 0 }, -- Invisible
+                },
+            },
+        }, 'combat_stats_detail_pivot', nil, { text_width, height })
+
+        local widget = self:_create_widget('detail_spacer_' .. #self._detail_widgets, widget_def)
+        self._detail_widgets[#self._detail_widgets + 1] = widget
+        return widget
+    end
+
+    -- Add top padding
+    create_spacer(15)
+
     -- Title
-    create_text(entry.display_name, Color.terminal_text_header(255, true), 26)
+    create_text(entry.name, Color.terminal_text_header(255, true), 26)
 
     -- Basic stats
     create_text(string.format('%s: %.1fs', mod:localize('time'), duration))
@@ -300,6 +406,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     end
 
     -- Damage Stats Header
+    create_spacer(10)
     create_text(mod:localize('damage_stats'), Color.terminal_text_header(255, true), 20)
     create_text(string.format('%s: %d', mod:localize('total'), stats.total_damage))
 
@@ -365,6 +472,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     end
 
     -- Hit Stats Header
+    create_spacer(10)
     create_text(mod:localize('hit_stats'), Color.terminal_text_header(255, true), 20)
     create_text(string.format('%s: %d', mod:localize('total'), stats.total_hits))
 
@@ -407,12 +515,44 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     end
 
     -- Buff Uptime
-    if duration > 0 and #buff_uptime > 0 then
-        create_text(mod:localize('buff_uptime'), Color.terminal_text_header(255, true), 20)
+    if duration > 0 and buffs then
+        -- Convert raw buff data to sorted array for display
+        local buff_array = {}
+        for buff_template_name, data in pairs(buffs) do
+            if data.ui_tracked then
+                -- Use title if available, fallback to template name
+                -- local display_name = data.title or buff_template_name
+                local display_name = buff_template_name
 
-        for i = 1, #buff_uptime do
-            local buff = buff_uptime[i]
-            create_progress_bar(buff.name, buff.uptime, duration, Color.ui_terminal(255, true))
+                buff_array[#buff_array + 1] = {
+                    name = display_name,
+                    uptime = data.uptime,
+                    icon = data.icon,
+                    gradient_map = data.gradient_map,
+                }
+            end
+        end
+
+        -- Sort by uptime descending
+        table.sort(buff_array, function(a, b)
+            return a.uptime > b.uptime
+        end)
+
+        if #buff_array > 0 then
+            create_spacer(10)
+            create_text(mod:localize('buff_uptime'), Color.terminal_text_header(255, true), 20)
+
+            for i = 1, #buff_array do
+                local buff = buff_array[i]
+                create_progress_bar(
+                    buff.name,
+                    buff.uptime,
+                    duration,
+                    Color.ui_terminal(255, true),
+                    buff.icon,
+                    buff.gradient_map
+                )
+            end
         end
     end
 
@@ -447,7 +587,30 @@ function CombatStatsView:cb_on_close_pressed()
     Managers.ui:close_view(self.view_name)
 end
 
+function CombatStatsView:cb_on_reset_pressed()
+    -- Don't reset if typing in search
+    local search_widget = self._widgets_by_name.combat_stats_search
+    if search_widget and search_widget.content.is_writing then
+        return
+    end
+
+    if mod.tracker then
+        mod.tracker:reset()
+        self:_setup_entries()
+    end
+end
+
 function CombatStatsView:update(dt, t, input_service)
+    -- Check if search text changed
+    local search_widget = self._widgets_by_name.combat_stats_search
+    if search_widget then
+        local current_search = search_widget.content.input_text or ''
+        if current_search ~= self._last_search_text then
+            self._last_search_text = current_search
+            self:_setup_entries()
+        end
+    end
+
     -- Update grids with proper input handling
     local widgets_by_name = self._widgets_by_name
 
