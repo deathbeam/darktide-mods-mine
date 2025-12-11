@@ -2,15 +2,36 @@ local mod = get_mod('CombatStats')
 
 local CombatStatsTracker = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_tracker')
 
-local class_name = 'HudElementCombatStats'
-local filename = 'CombatStats/scripts/mods/CombatStats/hud_element_combat_stats/hud_element_combat_stats'
-
+-- Register Combat HUD element
 mod:register_hud_element({
-    class_name = class_name,
-    filename = filename,
+    class_name = 'HudElementCombatStats',
+    filename = 'CombatStats/scripts/mods/CombatStats/hud_element_combat_stats/hud_element_combat_stats',
     use_hud_scale = true,
     visibility_groups = {
         'alive',
+    },
+})
+
+-- Register Combat Stats View
+mod:add_require_path('CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view')
+mod:register_view({
+    view_name = 'combat_stats_view',
+    view_settings = {
+        init_view_function = function()
+            return true
+        end,
+        class = 'CombatStatsView',
+        disable_game_world = false,
+        load_always = true,
+        load_in_hub = true,
+        path = 'CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view',
+        package = 'packages/ui/views/options_view/options_view',
+        state_bound = false,
+    },
+    view_transitions = {},
+    view_options = {
+        close_all = false,
+        close_previous = false,
     },
 })
 
@@ -18,32 +39,20 @@ mod.tracker = CombatStatsTracker:new()
 
 function mod.update(dt)
     mod.tracker:update(dt)
-    mod.tracker:draw()
 end
 
-function mod.toggle_window()
-    if mod.tracker._is_open then
-        mod.tracker:close()
-    else
-        mod.tracker:open()
-    end
-end
-
-function mod.toggle_window_focus()
-    if not mod.tracker._is_open then
-        mod.tracker:open()
-    end
-
-    if mod.tracker._is_focused then
-        mod.tracker:unfocus()
-    else
-        mod.tracker:focus()
+function mod.toggle_view()
+    local ui_manager = Managers.ui
+    if ui_manager:view_active('combat_stats_view') then
+        ui_manager:close_view('combat_stats_view')
+    elseif mod.tracker:is_enabled(true) then
+        ui_manager:open_view('combat_stats_view')
     end
 end
 
 function mod.on_game_state_changed(status, state_name)
     if (status == 'enter' or status == 'exit') and state_name == 'StateGameplay' then
-        mod.tracker:close()
+        mod.tracker:stop()
     end
 
     -- Preload icon packages
@@ -62,10 +71,10 @@ end
 mod:hook(CLASS.StateGameplay, 'on_enter', function(func, self, parent, params, creation_context, ...)
     func(self, parent, params, creation_context, ...)
 
+    -- Reset stats when starting new mission
     local mission_name = params.mission_name
     local is_hub = mission_name == 'hub_ship'
-
-    if is_hub and not mod:get('persist_stats_in_hub') then
+    if not is_hub then
         mod.tracker:reset_stats()
     end
 end)
