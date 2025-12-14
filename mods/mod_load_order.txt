@@ -6,6 +6,7 @@ AutoAbilities
 Skitarius
 guarantee_weapon_swap
 guarantee_special_action
+Perspectives
 
 -- Debugging
 creature_spawner
@@ -15,7 +16,6 @@ CombatStats
 -- General HUD
 custom_hud
 Enhanced_descriptions
-how_did_I_get_that
 modular_menu_buttons
 InventoryStats
 TalentRefundBelow
@@ -23,7 +23,6 @@ FilterTrash
 
 -- In Game HUD
 crosshair_hud
--- RingHud
 markers_aio
 DynamicCrosshair
 Spidey Sense
