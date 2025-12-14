@@ -24,6 +24,7 @@ function CombatStatsView:init(settings, context)
     self._pass_draw = false
     self._using_cursor_navigation = Managers.ui:using_cursor_navigation()
     self._viewing_history = false
+    self._viewing_history_entry = false
     self._tracker = mod.tracker
 end
 
@@ -126,10 +127,6 @@ function CombatStatsView:_setup_entries()
         end
     else
         local tracker = self._tracker
-        if not tracker then
-            return
-        end
-
         local current_time = Managers.time:time('gameplay')
         local engagements = tracker:get_engagement_stats()
         local session = tracker:get_session_stats()
@@ -188,6 +185,7 @@ function CombatStatsView:_setup_entries()
 
     self._entry_widgets, self._entry_alignment_list = self:_setup_widgets(entries, scenegraph_id, callback_name)
 
+    -- Setup entry grid for scrolling
     local grid_scenegraph_id = 'combat_stats_list_background'
     local grid_spacing = self._settings.grid_spacing
 
@@ -198,9 +196,12 @@ function CombatStatsView:_setup_entries()
     self._entry_grid:assign_scrollbar(scrollbar_widget, 'combat_stats_list_pivot', grid_scenegraph_id)
     self._entry_grid:set_scrollbar_progress(0)
 
-    -- Select first entry by default
-    if #self._entry_widgets > 0 then
+    if #self._entry_widgets > 0 and not self._viewing_history then
+        -- Select first entry by default when not viewing history list
         self:_select_entry(self._entry_widgets[1], entries[1])
+    elseif self._viewing_history then
+        -- Clear detail view when showing history list
+        self:_rebuild_detail_widgets(nil)
     end
 end
 
@@ -278,6 +279,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     self._detail_widgets = {}
 
     if not entry then
+        -- FIXME: Reset scrollbar here
         return
     end
 
@@ -431,10 +433,8 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
         return widget
     end
 
-    -- Add top padding
-    create_spacer(15)
-
     -- Title
+    create_spacer(10)
     create_text(entry.name, Color.terminal_text_header(255, true), 26)
 
     if not entry.is_session then
@@ -700,23 +700,15 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     end
 
     -- Setup detail grid for scrolling
-    if #self._detail_widgets > 0 then
-        local detail_grid_scenegraph_id = 'combat_stats_detail_content'
-        local detail_grid_spacing = { 0, 0 }
+    local detail_grid_scenegraph_id = 'combat_stats_detail_content'
+    local detail_grid_spacing = { 0, 0 }
 
-        self._detail_grid =
-            self:_setup_grid(self._detail_widgets, self._detail_widgets, detail_grid_scenegraph_id, detail_grid_spacing)
+    self._detail_grid =
+        self:_setup_grid(self._detail_widgets, self._detail_widgets, detail_grid_scenegraph_id, detail_grid_spacing)
 
-        local detail_scrollbar_widget = self._widgets_by_name.combat_stats_detail_scrollbar
-        if detail_scrollbar_widget then
-            self._detail_grid:assign_scrollbar(
-                detail_scrollbar_widget,
-                'combat_stats_detail_pivot',
-                detail_grid_scenegraph_id
-            )
-            self._detail_grid:set_scrollbar_progress(0)
-        end
-    end
+    local detail_scrollbar_widget = self._widgets_by_name.combat_stats_detail_scrollbar
+    self._detail_grid:assign_scrollbar(detail_scrollbar_widget, 'combat_stats_detail_pivot', detail_grid_scenegraph_id)
+    self._detail_grid:set_scrollbar_progress(0)
 end
 
 function CombatStatsView:cb_on_entry_pressed(widget, entry)
@@ -744,17 +736,34 @@ function CombatStatsView:cb_on_reset_pressed()
 end
 
 function CombatStatsView:cb_on_history_pressed()
-    self._viewing_history = true
-    self._selected_entry = nil
-    self:_setup_entries()
+    if self._viewing_history then
+        -- Already in history list, toggle back to current
+        self:cb_on_back_to_current_pressed()
+    else
+        -- Go to history list
+        self._viewing_history = true
+        self._viewing_history_entry = false
+        self._selected_entry = nil
+        self:_setup_entries()
+    end
 end
 
 function CombatStatsView:cb_on_back_to_current_pressed()
-    self._viewing_history = false
-    self._selected_entry = nil
-    self._tracker = mod.tracker
-
-    self:_setup_entries()
+    if self._viewing_history_entry then
+        -- Go back to history list from loaded history entry
+        self._viewing_history = true
+        self._viewing_history_entry = false
+        self._selected_entry = nil
+        self._tracker = mod.tracker
+        self:_setup_entries()
+    else
+        -- Go back to current from history list
+        self._viewing_history = false
+        self._viewing_history_entry = false
+        self._selected_entry = nil
+        self._tracker = mod.tracker
+        self:_setup_entries()
+    end
 end
 
 function CombatStatsView:_load_history_entry(entry)
@@ -766,8 +775,9 @@ function CombatStatsView:_load_history_entry(entry)
     self._tracker = CombatStatsTracker:new()
     self._tracker:load_from_history(entry.history_data)
 
-    -- Switch back to normal view (not history list view) and clear selection
+    -- Switch to history entry view (not history list, not current)
     self._viewing_history = false
+    self._viewing_history_entry = true
     self._selected_entry = nil
 
     -- Refresh entries - will now show the loaded history data
