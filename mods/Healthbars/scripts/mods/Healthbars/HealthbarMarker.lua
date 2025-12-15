@@ -103,91 +103,91 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				local hundreds_font_size = damage_number_settings.hundreds_font_size * scale
 				local font_type = ui_style.font_type
 
-                if mod:get("show_damage_numbers") then
-                    local default_color = Color[damage_number_settings.default_color](255, true)
-                    local crit_color = Color[damage_number_settings.crit_color](255, true)
-                    local weakspot_color = Color[damage_number_settings.weakspot_color](255, true)
-                    local text_color = table.clone(default_color)
-                    local num_damage_numbers = #damage_numbers
+				if mod:get("show_damage_numbers") then
+					local default_color = Color[damage_number_settings.default_color](255, true)
+					local crit_color = Color[damage_number_settings.crit_color](255, true)
+					local weakspot_color = Color[damage_number_settings.weakspot_color](255, true)
+					local text_color = table.clone(default_color)
+					local num_damage_numbers = #damage_numbers
 
-                    for i = num_damage_numbers, 1, -1 do
-                        local damage_number = damage_numbers[i]
-                        local duration = damage_number.duration
-                        local time = damage_number.time
-                        local progress = math.clamp(time / duration, 0, 1)
+					for i = num_damage_numbers, 1, -1 do
+						local damage_number = damage_numbers[i]
+						local duration = damage_number.duration
+						local time = damage_number.time
+						local progress = math.clamp(time / duration, 0, 1)
 
-                        if progress >= 1 then
-                            table.remove(damage_numbers, i)
-                        else
-                            damage_number.time = damage_number.time + ui_renderer.dt
-                        end
+						if progress >= 1 then
+							table.remove(damage_numbers, i)
+						else
+							damage_number.time = damage_number.time + ui_renderer.dt
+						end
 
-                        if damage_number.was_critical then
-                            text_color[2] = crit_color[2]
-                            text_color[3] = crit_color[3]
-                            text_color[4] = crit_color[4]
-                            damage_number.expand_duration = damage_number_settings.expand_duration
-                        elseif damage_number.hit_weakspot then
-                            text_color[2] = weakspot_color[2]
-                            text_color[3] = weakspot_color[3]
-                            text_color[4] = weakspot_color[4]
-                        else
-                            text_color[2] = default_color[2]
-                            text_color[3] = default_color[3]
-                            text_color[4] = default_color[4]
-                        end
+						if damage_number.was_critical then
+							text_color[2] = crit_color[2]
+							text_color[3] = crit_color[3]
+							text_color[4] = crit_color[4]
+							damage_number.expand_duration = damage_number_settings.expand_duration
+						elseif damage_number.hit_weakspot then
+							text_color[2] = weakspot_color[2]
+							text_color[3] = weakspot_color[3]
+							text_color[4] = weakspot_color[4]
+						else
+							text_color[2] = default_color[2]
+							text_color[3] = default_color[3]
+							text_color[4] = default_color[4]
+						end
 
-                        local value = damage_number.value
-                        local font_size = value <= 99 and default_font_size or hundreds_font_size
-                        local expand_duration = damage_number.expand_duration
+						local value = damage_number.value
+						local font_size = value <= 99 and default_font_size or hundreds_font_size
+						local expand_duration = damage_number.expand_duration
 
-                        if expand_duration then
-                            local expand_time = damage_number.expand_time
-                            local expand_progress = math.clamp(expand_time / expand_duration, 0, 1)
-                            local anim_progress = 1 - expand_progress
-                            font_size = font_size + damage_number_settings.expand_bonus_scale * anim_progress
+						if expand_duration then
+							local expand_time = damage_number.expand_time
+							local expand_progress = math.clamp(expand_time / expand_duration, 0, 1)
+							local anim_progress = 1 - expand_progress
+							font_size = font_size + damage_number_settings.expand_bonus_scale * anim_progress
 
-                            if expand_progress >= 1 then
-                                damage_number.expand_duration = nil
-                                damage_number.shrink_start_t = duration - damage_number_settings.shrink_duration
-                            else
-                                damage_number.expand_time = expand_time + ui_renderer.dt
-                            end
-                        elseif damage_number.shrink_start_t and damage_number.shrink_start_t < time then
-                            local diff = time - damage_number.shrink_start_t
-                            local percentage = diff / damage_number_settings.shrink_duration
-                            local scale = 1 - percentage
-                            font_size = font_size * scale
-                            text_color[1] = text_color[1] * scale
-                        end
+							if expand_progress >= 1 then
+								damage_number.expand_duration = nil
+								damage_number.shrink_start_t = duration - damage_number_settings.shrink_duration
+							else
+								damage_number.expand_time = expand_time + ui_renderer.dt
+							end
+						elseif damage_number.shrink_start_t and damage_number.shrink_start_t < time then
+							local diff = time - damage_number.shrink_start_t
+							local percentage = diff / damage_number_settings.shrink_duration
+							local scale = 1 - percentage
+							font_size = font_size * scale
+							text_color[1] = text_color[1] * scale
+						end
 
-                        local text = value
-                        local size = ui_style.size
-                        local current_order = num_damage_numbers - i
+						local text = value
+						local size = ui_style.size
+						local current_order = num_damage_numbers - i
 
-                        if current_order == 0 then
-                            local scale_size = damage_number.was_critical and damage_number_settings.crit_hit_size_scale
-                                or damage_number_settings.first_hit_size_scale
-                            font_size = font_size * scale_size
-                        end
+						if current_order == 0 then
+							local scale_size = damage_number.was_critical and damage_number_settings.crit_hit_size_scale
+								or damage_number_settings.first_hit_size_scale
+							font_size = font_size * scale_size
+						end
 
-                        position[3] = z_position + current_order
-                        position[2] = y_position
-                        position[1] = x_position + current_order * damage_number_settings.x_offset_between_numbers
-                        UIRenderer.draw_text(ui_renderer, text, font_size, font_type, position, size, text_color, {})
+						position[3] = z_position + current_order
+						position[2] = y_position
+						position[1] = x_position + current_order * damage_number_settings.x_offset_between_numbers
+						UIRenderer.draw_text(ui_renderer, text, font_size, font_type, position, size, text_color, {})
 					end
 				end
 
 				local damage_has_started = ui_content.damage_has_started
 
 				if damage_has_started then
-					if not ui_content.damage_has_started_timer then
-						ui_content.damage_has_started_timer = ui_renderer.dt
-					elseif not ui_content.dead then
-						ui_content.damage_has_started_timer = ui_content.damage_has_started_timer + ui_renderer.dt
-					end
-
 					if mod:get("show_dps") and ui_content.dead then
+						if not ui_content.damage_has_started_timer then
+							ui_content.damage_has_started_timer = ui_renderer.dt
+						elseif not ui_content.dead then
+							ui_content.damage_has_started_timer = ui_content.damage_has_started_timer + ui_renderer.dt
+						end
+
 						local damage_has_started_position =
 							Vector3(x_position, y_position - damage_number_settings.dps_y_offset, z_position)
 						local dps = ui_content.damage_has_started_timer > 1
@@ -195,16 +195,16 @@ template.create_widget_defintion = function(template, scenegraph_id)
 							or ui_content.damage_taken
 						local text = string.format("%d DPS", dps)
 
-                        UIRenderer.draw_text(
-                            ui_renderer,
-                            text,
-                            dps_font_size,
-                            font_type,
-                            damage_has_started_position,
-                            size,
-                            ui_style.text_color,
-                            {}
-                        )
+						UIRenderer.draw_text(
+							ui_renderer,
+							text,
+							dps_font_size,
+							font_type,
+							damage_has_started_position,
+							size,
+							ui_style.text_color,
+							{}
+						)
 					end
 
 					if mod:get("show_armour_type") and ui_content.last_hit_zone_name then
@@ -224,16 +224,16 @@ template.create_widget_defintion = function(template, scenegraph_id)
 							z_position
 						)
 
-                        UIRenderer.draw_text(
-                            ui_renderer,
-                            armor_type_text,
-                            dps_font_size,
-                            font_type,
-                            armor_type_position,
-                            size,
-                            ui_style.text_color,
-                            {}
-                        )
+						UIRenderer.draw_text(
+							ui_renderer,
+							armor_type_text,
+							dps_font_size,
+							font_type,
+							armor_type_position,
+							size,
+							ui_style.text_color,
+							{}
+						)
 					end
 				end
 
