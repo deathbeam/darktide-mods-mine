@@ -33,6 +33,7 @@ GasOutline
 Healthbars
 danger_zone
 ScanHelper
+StimmSupplyRings
 
 -- In Game overlays
 SpawnFeed
