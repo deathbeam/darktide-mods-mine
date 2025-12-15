@@ -1,8 +1,5 @@
 -- vim: set filetype=lua :
 
--- Temp, disables all logging
-PlasmaGunLagFix
-
 -- Gameplay
 DefaultSprint
 AutoAbilities
