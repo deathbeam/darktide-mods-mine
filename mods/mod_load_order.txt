@@ -17,6 +17,7 @@ CombatStats
 custom_hud
 Enhanced_descriptions
 modular_menu_buttons
+true_level
 InventoryStats
 TalentRefundBelow
 FilterTrash
