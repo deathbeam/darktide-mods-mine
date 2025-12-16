@@ -20,7 +20,6 @@ modular_menu_buttons
 true_level
 InventoryStats
 TalentRefundBelow
-FilterTrash
 
 -- In Game HUD
 crosshair_hud
