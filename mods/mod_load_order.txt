@@ -25,6 +25,7 @@ TalentRefundBelow
 crosshair_hud
 markers_aio
 DynamicCrosshair
+emperors_lantern
 Spidey Sense
 GasOutline
 Healthbars
