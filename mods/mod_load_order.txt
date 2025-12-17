@@ -4,10 +4,10 @@
 Perspectives
 AutoAbilities
 Skitarius
+DefaultSprint
 guarantee_weapon_swap
 guarantee_special_action
 guarantee_ability_activation
-hybrid_sprint
 
 -- Debugging
 creature_spawner
