@@ -20,13 +20,13 @@ modular_menu_buttons
 true_level
 InventoryStats
 TalentRefundBelow
+DumpStatFinder
 
 -- In Game HUD
 crosshair_hud
 markers_aio
 DynamicCrosshair
 emperors_lantern
-Spidey Sense
 GasOutline
 Healthbars
 danger_zone
