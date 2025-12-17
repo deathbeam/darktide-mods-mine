@@ -96,10 +96,10 @@ local function update_talent_category_counts(talent_name, talent_category_counts
 	end
 end
 
-local function unit_spawned(unit, dont_load_package, owner_unit)
+local function unit_spawned(unit, dont_load_package)
 	if not Managers.package:has_loaded(package_name) and not dont_load_package then
 		Managers.package:load(package_name, "StimmSupplyRings", function()
-			unit_spawned(unit, true, owner_unit)
+			unit_spawned(unit, true)
 		end)
 		return
 	end
@@ -204,23 +204,33 @@ local function pre_unit_destroyed(unit)
 	end
 end
 
-mod:hook_require("scripts/extension_systems/unit_templates", function(instance)
-	-- As a client
-	mod:hook_safe(instance.broker_stimm_field_crate_deployable, "husk_init", function(unit, _config, template_context, _game_object_data, _side_id, _deployable, _placed_on_unit, owner_unit)
-		unit_spawned(unit, false, owner_unit)
-	end)
 
-	-- As a server
-	mod:hook_safe(instance.broker_stimm_field_crate_deployable, "local_init", function(unit, _config, template_context, _game_object_data, _side_id, _deployable, _placed_on_unit, owner_unit)
-		local is_server = template_context.is_server
-		if is_server then
-			unit_spawned(unit, false, owner_unit)
+mod.on_all_mods_loaded = function()
+	local is_mod_loading = true
+	mod:hook_require("scripts/extension_systems/unit_templates", function(instance)
+		if is_mod_loading then
+			-- As a client
+			mod:hook_safe(instance.broker_stimm_field_crate_deployable, "husk_init", function(unit)
+				unit_spawned(unit, false)
+			end)
+
+			-- As a server
+			mod:hook_safe(instance.broker_stimm_field_crate_deployable, "local_init", function(unit, _config, template_context)
+				local is_server = template_context.is_server
+				if is_server then
+					unit_spawned(unit, false)
+				end
+			end)
+
+			if instance.broker_stimm_field_crate_deployable.pre_unit_destroyed then
+				mod:hook_safe(instance.broker_stimm_field_crate_deployable, "pre_unit_destroyed", pre_unit_destroyed)
+			else
+				instance.broker_stimm_field_crate_deployable.pre_unit_destroyed = pre_unit_destroyed
+			end
+
+			-- Preload assets
+			Managers.package:load(package_name, "StimmSupplyRings")
 		end
+		is_mod_loading = false
 	end)
-
-	if instance.broker_stimm_field_crate_deployable.pre_unit_destroyed then
-		mod:hook_safe(instance.broker_stimm_field_crate_deployable, "pre_unit_destroyed", pre_unit_destroyed)
-	else
-		instance.broker_stimm_field_crate_deployable.pre_unit_destroyed = pre_unit_destroyed
-	end
-end)
+end

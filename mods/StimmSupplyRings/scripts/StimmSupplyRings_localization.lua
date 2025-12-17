@@ -63,5 +63,10 @@ return {
 	},
 	personal_stimm_active = {
 		en = "Owner '%s' has personal stimm active for %.2f more seconds"
+	},
+
+	-- Experimental
+	has_stimm_pickup = {
+		en = "Owner '%s' has stimm pickup: %s"
 	}
 }
