@@ -1,12 +1,13 @@
 -- vim: set filetype=lua :
 
 -- Gameplay
-DefaultSprint
+Perspectives
 AutoAbilities
 Skitarius
 guarantee_weapon_swap
 guarantee_special_action
-Perspectives
+guarantee_ability_activation
+hybrid_sprint
 
 -- Debugging
 creature_spawner
