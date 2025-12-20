@@ -1,6 +1,6 @@
 local function cf(text, color_name)
     local color = Color[color_name](255, true)
-    return string.format("{#color(%s,%s,%s)}", color[2], color[3], color[4]) .. text .. "{#color(203,203,203)}"
+    return string.format('{#color(%s,%s,%s)}', color[2], color[3], color[4]) .. text .. '{#color(203,203,203)}'
 end
 
 local box = 2
@@ -20,39 +20,42 @@ local grenadier = 1
 
 return {
     mod_name = {
-        en = "AutoAbilities",
+        en = 'AutoAbilities',
     },
     mod_description = {
-        en = "Automatically use abilities and consumables based on conditions or keybinds",
+        en = 'Automatically use abilities and consumables based on conditions or keybinds',
     },
 
-    -- Chemical AutoStim
+    -- Broker AutoStim (unified)
     chemical_autostim = {
-        en = "Chemical AutoStim",
+        en = 'Broker AutoStim',
     },
     chemical_autostim_enabled = {
-        en = "Enable Chemical AutoStim",
+        en = 'Enable Broker AutoStim',
+    },
+    chemical_autostim_enabled_tooltip = {
+        en = 'Automatically manages broker stimms:\n• Chemical Dependency: Uses syringe to maintain stacks\n• Stimm Field Crate: Uses syringe or crate for buff uptime (prioritizes syringe)',
     },
 
     -- Quick Deploy
     quick_deploy = {
-        en = "Quick Deploy",
+        en = 'Quick Deploy',
     },
     quick_deploy_enabled = {
-        en = "Enable Quick Deploy",
+        en = 'Enable Quick Deploy',
     },
     quick_deploy_enabled_tooltip = {
-        en = "Automatically use ammo/medkits/stims when wielded",
+        en = 'Automatically use ammo/medkits/stims when wielded',
     },
 
     -- Auto Blitz
     auto_blitz = {
-        en = "Auto Blitz",
+        en = 'Auto Blitz',
     },
     auto_blitz_enabled = {
-        en = "Enable Auto Blitz",
+        en = 'Enable Auto Blitz',
     },
     auto_blitz_enabled_tooltip = {
-        en = "Automatically throw grenades when wielded (skips quick-throw grenades like Zealot Knives and Broker Flash)",
+        en = 'Automatically throw grenades when wielded (skips quick-throw grenades like Zealot Knives and Broker Flash)',
     },
 }
