@@ -31,6 +31,7 @@ emperors_lantern
 GasOutline
 Healthbars
 danger_zone
+DisableScreenEffects
 ScanHelper
 StimmSupplyRings
 
