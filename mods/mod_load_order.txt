@@ -22,6 +22,7 @@ true_level
 InventoryStats
 TalentRefundBelow
 DumpStatFinder
+ItemSorting
 LetMePlayHavoc
 valkyrie
 
