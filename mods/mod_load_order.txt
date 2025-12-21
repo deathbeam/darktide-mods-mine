@@ -22,6 +22,8 @@ true_level
 InventoryStats
 TalentRefundBelow
 DumpStatFinder
+LetMePlayHavoc
+valkyrie
 
 -- In Game HUD
 crosshair_hud
