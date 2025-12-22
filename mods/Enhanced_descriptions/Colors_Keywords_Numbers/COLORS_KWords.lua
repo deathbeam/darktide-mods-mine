@@ -117,6 +117,7 @@ local CONFIG = {
 	},
 	toughness_text_colour = {
 		TDR =			"TDR",
+		TGHN =			"TGHN",
 		Tghns_dmg_red =	"Toughness Damage Reduction",
 		Toughness =		"Toughness",
 	},
@@ -172,6 +173,10 @@ local CONFIG = {
 		},
 		momentum_text_colour = {
 			Momentum =		"Momentum",
+
+			Taunt =			"Taunt",				-- Ogryn
+			Taunted =		"Taunted",				-- Ogryn
+			Taunting =		"Taunting",				-- Ogryn
 
 			Adren =			"Adrenaline",			-- Hive Scum
 			AdrenFr =		"Adrenaline Frenzy",	-- Hive Scum
@@ -243,6 +248,8 @@ local CONFIG = {
 		Fragm_gren =	"Fragmentation Grenade",
 		Rangd_stnc =	"Ranged Stance",
 		Duty_honor =	"Duty and Honour",
+-- Ogryn
+		Att_Seeker =		"Attention Seeker",
 
 -- PENANCES
 		Base_tut_p =	"Basic Training",
@@ -250,9 +257,7 @@ local CONFIG = {
 		Omnissia_p =	"Shrine of the Omnissiah",
 		Prologue_p =	"Prologue",
 		Sir_melk_p =	"Sire Melk's Requisitorium",
-	-- },
 
-	-- talents_penances_text_colour = {
 	-- Psyker
 		assail =		"Assail",
 		bburst =		"Brain Burst",
@@ -318,9 +323,9 @@ local CONFIG = {
 	},
 
 -- DIFFICULTY
-	sedition_text_colour = {
-		sedition =		"Sedition",
-	},
+	-- sedition_text_colour = {
+		-- sedition =		"Sedition",
+	-- },
 	uprising_text_colour = {
 		uprising =		"Uprising",
 	},
@@ -365,23 +370,21 @@ local function create_colored_keywords()
 	return result
 end
 
---[+ +FREQUENTLY REPEATED PHRASES+ +]--
+--[+ +FREQUENTLY REPEATED PHRASES+ +]-- CPhrs("")
 local function create_phrs_en(colors_en)
 	-- Local constants for this file
 	local Dot_green =	"{#color(35, 255, 5)}•{#reset()}"
 	local Dot_red =		"{#color(255, 35, 5)}•{#reset()}"
 
-	-- local function CKWord(fallback, colors, key)
-		-- return colors[key] or fallback
-	-- end
 	local CKWord = function(fallback, key)
-		return fallback
+		return colors_en[key] or fallback
 	end
 
 	return {
 	Can_appl_thr_shlds =		Dot_green.." Can be applied through shields.",
 	Can_be_refr =				Dot_green.." Can be refreshed during active duration. ",
 	Can_be_refr_drop_1 =		Dot_green.." Stacks can be refreshed during active duration, and are dropped one by one.",
+	Can_gen_mult =				Dot_green.." Can generate multiple Stacks per Swing.\n",
 	Can_proc_mult =				Dot_green.." Can proc multiple times per swing when "..CKWord("Cleaving", "Cleaving_rgb")..".\n",
 	Can_proc_mult_str =			Dot_green.." Can proc multiple times per swing when "..CKWord("Cleaving", "Cleaving_rgb")..".\n",
 	Refr_dur_stappl =			Dot_green.." Refreshes duration on Stack application. ",
@@ -393,24 +396,25 @@ local function create_phrs_en(colors_en)
 -- Zealot
 	Doesnt_Stack_Zea_Aura =		Dot_red.." Does not Stack with the same Aura from another "..CKWord("Zealot", "cls_zea_rgb")..".",
 	Doesnt_Stack_Zea_abil =		Dot_red.." Does not Stack with the same talent from another "..CKWord("Zealot", "cls_zea_rgb")..".",
+-- Ogryn
+	Doesnt_Stack_Ogr_Aura =		Dot_red.." Does not Stack with the same Aura from another "..CKWord("Ogryn", "cls_ogr_rgb")..".",
+	Doesnt_Stack_Ogr_abil =		Dot_red.." Does not Stack with the same talent from another "..CKWord("Ogryn", "cls_ogr_rgb")..".",
 
 	Cant_appl_thr_shlds =		Dot_red.." Can't apply through shields.",
+	Cant_be_refr =				Dot_red.." Cannot be refreshed during active duration. ",
 	Cant_Crit =					Dot_red.." Cannot "..CKWord("Crit", "Crit_rgb")..".\n",
 	Carap_cant_clv =			Dot_red.." Carapace armor cannot be "..CKWord("Cleaved", "Cleaved_rgb").." by default.",
 	Carap_cant_cleave =			Dot_red.." Carapace armor cannot be "..CKWord("Cleaved", "Cleaved_rgb").." by default.",
-	Dont_intw_coher_toughn =	Dot_red.." Does not interact with "..CKWord("Coherency", "Coherency_rgb").." "..CKWord("Toughness", "Toughness_rgb")..".",
+	Dont_intw_coher_toughn =	Dot_red.." Does not interact with "..CKWord("Coherency", "Coherency_rgb").." "..CKWord("Toughness", "Toughness_rgb").." Regeneration.",
 	}
 end
 
---[+ +NOTES+ +]--
+--[+ +NOTES+ +]-- CNote("")
 local function create_nts_en(colors_en)
 	local Dot_green = "{#color(35, 255, 5)}•{#reset()}"
 
-	-- local function CKWord(fallback, colors, key)
-		-- return colors[key] or fallback
-	-- end
 	local CKWord = function(fallback, key)
-		return fallback
+		return colors_en[key] or fallback
 	end
 
 	return {
