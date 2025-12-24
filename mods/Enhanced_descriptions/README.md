@@ -67,13 +67,14 @@
 - 🟢 Psyker Talent descriptions.
 - 🟡 Arbites Talent descriptions.
 - 🟡 Various Menu texts. 
-- 🔴 Veteran Talent descriptions.
-- 🔴 Zealot Talent descriptions.
-- 🔴 Ogryn Talent descriptions.
+- 🟡 Veteran Talent descriptions.
+- 🟡 Zealot Talent descriptions.
+- 🟡 Ogryn Talent descriptions.
+- 🔴 Scum Talent descriptions.
 - 🔴 Penance descriptions.
 ## Non-English localizations only:
-- 🟡 Names of Enemies and Weapons.
-- 🟡 Names of Blessings and Talents.
+- 🔴 Names of Enemies and Weapons.
+- 🔴 Names of Blessings and Talents.
 <hr>
 
 > [!TIP]

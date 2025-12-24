@@ -2,36 +2,8 @@
 
 local mod = get_mod("Enhanced_descriptions")
 
--- Загружаем утилиты
-local Utils
-local success, result = pcall(function()
-	return mod:io_dofile("Enhanced_descriptions/Enhanced_descriptions_utils")
-end)
-
-if success and result then
-	Utils = result
-	mod:info("Utils loaded successfully")
-else
-	mod:error("Failed to load utils: %s", tostring(result))
-	Utils = {
-		CKWord = function(fallback, key) return fallback end,
-		CNumb = function(fallback, key) return fallback end,
-		CPhrs = function(key) return "" end,
-		CNote = function(key) return "" end,
-		create_template = function(id, loc_keys, locales, handle_func)
-			return { id = id, loc_keys = loc_keys, locales = locales, handle_func = handle_func }
-		end,
-		loc_text = function(text)
-			if type(text) == "table" then
-				return function(locale) return text[locale] or text["en"] or "" end
-			end
-			return function() return text end 
-		end,
-		DOT_RED = "•",
-		DOT_NC = "•",
-		DOT_GREEN = "•",
-	}
-end
+-- ИСПОЛЬЗУЕМ КЭШИРОВАННЫЕ УТИЛИТЫ
+local Utils = mod.get_utils()
 
 -- ИМПОРТ ВСЕХ НУЖНЫХ ФУНКЦИЙ И КОНСТАНТ
 local create_template = Utils.create_template
@@ -117,7 +89,7 @@ local weapon_localizations = {
 			en = CNumb("{crit_chance:%s}", "crit_var_rgb").." Melee "..CKWord("Critical Chance", "Crit_chance_rgb"),
 			ru = CNumb("{crit_chance:%s}", "crit_var_rgb").." к "..CKWord("шансу критического удара", "sh_krit_udara_rgb_ru"),
 			fr = CNumb("{crit_chance:%s}", "crit_var_rgb").." "..CKWord("Taux de coup critique", "Crit_chance_rgb_fr").." en Mélée",
-			["zh-tw"] = CNumb("{crit_chance:%s}", "crit_var_rgb").." "..CKWord("近戰暴擊機率", "Crit_m_chance_rgb_tw"), -- 暴擊機率
+			["zh-tw"] = CNumb("{crit_chance:%s}", "crit_var_rgb").." "..CKWord("近戰暴擊機率", "Crit_m_chance_rgb_tw"), -- 近戰暴擊機率
 			["zh-cn"] = CNumb("{crit_chance:%s}", "crit_var_rgb").." 近战"..CKWord("暴击几率", "Crit_chance_rgb_zh_cn"), -- 暴击几率
 		},
 		--[+ +CRIT DAMAGE +]--	08.12.2025
@@ -125,7 +97,7 @@ local weapon_localizations = {
 			en = CNumb("{crit_damage:%s}", "critdmg_var_rgb").." Melee "..CKWord("критическому урону", "Crt_hit_col_rgb"),
 			ru = CNumb("{crit_damage:%s}", "critdmg_var_rgb").." к "..CKWord("урону критического удара", "krit_udara_uron_rgb_ru"),
 			fr = CNumb("{crit_damage:%s}", "critdmg_var_rgb").." "..CKWord("Dégâts de coup critique", "Crit_hit_color_rgb_fr").." de Mélée",
-			["zh-tw"] = CNumb("{crit_damage:%s}", "critdmg_var_rgb").." "..CKWord("近戰暴擊傷害", "Crit_hit_m_color_rgb_tw"), -- 暴擊傷害
+			["zh-tw"] = CNumb("{crit_damage:%s}", "critdmg_var_rgb").." "..CKWord("近戰暴擊傷害", "Crit_hit_m_dmg_rgb_tw"), -- 近戰暴擊傷害
 			["zh-cn"] = CNumb("{crit_damage:%s}", "critdmg_var_rgb").." 近战"..CKWord("暴击伤害", "Crit_hit_color_rgb_zh_cn"), -- 暴击伤害
 		},
 		--[+ +DAMAGE VS GROANERS AND POXWALKERS +]--	08.12.2025
@@ -165,7 +137,7 @@ local weapon_localizations = {
 			en = CNumb("{weakspot_damage:%s}", "wkspdmg_var_rgb").." Melee "..CKWord("Weakspot Damage", "Weakspot_dmg_rgb"),
 			ru = CNumb("{weakspot_damage:%s}", "wkspdmg_var_rgb").." к "..CKWord("урону по уязвимым местам", "u_mestam_uronu_rgb_ru").." в ближнем бою",
 			fr = CNumb("{weakspot_damage:%s}", "wkspdmg_var_rgb").." "..CKWord("Dégât sur point faible", "Weakspot_dmg_rgb_fr").." en Mélée",
-			["zh-tw"] = CNumb("{weakspot_damage:%s}", "wkspdmg_var_rgb").." "..CKWord("近戰弱點傷害", "Weakspot_m_dmg_rgb_tw"), -- 弱點傷害 
+			["zh-tw"] = CNumb("{weakspot_damage:%s}", "wkspdmg_var_rgb").." "..CKWord("近戰弱點傷害", "Weakspot_m_dmg_rgb_tw"), -- 近戰弱點傷害
 			["zh-cn"] = CNumb("{weakspot_damage:%s}", "wkspdmg_var_rgb").." 近战"..CKWord("弱点伤害", "Weakspot_dmg_rgb_zh_cn"), -- 弱点伤害
 		},
 		--[+ +BLOCK EFFICIENCY +]--	08.12.2025
@@ -239,7 +211,7 @@ local weapon_localizations = {
 			en = CNumb("{crit_chance:%s}", "crit_var_rgb").." Ranged "..CKWord("Critical Strike Chance", "Crt_chnc_r_rgb"),
 			ru = CNumb("{crit_chance:%s}", "crit_var_rgb").." к "..CKWord("шансу критического выстрела", "sh_krit_vystrela_rgb_ru"),
 			fr = CNumb("{crit_chance:%s}", "crit_var_rgb").." "..CKWord("Taux de coup critique", "Crit_chance_r_rgb_fr").." à Distance",
-			["zh-tw"] = CNumb("{crit_chance:%s}", "crit_var_rgb").." "..CKWord("遠程暴擊機率", "Crit_r_chance_rgb_tw"), -- 暴擊機率
+			["zh-tw"] = CNumb("{crit_chance:%s}", "crit_var_rgb").." "..CKWord("遠程暴擊機率", "Crit_r_chance_rgb_tw"), -- 遠程暴擊機率
 			["zh-cn"] = CNumb("{crit_chance:%s}", "crit_var_rgb").." 远程"..CKWord("暴击几率", "Crit_chance_rgb_zh_cn"), -- 暴击几率
 		},
 		--[+ +CRIT DAMAGE +]--	08.12.2025
@@ -247,7 +219,7 @@ local weapon_localizations = {
 			en = CNumb("{crit_damage:%s}", "critdmg_var_rgb").." Ranged "..CKWord("критическому урону", "Crt_hit_col_rgb"),
 			ru = CNumb("{crit_damage:%s}", "critdmg_var_rgb").." к "..CKWord("урону критического выстрела", "krit_vystr_uron_rgb_ru"),
 			fr = CNumb("{crit_damage:%s}", "critdmg_var_rgb").." "..CKWord("Dégâts de coup critique", "Crit_hit_color_rgb_fr").." de Distance",
-			["zh-tw"] = CNumb("{crit_damage:%s}", "critdmg_var_rgb").." "..CKWord("遠程暴擊傷害", "Crit_hit_r_color_rgb_tw"), -- 暴擊傷害
+			["zh-tw"] = CNumb("{crit_damage:%s}", "critdmg_var_rgb").." "..CKWord("遠程暴擊傷害", "Crit_hit_r_dmg_rgb_tw"), -- 遠程暴擊傷害
 			["zh-cn"] = CNumb("{crit_damage:%s}", "critdmg_var_rgb").." 远程"..CKWord("暴击伤害", "Crit_hit_color_rgb_zh_cn"), -- 暴击伤害
 		},
 		--[+ +DAMAGE VS ELITES +]--	08.12.2025
@@ -255,7 +227,7 @@ local weapon_localizations = {
 			en = CNumb("{damage:%s}", "dmg_var_rgb").." Ranged "..CKWord("Damage", "Damage_rgb").." vs Elites",
 			ru = CNumb("{damage:%s}", "dmg_var_rgb").." к "..CKWord("урону", "uronu_rgb_ru").." элите в дальнем бою",
 			fr = CNumb("{damage:%s}", "dmg_var_rgb").." "..CKWord("Dégâts", "Damage_rgb_fr").." de Distance vs Élites",
-			["zh-tw"] = CNumb("{damage:%s}", "dmg_var_rgb").." "..CKWord("遠程傷害", "Damage_ranged_rgb_tw").." vs 精英", -- 精英
+			["zh-tw"] = CNumb("{damage:%s}", "dmg_var_rgb").." "..CKWord("遠程傷害", "Damage_r_rgb_tw").." vs 精英", -- 精英
 			["zh-cn"] = CNumb("{damage:%s}", "dmg_var_rgb").." 远程"..CKWord("伤害", "Damage_rgb_zh_cn").."（精英）", -- 精英
 		},
 		--[+ +DAMAGE VS GROANERS AND POXWALKERS +]--	08.12.2025
@@ -263,7 +235,7 @@ local weapon_localizations = {
 			en = CNumb("{damage:%s}", "dmg_var_rgb").." Ranged "..CKWord("Damage", "Damage_rgb").." vs Groaners and Poxwalkers",
 			ru = CNumb("{damage:%s}", "dmg_var_rgb").." к "..CKWord("урону", "uronu_rgb_ru").." ворчунам и чумным ходокам в дальнем бою",
 			fr = CNumb("{damage:%s}", "dmg_var_rgb").." "..CKWord("Dégâts", "Damage_rgb_fr").." de Distance vs Grogneurs et Scrofuleux",
-			["zh-tw"] = CNumb("{damage:%s}", "dmg_var_rgb").." "..CKWord("遠程傷害", "Damage_ranged_rgb_tw").." vs 呻吟者和瘟疫行者", -- 呻吟者、瘟疫行者
+			["zh-tw"] = CNumb("{damage:%s}", "dmg_var_rgb").." "..CKWord("遠程傷害", "Damage_r_rgb_tw").." vs 呻吟者和瘟疫行者", -- 呻吟者、瘟疫行者
 			["zh-cn"] = CNumb("{damage:%s}", "dmg_var_rgb").." 远程"..CKWord("伤害", "Damage_rgb_zh_cn").."（呻吟者、瘟疫行者）", --呻吟者、瘟疫行者
 		},
 		--[+ +DAMAGE VS SPECIALISTS +]--	08.12.2025
@@ -271,7 +243,7 @@ local weapon_localizations = {
 			en = CNumb("{damage:%s}", "dmg_var_rgb").." Ranged "..CKWord("Damage", "Damage_rgb").." vs Specialists",
 			ru = CNumb("{damage:%s}", "dmg_var_rgb").." к "..CKWord("урону", "uronu_rgb_ru").." специалистам в дальнем бою",
 			fr = CNumb("{damage:%s}", "dmg_var_rgb").." "..CKWord("Dégâts", "Damage_rgb_fr").." de Distance vs Spécialistes",
-			["zh-tw"] = CNumb("{damage:%s}", "dmg_var_rgb").." "..CKWord("遠程傷害", "Damage_ranged_rgb_tw").." vs 專家", -- 專家
+			["zh-tw"] = CNumb("{damage:%s}", "dmg_var_rgb").." "..CKWord("遠程傷害", "Damage_r_rgb_tw").." vs 專家", -- 專家
 			["zh-cn"] = CNumb("{damage:%s}", "dmg_var_rgb").." 远程"..CKWord("伤害", "Damage_rgb_zh_cn").."（专家）", -- 专家
 		},
 		--[+ +STAMINA +]--	08.12.2025
@@ -287,7 +259,7 @@ local weapon_localizations = {
 			en = CNumb("{weakspot_damage:%s}", "wkspdmg_var_rgb").." Ranged "..CKWord("Weakspot Damage", "Weakspot_dmg_rgb"),
 			ru = CNumb("{weakspot_damage:%s}", "wkspdmg_var_rgb").." к "..CKWord("урону по уязвимым местам", "u_mestam_uronu_rgb_ru").." в дальнем бою",
 			fr = CNumb("{weakspot_damage:%s}", "wkspdmg_var_rgb").." "..CKWord("Dégât sur point faible", "Weakspot_dmg_rgb_fr").." à Distance",
-			["zh-tw"] = CNumb("{weakspot_damage:%s}", "wkspdmg_var_rgb").." "..CKWord("遠程弱點傷害", "Weakspot_r_dmg_rgb_tw"), -- 弱點傷害
+			["zh-tw"] = CNumb("{weakspot_damage:%s}", "wkspdmg_var_rgb").." "..CKWord("遠程弱點傷害", "Weakspot_r_dmg_rgb_tw"), -- 遠程弱點傷害
 			["zh-cn"] = CNumb("{weakspot_damage:%s}", "wkspdmg_var_rgb").." 远程"..CKWord("弱点伤害", "Weakspot_dmg_rgb_zh_cn"), -- 弱点伤害
 		},
 		--[+ +RELOAD SPEED +]--	08.12.2025

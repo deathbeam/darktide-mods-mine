@@ -75,6 +75,8 @@ local LOCALIZATION_GROUPS = {
 	"heresy",
 	"damnation",
 	"auric",
+
+	"dump_stat",
 }
 
 -- UTILITY FUNCTIONS
@@ -400,6 +402,11 @@ local localizations = {
 		es = "{#color(255, 35, 5)}¡SOLO PARA DESARROLLADORES!{#reset()}\nEste módulo habilita comandos de depuración y utilidades para pruebas y solución de problemas. Usar con precaución.",
 	},
 
+--[+DUMP STATS+]--
+	dump_stat_colour = {
+		en = "Dump Stats",
+		ru = "Мусорные статы",
+	},
 
 --[+MAIN+]--
 	bleed_colour = {

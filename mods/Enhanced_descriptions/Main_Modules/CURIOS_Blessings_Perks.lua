@@ -2,36 +2,8 @@
 
 local mod = get_mod("Enhanced_descriptions")
 
--- Загружаем утилиты
-local Utils
-local success, result = pcall(function()
-	return mod:io_dofile("Enhanced_descriptions/Enhanced_descriptions_utils")
-end)
-
-if success and result then
-	Utils = result
-	mod:info("Utils loaded successfully")
-else
-	mod:error("Failed to load utils: %s", tostring(result))
-	Utils = {
-		CKWord = function(fallback, key) return fallback end,
-		CNumb = function(fallback, key) return fallback end,
-		CPhrs = function(key) return "" end,
-		CNote = function(key) return "" end,
-		create_template = function(id, loc_keys, locales, handle_func)
-			return { id = id, loc_keys = loc_keys, locales = locales, handle_func = handle_func }
-		end,
-		loc_text = function(text)
-			if type(text) == "table" then
-				return function(locale) return text[locale] or text["en"] or "" end
-			end
-			return function() return text end 
-		end,
-		DOT_RED = "•",
-		DOT_NC = "•",
-		DOT_GREEN = "•",
-	}
-end
+-- ИСПОЛЬЗУЕМ КЭШИРОВАННЫЕ УТИЛИТЫ
+local Utils = mod.get_utils()
 
 -- ИМПОРТ ВСЕХ НУЖНЫХ ФУНКЦИЙ И КОНСТАНТ
 local create_template = Utils.create_template
@@ -97,13 +69,13 @@ local curios_localizations = {
 			["zh-cn"] = CNumb("{toughness_bonus:%s}", "maxtghns_rgb").." 最大"..CKWord("韧性", "Toughness_rgb_zh_cn"),
 		},
 
-	--[+ TRAITS - ХАРАКТЕРИСТИКИ +]--
+	--[+ TRAITS - ХАРАКТЕРИСТИКИ - 附加屬性 +]--
 		--[+ Combat Ability Regeneration +]--
 		["loc_gadget_cooldown_desc"] = { -- ability_cooldown_modifier: +4%
 			en = CNumb("{ability_cooldown_modifier:%s}", "abil_cd_rgb").." "..CKWord("Combat Ability", "Cmbt_abil_rgb").." Regeneration",
 			ru = CNumb("{ability_cooldown_modifier:%s}", "abil_cd_rgb").." к восстановлению "..CKWord("боевой способности", "boev_sposobnosti_rgb_ru"),
 			fr = CNumb("{ability_cooldown_modifier:%s}", "abil_cd_rgb").." de régénération du "..CKWord("Temps de recharge des capacités de combat", "Combat_ability_cd_rgb_fr"),
-			["zh-tw"] = CNumb("{ability_cooldown_modifier:%s}", "abil_cd_rgb").." "..CKWord("戰鬥技能冷卻", "Combat_ability_cd_rgb_tw"),
+			["zh-tw"] = CNumb("{ability_cooldown_modifier:%s}", "abil_cd_rgb").." "..CKWord("戰鬥技能冷卻", "Cmbt_abil_cd_rgb_tw"),
 			["zh-cn"] = CNumb("{ability_cooldown_modifier:%s}", "abil_cd_rgb").." "..CKWord("作战技能", "Combat_ability_rgb_zh_cn").."回复",
 		},
 		--[+ Corruption Resistance +]--
@@ -119,7 +91,7 @@ local curios_localizations = {
 			en = CNumb("{permanent_damage_converter_resistance:%s}", "corrgrm_rgb").." "..CKWord("Corruption", "Corruption_rgb").." Resistance from Grimoires",
 			ru = CNumb("{permanent_damage_converter_resistance:%s}", "corrgrm_rgb").." к сопротивлению "..CKWord("порче", "porche_rgb_ru").." от гримуаров",
 			fr = CNumb("{permanent_damage_converter_resistance:%s}", "corrgrm_rgb").." de résistance à la "..CKWord("Corruption", "Corruption_rgb_fr").." (Grimoires)",
-			["zh-tw"] = CNumb("{permanent_damage_converter_resistance:%s}", "corrgrm_rgb").." "..CKWord("腐敗", "Corruption_rgb_tw").." 抗性(法術書)",
+			["zh-tw"] = CNumb("{permanent_damage_converter_resistance:%s}", "corrgrm_rgb").." "..CKWord("腐敗抗性", "Corruption_res_rgb_tw").."(法術書)",
 			["zh-cn"] = CNumb("{permanent_damage_converter_resistance:%s}", "corrgrm_rgb").." "..CKWord("腐化", "Corruption_rgb_zh_cn").."抗性 (魔法书)",
 		},
 		--[+ Health +]--
