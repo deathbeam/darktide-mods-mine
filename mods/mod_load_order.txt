@@ -25,6 +25,7 @@ DumpStatFinder
 ItemSorting
 LetMePlayHavoc
 valkyrie
+WeaponStats
 
 -- In Game HUD
 crosshair_hud
