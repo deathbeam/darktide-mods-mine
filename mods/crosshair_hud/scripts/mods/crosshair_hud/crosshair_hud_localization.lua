@@ -567,6 +567,16 @@ local localizations = {
     ["zh-cn"] = "在状态效果栏隐藏亚空间充能效果。",
     ru = "Убирает значок баффа Варп-заряда с панели баффов.",
   },
+  hide_warp_charge_timer = {
+    en = "Hide Warp Charge Timer",
+    ["zh-cn"] = "隐藏亚空间充能计时器",
+    ru = "Скрыть таймер Варп-заряда",
+  },
+  hide_warp_charge_timer_description = {
+    en = "Hides the countdown timer for Warp Charges.",
+    ["zh-cn"] = "隐藏亚空间充能倒计时。",
+    ru = "Скрывает таймер обратного отсчета для Варп-зарядов.",
+  },
   display_kinetic_flayer_indicator = {
     en = "Display Kinetic Flayer Cooldown",
     ["zh-cn"] = "显示动能剥皮者冷却",
@@ -576,6 +586,16 @@ local localizations = {
     en = "Hide Kinetic Flayer Buff Icon",
     ["zh-cn"] = "隐藏动能剥皮者增益图标",
     ru = "Скрыть значок баффа Кинетического истребителя",
+  },
+  hide_kinetic_flayer_timer = {
+    en = "Hide Kinetic Flayer Timer",
+    ["zh-cn"] = "隐藏动能剥皮者计时器",
+    ru = "Скрыть таймер Кинетического истребителя",
+  },
+  hide_kinetic_flayer_timer_description = {
+    en = "Hides the cooldown timer for Kinetic Flayer.",
+    ["zh-cn"] = "隐藏动能剥皮者冷却倒计时。",
+    ru = "Скрывает таймер восстановления Кинетического истребителя.",
   },
   move_independently = {
     en = "Move Independently",
