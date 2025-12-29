@@ -26,6 +26,7 @@ ItemSorting
 LetMePlayHavoc
 valkyrie
 WeaponStats
+BetterLoadouts
 
 -- In Game HUD
 crosshair_hud
