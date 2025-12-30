@@ -25,6 +25,7 @@ DumpStatFinder
 ItemSorting
 LetMePlayHavoc
 valkyrie
+MissionBrief
 WeaponStats
 BetterLoadouts
 
