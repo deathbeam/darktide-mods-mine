@@ -5,7 +5,7 @@
 local mod = get_mod("Enhanced_descriptions")
 
 -- <<<CODE_REVEALER>>>
--- local function create_template(id, loc_keys, locales, handle_func) return { id = id, loc_keys = loc_keys, locales = locales, handle_func = handle_func } end mod.localization_templates = { create_template("code_reveal", {"loc_talent_broker_passive_close_ranged_damage_desc"}, {"ru", "en"}, function(locale, value) return string.gsub(value, "{", "(") end), }
+-- local function create_template(id, loc_keys, locales, handle_func) return { id = id, loc_keys = loc_keys, locales = locales, handle_func = handle_func } end mod.localization_templates = { create_template("code_reveal", {"loc_talent_broker_toughness_on_toxined_kill_desc"}, {"ru", "en"}, function(locale, value) return string.gsub(value, "{", "(") end), }
 -- <<</CODE_REVEALER>>>
 
 -- Кэш утилит
@@ -148,6 +148,7 @@ local MFF = {}
 MFF.patterns = {
 	plus_prefix = "^%+",
 	all_plus = "%+",
+	all_minus = "%-",
 	percent_zeros = "%.00%%",
 	hyphen_spaces = "%s*%-%s*"
 }
@@ -170,90 +171,119 @@ local FIXES = {
 --[+ ++BLESSINGS - БЛАГОСЛОВЕНИЯ++ +]--
 	--[+ OVERLOAD +]--
 		loc_explosion_on_overheat_lockout_desc = {
-			overheat_reduction =	MFF.fixes.plus_prefix
+			overheat_reduction =				MFF.fixes.plus_prefix
 		},
 	--[+ WRATH +]--
 		loc_trait_bespoke_chained_hits_increases_cleave_desc = {
-			cleave =				MFF.fixes.plus_prefix
+			cleave =							MFF.fixes.plus_prefix
 		},
 	--[+ HEATSINK +]--
 		loc_reduce_fixed_overheat_amount_desc = {
-			amount =				MFF.fixes.plus_prefix
+			amount =							MFF.fixes.plus_prefix
 		},
 	--[+ SLOW AND STEADY +]--
 		loc_trait_bespoke_toughness_on_hit_based_on_charge_time_desc = {
-			toughness =				MFF.fixes.plus_prefix
+			toughness =							MFF.fixes.plus_prefix
 		},
 	--[+ FOCUSED COOLING +]--
 		loc_trait_bespoke_reduced_overheat_on_crits_desc = {
-			heat_percentage =		MFF.fixes.plus_prefix
+			heat_percentage =					MFF.fixes.plus_prefix
 		},
 
 --[+ ++TALENTS - ТАЛАНТЫ++ +]--
 	--[+ NODES - УЗЛЫ +]--
 		--[+ Peril Resistance Medium +]--
 		loc_talent_warp_charge_low_desc = {
-			warp_charge =			MFF.fixes.percent_zeros
+			warp_charge =						MFF.fixes.percent_zeros
 		},
 
 	--[+ PSYKER - ПСАЙКЕР +]--
 		--[+ ABILITY 1-3 - Creeping Flames +]--
 		loc_talent_psyker_warpfire_on_shout_desc = {
-			min_stacks =			MFF.fixes.hyphen_spaces
+			min_stacks =						MFF.fixes.hyphen_spaces
 		},
 
 	--[+ VETERAN - ВЕТЕРАН +]--
 		--[+ Passive 23 - Deadshot +]--
 		loc_talent_veteran_ads_drains_stamina_boost_desc = {
-			sway_reduction =		MFF.fixes.all_plus
+			sway_reduction =					MFF.fixes.all_plus
 		},
 
 	--[+ ZEALOT - ИЗУВЕР +]--
 		--[+ BLITZ 1 - Stunstorm Grenade +]--
 		loc_zealot_improved_stun_grenade_desc = {
-			radius =				MFF.fixes.all_plus
+			radius =							MFF.fixes.all_plus
 		},
 		--[+ ABILITY 1-1 - Unrelenting Fury +]--
 		loc_talent_zealot_fotf_refund_cooldown_desc = {
-			cooldown =				MFF.fixes.all_plus
+			cooldown =							MFF.fixes.all_plus
 		},
 		--[+ Passive 5 - Enemies Within, Enemies Without +]--
 		loc_talent_zealot_toughness_near_enemies_desc = {
-			toughness =				MFF.fixes.all_plus
+			toughness =							MFF.fixes.all_plus
 		},
 
 	--[+ ARBITES - АРБИТРЕС +]--
 		--[+ ABILITY 1 - Castigator's Stance +]--
 		loc_talent_adamant_stance_ability_alt_description = {
-			damage_taken =			MFF.fixes.all_plus
+			damage_taken =						MFF.fixes.all_plus
 		},
 		--[+ Passive 16 - Canine Morale +]--
 		loc_talent_adamant_pinning_dog_kills_buff_allies_description = {
-			toughness =				MFF.fixes.all_plus
+			toughness =							MFF.fixes.all_plus
 		},
 
 	--[+ OGRYN - ОГРИН +]--
 		--[+ ABILITY 3-1 - Bullet Bravado +]--
 		loc_talent_ogryn_special_ammo_toughness_on_shot_and_reload_desc = {
-			toughness =				MFF.fixes.all_plus,
-			toughness_reload =		MFF.fixes.all_plus
+			toughness =							MFF.fixes.all_plus,
+			toughness_reload =					MFF.fixes.all_plus
 		},
 		--[+ Passive 21 - Batter +]--
 		loc_talent_ogryn_heavy_bleeds_new_desc = {
-			stacks =				MFF.fixes.all_plus,
-			heavy_stacks =			MFF.fixes.all_plus
+			stacks =							MFF.fixes.all_plus,
+			heavy_stacks =						MFF.fixes.all_plus
 		},
 		--[+ Passive 24 - Concentrate +]--
 		loc_talent_ogryn_drain_stamina_for_handling_desc = {
-			sway_reduction =		MFF.fixes.all_plus,
-			spread_reduction =		MFF.fixes.all_plus,
-			recoil_reduction =		MFF.fixes.all_plus
+			sway_reduction =					MFF.fixes.all_plus,
+			spread_reduction =					MFF.fixes.all_plus,
+			recoil_reduction =					MFF.fixes.all_plus
 		},
 
 	--[+ HIVE SCUM - ОТРЕБЬЕ УЛЬЯ +]--
 		--[+ ABILITY 2 - Rampage! +]--
 		loc_talent_broker_ability_punk_rage_desc_2 = {
-			damage_taken =			MFF.fixes.all_plus
+			damage_taken =						MFF.fixes.all_plus
+		},
+		--[+ KEYSTONE 3 - Chemical Dependency +]--
+		loc_talent_broker_keystone_chemical_dependency_desc = {
+			cooldown_reduction =				MFF.fixes.all_plus
+		},
+		--[+ Passive 4 - Voice of Tertium +]--
+		loc_talent_broker_passive_restore_toughness_on_close_ranged_kill_desc = {
+			toughness =							MFF.fixes.all_plus,
+			toughness_elites =					MFF.fixes.all_plus
+		},
+		--[+ Passive 7 - Burst of Energy +]--
+		loc_talent_broker_passive_stun_immunity_on_toughness_broken_desc = {
+			toughness =							MFF.fixes.all_plus
+		},
+		--[+ Passive 9 - Calling for a Time Out +]--
+		loc_talent_broker_passive_reduced_toughness_damage_during_reload_desc = {
+			toughness_damage_taken_modifier =	MFF.fixes.all_minus
+		},
+		--[+ Passive 29 - Pickpocket +]--
+		loc_talent_broker_passive_low_ammo_regen_desc = {
+			ammo_threshold =					MFF.fixes.all_plus
+		},
+		--[+ Passive 33 - Hyper-Violence +]--
+		loc_talent_broker_passive_melee_damage_carry_over_desc = {
+			percentage =						MFF.fixes.all_plus
+		},
+		--[+ Passive 42 - Toxic Renewal +]--
+		loc_talent_broker_toughness_on_toxined_kill_desc = {
+			toughness =							MFF.fixes.all_plus
 		},
 }
 

@@ -55,8 +55,10 @@ local CONFIG = {
 		porchi =			"порчи",						-- Таланты
 		porchu =			"порчу",						-- Таланты
 		porchi_uron =		"урон от порчи",				-- Таланты
+		porchi_urona =		"урона от порчи",				-- Таланты
 	},
 	crit_text_colour = {
+		Kriticheskie =		"Критические",					-- Таланты
 		Krit_vystrely =		"Критические выстрелы",			-- Таланты
 		Krit_udary =		"Критические удары",			-- Благословения
 
@@ -82,6 +84,8 @@ local CONFIG = {
 		sh_krit_vystrela =	"шансу критического выстрела",	-- Таланты, Благословения
 		sha_krit_udara =	"шанса критического удара",		-- Таланты
 		sh_krit_udara =		"шансу критического удара",		-- Таланты, Благословения
+
+		Conc_Stimm =		"Стима концентрации",
 	},
 	damage_text_colour = {
 		Uron =				"Урон",							-- Таланты
@@ -90,6 +94,8 @@ local CONFIG = {
 		uronu =				"урону",						-- Таланты, Благословения, Редкости
 	-- urona_warp =			"варп-урона",					-- ?
 		uronu_warp =		"варп-урону",					-- Таланты
+
+		Combat_Stimm =		"Боевого стима",
 	},
 	electrocuted_text_colour = {
 	-- elektroshok =		"электрошок",					-- ?
@@ -134,6 +140,8 @@ local CONFIG = {
 	rending_text_colour = {
 		Probivanie =		"Пробивание",					-- Примечания внизу
 		probivaniu =		"пробиванию",					-- Таланты, Благословения
+
+		Cartel_Stimm =		"Особого стима Картеля",
 	},
 	soulblaze_text_colour = {
 		gorenia_dushi =		"горения души",					-- Таланты, Благословения
@@ -179,12 +187,13 @@ local CONFIG = {
 		stoikost =			"стойкость",					-- Таланты, Примечания внизу
 
 		TDR =				"СУС",
-	-- sn_ur_stoikosti =	"снижение урона стойкости",		-- ?
+	-- ur_stoikosti =		"снижение урона стойкости",		-- ?
 		snu_ur_stoikosti =	"снижению урона стойкости",		-- Таланты
-	-- stoikosti_urona =	"урона стойкости",				-- ?
+		stoikosti_urona =	"урона стойкости",				-- Таланты
 	},
 	weakspot_text_colour = {
 		ujazvimye_mesta =	"уязвимые места",				-- Таланты, Благословения
+		ujazvimym_mestam =	"уязвимым местам",				-- Таланты
 		u_mestam_uronu =	"урону по уязвимым местам",		-- Таланты, Благословения
 		ujazvimoe_mesto =	"уязвимое место",				-- Таланты, Благословения
 		u_mestam_uron =		"урон по уязвимым местам",		-- Примечания внизу
@@ -200,6 +209,8 @@ local CONFIG = {
 	},
 		precision_text_colour = {
 			Precision =			"меткости",
+
+			Celerity_Stimm =	"Стима скорости",
 	},
 -- Огрин
 	class_ogryn_text_colour = {
@@ -268,6 +279,8 @@ local CONFIG = {
 		focus_text_colour = {
 			Focus =				"Концентрации",
 			Forceful =			"Неудержимости",
+
+			Shout =				"Крик",						-- Hive Scum
 		},
 		focust_text_colour = {
 			Focus_Target =		"Важной цели",
@@ -303,6 +316,8 @@ local CONFIG = {
 			Chem_Tox =			"Хим-токсин",
 			Chem_Toxa =			"Хим-токсина",
 			Chem_Toxom =		"Хим-токсином",
+
+			Med_Stimm =			"Мед стима",
 		},
 
 -- ТАЛАНТЫ

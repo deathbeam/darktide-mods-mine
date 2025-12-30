@@ -19,7 +19,7 @@ local DEFAULT_SETTINGS = {
 }
 
 local COLOR_SETTINGS = {
-	-- Default text color = terminal_text_body
+-- Default text color = terminal_text_body
 	{ id = "dump_stat",			default = "terminal_text_body" },
 	{ id = "dump_stat2",		default = "terminal_text_body" },
 	{ id = "dump_stat3",		default = "terminal_text_body" },
@@ -31,8 +31,8 @@ local COLOR_SETTINGS = {
 	{ id = "coherency",			default = "citadel_kindleflame" },
 	{ id = "combat_ability",	default = "olive_drab" },
 	{ id = "corruption",		default = "ui_corruption_medium" },
-	{ id = "crit",				default = "citadel_yriel_yellow" },
-	{ id = "damage",			default = "citadel_jokaero_orange" },
+	{ id = "crit",				default = "citadel_yriel_yellow" },		-- Concentration Stimm
+	{ id = "damage",			default = "citadel_jokaero_orange" },	-- Combat Stimm
 	{ id = "electrocuted",		default = "citadel_stormfang" },
 	{ id = "finesse",			default = "dodger_blue" },
 	{ id = "health",			default = "red" },
@@ -40,32 +40,38 @@ local COLOR_SETTINGS = {
 	{ id = "impact",			default = "sea_green" },
 	{ id = "peril",				default = "ui_orange_dark" },
 	{ id = "power",				default = "steel_blue" },
-	{ id = "rending",			default = "violet" },
+	{ id = "rending",			default = "violet" },					-- Cartel Special Stimm
 	{ id = "soulblaze",			default = "ui_toughness_default" },
 	{ id = "stagger",			default = "terminal_background_selected" },
 	{ id = "stamina",			default = "light_salmon" },
 	{ id = "toughness",			default = "ui_difficulty_1" },
 	{ id = "weakspot",			default = "green_yellow" },
 
-	-- Classes
+-- Classes
+	-- Psyker
 	{ id = "class_psyker",		default = "player_slot_4" },
-	{ id = "precision",			default = "ui_psyker" },
+	{ id = "precision",			default = "ui_psyker" },				-- Celerity Stimm
+	-- Ogryn
 	{ id = "class_ogryn",		default = "player_slot_3" },
-	{ id = "fnp",				default = "light_coral" },
-	{ id = "luckyb",			default = "orange" },
-	{ id = "trample",			default = "dark_olive_green" },
+	{ id = "fnp",				default = "light_coral" },				-- Scum (Desperado)
+	{ id = "luckyb",			default = "orange" },					-- Zealot (Toughness gold)
+	{ id = "trample",			default = "mb_terminal_base" },			-- Scum (Dependency)
+	-- Zealot
 	{ id = "class_zealot",		default = "player_slot_2" },
-	{ id = "fury",				default = "hot_pink" },
-	{ id = "momentum",			default = "ui_red_super_light" },
-	{ id = "stealth",			default = "ui_grey_light" },
+	{ id = "fury",				default = "hot_pink" },					-- Scum (Rampage!)
+	{ id = "momentum",			default = "ui_red_super_light" },		-- Ogryn (Taunt), Scum (Adrenaline, Adrenaline Frenzy)
+	{ id = "stealth",			default = "ui_grey_light" },			-- Psyker (Marked)
+	-- Veteran
 	{ id = "class_veteran",		default = "player_slot_1" },
-	{ id = "focus",				default = "dark_violet" },
-	{ id = "focust",			default = "teal" },
-	{ id = "meleespec",			default = "ui_hud_red_light" },
-	{ id = "rangedspec",		default = "citadel_the_fang_grey" },
+	{ id = "focus",				default = "dark_violet" },				-- Veteran (Forceful), Scum (Shout)
+	{ id = "focust",			default = "teal" },						-- Psyker (Marked Enemy), Scum (Vulture's Mark)
+	{ id = "meleespec",			default = "ui_hud_red_light" },			-- Arbites (Melee Justice), Scum (Exhausted)
+	{ id = "rangedspec",		default = "citadel_the_fang_grey" },	-- Arbites (Ranged Justice)
+	-- Arbites
 	{ id = "class_arbites",		default = "plum" },
+	-- Hive Scum
 	{ id = "class_scum",		default = "citadel_nurgling_green" },
-	{ id = "chemtox",			default = "online_green" },
+	{ id = "chemtox",			default = "online_green" },				-- Med Stimm
 
 	-- Misc
 	{ id = "talents",			default = "ui_input_color" },

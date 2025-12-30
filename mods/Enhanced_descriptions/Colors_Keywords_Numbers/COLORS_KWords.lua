@@ -61,10 +61,13 @@ local CONFIG = {
 		Crit_dmg_r =	"Critical Damage",
 		Crt_dmg_r =		"Crit Damage",
 
+		Conc_Stimm =	"Concentration Stimm",
 	},
 	damage_text_colour = {
 		Damage =		"Damage",
 		Damagewrp =		"Warp-Damage",
+
+		Combat_Stimm =	"Combat Stimm",
 	},
 	electrocuted_text_colour = {
 		Electrocute =	"Electrocute",
@@ -99,6 +102,8 @@ local CONFIG = {
 	},
 	rending_text_colour = {
 		Rending =		"Rending",
+
+		Cartel_Stimm =	"Cartel Special Stimm",
 	},
 	soulblaze_text_colour = {
 		Soulblaze =		"Soulblaze",
@@ -119,6 +124,7 @@ local CONFIG = {
 	toughness_text_colour = {
 		TDR =			"TDR",
 		TGHN =			"TGHN",
+		Tghns_dmg =		"Toughness Damage",
 		Tghns_dmg_red =	"Toughness Damage Reduction",
 		Toughness =		"Toughness",
 	},
@@ -142,6 +148,8 @@ local CONFIG = {
 	},
 		precision_text_colour = {
 			Precision =		"Precision",
+
+			Celerity_Stimm = "Celerity Stimm",
 		},
 	-- Ogryn
 	class_ogryn_text_colour = {
@@ -150,6 +158,7 @@ local CONFIG = {
 	},
 		fnp_text_colour = {
 			Feel_no_pain =	"Feel No Pain",
+
 			Desperado =		"Desperado",			-- Hive Scum
 		},
 		luckyb_text_colour = {
@@ -196,6 +205,8 @@ local CONFIG = {
 		focus_text_colour = {
 			Forceful =		"Forceful",
 			Focus =			"Focus",
+
+			Shout =			"Shout",				-- Hive Scum
 		},
 		focust_text_colour = {
 			Focus_Target =	"Focus Target",
@@ -228,6 +239,8 @@ local CONFIG = {
 	},
 		chemtox_text_colour = {
 			Chem_Tox =		"Chem Toxin",
+
+			Med_Stimm =		"Med Stimm",
 		},
 
 -- TALENTS

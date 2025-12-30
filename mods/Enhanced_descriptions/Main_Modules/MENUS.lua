@@ -417,6 +417,28 @@ local menus_templates = {
 		["zh-tw"] = "神化", -- 紅色
 		["zh-cn"] = "神圣", -- 红
 	},
+	
+--[+ ++STIMS++ +]--
+	--[+ Celerity Stimm - Стим скорости +]--
+	-- ["loc_pickup_syringe_pocketable_4"] = {
+		-- en = "Celerity Stimm",
+		-- ru = "Стим скорости", -- Синий
+	-- },
+	--[+ Combat Stimm - Боевой стим +]--
+	-- ["loc_pickup_syringe_pocketable_3"] = {
+		-- en = "Combat Stimm",
+		-- ru = "Боевой стим", -- Красный
+	-- },
+	--[+ Concentration Stimm - Стим концентрации +]--
+	-- ["loc_pickup_syringe_pocketable_2"] = {
+		-- en = "Concentration Stimm",
+		-- ru = "Стим концентрации", -- Жёлтый
+	-- },
+	--[+ Med Stimm - Мед стим +]--
+	-- ["loc_pickup_pocketable_1"] = {
+		-- en = "Med Stimm",
+		-- ru = "Мед стим", -- Зелёный
+	-- },
 
 --[+ ++WEAPON CARD - КАРТОЧКА ОРУЖИЯ++ +]--
 --[+ +Weapon - Оружие+ +]--
