@@ -43,6 +43,7 @@ local CONFIG = {
 		splochennosti =		"сплочённости",					-- Таланты, ЧПФ внизу
 	},
 	combat_ability_text_colour = {
+		sposobnosti =		"способности",					-- Таланты
 		boeva_sposobnost =	"боевая способность",			-- Таланты
 		boev_sposobnosti =	"боевой способности",			-- Таланты, Редкости
 		vosstanovlenii =	"восстановлении",				-- Таланты

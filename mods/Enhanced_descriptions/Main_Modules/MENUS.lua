@@ -233,6 +233,7 @@ local menus_templates = {
 		["zh-cn"] = "获得一件你选择的武器（亵渎级）。",
 	},
 
+
 --[+ ++MAIN MENU++ +]--
 	--[+ Account Wallet +]--
 	["loc_main_menu_account_wallet_title"] = {
@@ -257,6 +258,13 @@ local menus_templates = {
 		-- ru = , -- руоф Предыдущие задания
 		["zh-tw"] = "歷史任務", -- 歷史任務
 	},
+	--[+ STIMM LAB +]--
+	["loc_broker_stimm_builder_view_display_name"] = {
+		-- en = "Stimm Lab",
+		ru = "Стим лаба", -- руоф Стимуляторы
+	},
+
+
 --[+ +MISSIONS MENU++]
 	--[+  +]--
 	-- [""] = {

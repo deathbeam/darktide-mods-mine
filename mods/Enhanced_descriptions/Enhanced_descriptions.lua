@@ -5,7 +5,7 @@
 local mod = get_mod("Enhanced_descriptions")
 
 -- <<<CODE_REVEALER>>>
--- local function create_template(id, loc_keys, locales, handle_func) return { id = id, loc_keys = loc_keys, locales = locales, handle_func = handle_func } end mod.localization_templates = { create_template("code_reveal", {"loc_talent_broker_toughness_on_toxined_kill_desc"}, {"ru", "en"}, function(locale, value) return string.gsub(value, "{", "(") end), }
+-- local function create_template(id, loc_keys, locales, handle_func) return { id = id, loc_keys = loc_keys, locales = locales, handle_func = handle_func } end mod.localization_templates = { create_template("code_reveal", {"loc_talent_buff_cooldown_on_melee_kills"}, {"ru", "en"}, function(locale, value) return string.gsub(value, "{", "(") end), }
 -- <<</CODE_REVEALER>>>
 
 -- Кэш утилит
@@ -64,8 +64,8 @@ local location = "Enhanced_descriptions/Main_Modules/"
 local VERSION = "4.95b"
 local LOCALIZATION_FILES = {
 	WEAPONS_Blessings_Perks =		"enable_weapons_file",
-	-- TALENTS_Modular =			"enable_talents_file",
-	TALENTS =						"enable_talents_file",
+	TALENTS_Modular =				"enable_talents_file",
+	-- TALENTS =					"enable_talents_file",
 	CURIOS_Blessings_Perks =		"enable_curious_file",
 	MENUS =							"enable_menus_file",
 	PENANCES =						"enable_penances_file",
