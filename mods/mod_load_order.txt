@@ -12,6 +12,7 @@ guarantee_ability_activation
 -- Debugging
 creature_spawner
 show_crit_chance
+SoloPlay
 CombatStats
 
 -- General HUD
