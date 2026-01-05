@@ -14,6 +14,7 @@ creature_spawner
 show_crit_chance
 SoloPlay
 CombatStats
+WeaponStats
 
 -- General HUD
 custom_hud
@@ -27,8 +28,9 @@ ItemSorting
 LetMePlayHavoc
 valkyrie
 MissionBrief
-WeaponStats
 BetterLoadouts
+InspectFromSocial
+InspectFromPartyFinder
 
 -- In Game HUD
 crosshair_hud
