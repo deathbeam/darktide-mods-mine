@@ -36,7 +36,8 @@ InspectFromPartyFinder
 crosshair_hud
 markers_aio
 DynamicCrosshair
-emperors_lantern
+-- emperors_lantern
+machine_gods_beacon
 GasOutline
 Healthbars
 danger_zone
