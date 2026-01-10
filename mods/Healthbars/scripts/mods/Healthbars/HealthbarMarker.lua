@@ -181,33 +181,35 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				local damage_has_started = ui_content.damage_has_started
 
 				if damage_has_started then
-					if mod:get("show_dps") and ui_content.dead then
+					if mod:get("show_dps") then
 						if not ui_content.damage_has_started_timer then
 							ui_content.damage_has_started_timer = ui_renderer.dt
 						elseif not ui_content.dead then
 							ui_content.damage_has_started_timer = ui_content.damage_has_started_timer + ui_renderer.dt
 						end
+						
+						if ui_content.dead then
+							local damage_has_started_position =
+								Vector3(x_position, y_position - damage_number_settings.dps_y_offset, z_position)
+							local dps = ui_content.damage_has_started_timer > 1
+									and ui_content.damage_taken / ui_content.damage_has_started_timer
+								or ui_content.damage_taken
+							local text = string.format("%d DPS", dps)
 
-						local damage_has_started_position =
-							Vector3(x_position, y_position - damage_number_settings.dps_y_offset, z_position)
-						local dps = ui_content.damage_has_started_timer > 1
-								and ui_content.damage_taken / ui_content.damage_has_started_timer
-							or ui_content.damage_taken
-						local text = string.format("%d DPS", dps)
-
-						UIRenderer.draw_text(
-							ui_renderer,
-							text,
-							dps_font_size,
-							font_type,
-							damage_has_started_position,
-							size,
-							ui_style.text_color,
-							{}
-						)
+							UIRenderer.draw_text(
+								ui_renderer,
+								text,
+								dps_font_size,
+								font_type,
+								damage_has_started_position,
+								size,
+								ui_style.text_color,
+								{}
+							)
+						end
 					end
 
-					if mod:get("show_armour_type") and ui_content.last_hit_zone_name then
+					if ui_content.last_hit_zone_name and mod:get("show_armour_type") then
 						local hit_zone_name = ui_content.last_hit_zone_name
 						local breed = ui_content.breed
 						local armor_type = breed.armor_type
@@ -684,7 +686,7 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 		content.visibility_delay = damage_number_settings.visibility_delay
 		content.damage_taken = damage_taken
 
-		if old_damage_taken < damage_taken then
+		if old_damage_taken < damage_taken and mod:get("show_damage_numbers") then
 			local damage_numbers = content.damage_numbers
 			local damage_diff = math.ceil(damage_taken - old_damage_taken)
 			local latest_damage_number = damage_numbers[#damage_numbers]
