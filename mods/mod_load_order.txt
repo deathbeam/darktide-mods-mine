@@ -27,7 +27,6 @@ DumpStatFinder
 ItemSorting
 LetMePlayHavoc
 valkyrie
-MissionBrief
 BetterLoadouts
 InspectFromSocial
 InspectFromPartyFinder
