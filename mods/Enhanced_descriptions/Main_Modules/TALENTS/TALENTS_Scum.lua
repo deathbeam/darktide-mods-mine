@@ -67,12 +67,27 @@ local scum_localizations = {
 			..Dot_nc.." Max travel time: "..CNumb("1.5", "n_1_5_rgb").." seconds.\n"
 			.."\n"
 			..Dot_nc.." Projectile impact base "..CKWord("Damage", "Damage_rgb")..": "..CNumb("1800", "n_1800_rgb")..".\n"
-			..Dot_green.." Good armor "..CKWord("Damage", "Damage_rgb")..".\n"
+			..Dot_green.." Armor "..CKWord("Damage", "Damage_rgb").." modifiers:\n"
+			.."_______________________________\n"
+			.."Carapace                                         |      "..CNumb("1.1", "n_1_1_rgb").."\n"
+			.."Unarmoured, Flak, Void Shield    |        "..CNumb("1", "n_1_rgb").."\n"
+			.."Maniac                                             |    "..CNumb("0.9", "n_0_9_rgb").."\n"
+			.."Unyielding                                       |  "..CNumb("0.75", "n_0_75_rgb").."\n"
+			.."Infested                                            | "..CNumb("0.25", "n_0_25_rgb").."\n"
+			.."_______________________________\n"
 			..Dot_green.." Ignores Bulwark shield.\n"
 			..CPhrs("Cant_Crit")
 			.."\n"
 			..Dot_green.." Explosion base "..CKWord("Damage", "Damage_rgb")..": ["..CNumb("2800", "n_2800_rgb").."-"..CNumb("1300", "n_1300_rgb").."].\n"
-			..Dot_green.." High armor "..CKWord("Damage", "Damage_rgb").." vs Flak, Carapace, Unyielding.\n"
+			..Dot_green.." Armor "..CKWord("Damage", "Damage_rgb").." modifiers:\n"
+			.."_______________________________\n"
+			.."Carapace                                         |    "..CNumb("2.4", "n_2_4_rgb").."\n"
+			.."Flak, Unyielding                             |        "..CNumb("2", "n_2_rgb").."\n"
+			.."Maniac                                             |   "..CNumb("1.35", "n_1_35_rgb").."\n"
+			.."Unarmoured                                   |   "..CNumb("1.25", "n_1_25_rgb").."\n"
+			.."Void Shield                                      |      "..CNumb("1.1", "n_1_1_rgb").."\n"
+			.."Infested                                            |  "..CNumb("0.75", "n_0_75_rgb").."\n"
+			.."_______________________________\n"
 			.."\n"
 			..Dot_green.." Very high "..CKWord("Stagger", "Stagger_rgb").." against all enemies except for Mutants and Twins/Captains without Void shield.\n"
 			..Dot_nc.." Replenishes all missiles per grenade pickup.",
@@ -83,24 +98,25 @@ local scum_localizations = {
 			..Dot_nc.." Максимальное время полёта: "..CNumb("1.5", "n_1_5_rgb").." секунды.\n"
 			.."\n"
 			..Dot_nc.." Базовый "..CKWord("урон", "uron_rgb_ru").." от попадания: "..CNumb("1800", "n_1800_rgb")..".\n"
-			..Dot_green.." Хороший "..CKWord("урон", "uron_rgb_ru").." по броне.\n"
+			-- ..Dot_green.." Хороший "..CKWord("урон", "uron_rgb_ru").." по броне.\n"
 			..Dot_green.." Игнорирует щит бастиона.\n"
 			..CPhrs("Cant_Crit")
 			.."\n"
 			..Dot_green.." Базовый "..CKWord("урон", "uron_rgb_ru").." от взрыва: ["..CNumb("2800", "n_2800_rgb").."-"..CNumb("1300", "n_1300_rgb").."].\n"
-			..Dot_green.." Высокий "..CKWord("урон", "uron_rgb_ru").." против несгибаемых, противоосколочной и панцирной брони.\n"
+			-- ..Dot_green.." Высокий "..CKWord("урон", "uron_rgb_ru").." против несгибаемых, противоосколочной и панцирной брони.\n"
 			.."\n"
 			..Dot_green.." Очень высокое "..CKWord("ошеломление", "oshelomlenie_rgb_ru").." против всех врагов, кроме мутантов, близнецов и капитанов без пустотного щита.\n"
 			..Dot_nc.." Все заряды пополняются из подобранного ящика гранат.", -- Бабахер
 	},
-	--[+ BLITZ 3 - Chem Grenade +]--	30.12.2025
-	["loc_talent_broker_blitz_tox_grenade_desc"] = { -- toxin: Chem Toxin, max_charges: 3, +colors
-		en = "Thrown grenade containing a "..CKWord("Chem Toxin", "Chem_Tox_rgb")..". The canister breaks open and contents spill out across an area when it explodes.\n"
+	--[+ BLITZ 3 - Chem Grenade +]--	11.02.2026
+	["loc_talent_broker_blitz_tox_grenade_desc_02"] = { -- toxin: Chem Toxin, max_charges: 3, +colors
+		en = "Thrown grenade containing a "..CKWord("Chem Toxin", "Chem_Tox_rgb")..". The canister breaks open when it explodes, spilling its contents out across an area.\n"
 			.."\n"
 			..Dot_nc.." Max Grenades: {max_charges:%s}.\n"
-			..Dot_nc.." Fuse time: "..CNumb("5", "n_5_rgb").." seconds.\n"
+			..Dot_nc.." Fuse time: "..CNumb("5", "n_5_rgb").." seconds, "..CNumb("1.5", "n_1_5_rgb").." seconds on impact.\n"
+			..Dot_nc.." Initial explosion radius: "..CNumb("4", "n_4_rgb").." meters.\n"
 			..Dot_nc.." Toxic area: "..CNumb("10", "n_10_rgb").." meters.\n"
-			..Dot_nc.." Lasts: "..CNumb("20", "n_20_rgb").." seconds.\n"
+			..Dot_nc.." Lasts: "..CNumb("15", "n_15_rgb").." seconds.\n"
 			..Dot_nc.." Replenishes all grenades per grenade pickup.\n"
 			.."\n"
 			.."Toxin application:\n"
@@ -118,14 +134,14 @@ local scum_localizations = {
 			..Dot_nc.." Explosion radius: "..CNumb("2.5", "n_2_5_rgb").." meters.\n"
 			..Dot_green.." Explosion base "..CKWord("Damage", "Damage_rgb")..": ["..CNumb("200", "n_200_rgb").."-"..CNumb("100", "n_100_rgb").."].\n"
 			..Dot_nc.." Average armor "..CKWord("Damage", "Damage_rgb")..".\n"
-			..Dot_red.." Low "..CKWord("Damage", "Damage_rgb").." vs Flak.\n"
-			..Dot_red.." No "..CKWord("Damage", "Damage_rgb").." vs Carapace (only in epicenter).",
+			..Dot_red.." Low "..CKWord("Damage", "Damage_rgb").." vs Flak.",
 		ru = "Вы бросаете контейнер, который разбивается и разливает "..CKWord("Хим-токсин", "Chem_Tox_rgb_ru").." по области при взрыве.\n"
 			.."\n"
 			..Dot_nc.." Максимум гранат: {max_charges:%s}.\n"
 			..Dot_nc.." Время до взрыва: "..CNumb("5", "n_5_rgb").." секунд.\n"
+			-- ..Dot_nc.." Первоначальный радиус взрыва: "..CNumb("4", "n_4_rgb").." метра.\n"
 			..Dot_nc.." Токсичная область: "..CNumb("10", "n_10_rgb").." метров.\n"
-			..Dot_nc.." Длится: "..CNumb("20", "n_20_rgb").." секунд.\n"
+			..Dot_nc.." Длится: "..CNumb("15", "n_15_rgb").." секунд.\n"
 			..Dot_nc.." Все гранаты пополняются из подобранного ящика гранат.\n"
 			.."\n"
 			.."Наложение токсина:\n"
@@ -293,8 +309,8 @@ local scum_localizations = {
 			.."\n"
 			..CPhrs("Can_proc_mult_str"),
 	},
-	--[+ ABILITY 2 - Rampage! +]--	30.12.2025
-	["loc_talent_broker_ability_punk_rage_desc_2"] = { -- talent_name: Rampage!, duration: 10, power: +50%, attack_speed: +20%, damage_taken: 25%, rage_duration_extend: 0.3, rage_duration_max: 20, exhaust_duration: 7, exhaust_damage_taken: +25%, exhaust_stamina_regeneration: -75%, cooldown: 30, s->seconds, +colors
+	--[+ ABILITY 2 - Rampage! +]--	11.02.2026
+	["loc_talent_broker_ability_punk_rage_desc_3"] = { -- talent_name: Rampage!, duration: 10, power: +50%, attack_speed: +20%, damage_taken: 25%, rage_duration_extend: 0.3, rage_duration_max: 20, exhaust_duration: 7, exhaust_damage_taken: +25%, exhaust_stamina_regeneration: -75%, cooldown: 30, s->seconds, +colors
 		en = "Replenish all "..CKWord("Toughness", "Toughness_rgb").." and enter {talent_name:%s} for {duration:%s} seconds.\n"
 			.."\n"
 			.."For the duration, gain:\n"
@@ -304,22 +320,16 @@ local scum_localizations = {
 			..Dot_green.." "..CKWord("Stun", "Stun_rgb").." Immunity and\n"
 			..Dot_green.." Slowdown Immunity.\n"
 			.."\n"
-			.."Duration Extension on Melee Hit:\n"
+			.."Duration Extension on Melee Strike:\n"
 			..Dot_green.." First {rage_duration_max:%s} seconds: "..CNumb("+", "n_plus_rgb").."{rage_duration_extend:%s} seconds per hit.\n"
 			..Dot_green.." After {rage_duration_max:%s} seconds: "..CNumb("+", "n_plus_rgb")..CNumb("0.15", "n_0_15_rgb").." seconds per hit.\n"
 			..Dot_nc.." Effect diminishes further every {rage_duration_max:%s} seconds.\n"
 			..CPhrs("Can_proc_mult_str")
 			.."\n"
-			.."Upon exiting {talent_name:%s}:\n"
-			..Dot_red.." Lose all "..CKWord("Stamina", "Stamina_rgb").." and\n"
-			..Dot_red.." Become "..CKWord("Exhausted", "Exhausted_rgb").." for {exhaust_duration:%s} seconds.\n"
-			.."\n"
-			.."While "..CKWord("Exhausted", "Exhausted_rgb")..":\n"
-			..Dot_red.." {exhaust_damage_taken:%s} "..CKWord("Damage", "Damage_rgb").." Taken and\n"
-			..Dot_red.." {exhaust_stamina_regeneration:%s} "..CKWord("Stamina", "Stamina_rgb").." Regeneration Speed.\n"
-			.."\n"
 			..Dot_nc.." Base Cooldown: {cooldown:%s} seconds.\n"
-			..Dot_red.." Cooldown paused while {talent_name:%s} active.",
+			..Dot_red.." Cooldown paused while {talent_name:%s} active.\n"
+			.."\n"
+			..CNote("Pwr_note"),
 		ru = "Вы восполняете всю "..CKWord("стойкость", "stoikost_rgb_ru").." и на {duration:%s} секунд впадаете в {talent_name:%s}\n"
 			.."\n"
 			.."На время действия вы получаете:\n"
@@ -335,24 +345,18 @@ local scum_localizations = {
 			..Dot_nc.." Эффект продолжает ослабевать каждые {rage_duration_max:%s} секунд.\n"
 			..CPhrs("Can_proc_mult")
 			.."\n"
-			.."Когда заканчивается {talent_name:%s} вы:\n"
-			..Dot_red.." Теряете всю "..CKWord("выносливость", "vynoslivost_rgb_ru").." и\n"
-			..Dot_red.." Получаете "..CKWord("Истощение", "Exhausted_rgb_ru").." на {exhaust_duration:%s} секунд.\n"
-			.."\n"
-			.."Пока действует "..CKWord("Истощение", "Exhausted_rgb_ru").." вы получаете ослабление:\n"
-			..Dot_red.." {exhaust_damage_taken:%s} к получаемому "..CKWord("урону", "uronu_rgb_ru").." и\n"
-			..Dot_red.." {exhaust_stamina_regeneration:%s} к скорости восстановления "..CKWord("выносливости", "vynoslivosti_rgb_ru")..".\n"
-			.."\n"
 			..Dot_nc.." Базовое время восстановления: {cooldown:%s} секунд.\n"
-			..Dot_red.." Время восстановления приостанавливается, пока {talent_name:%s} активно.",
+			..Dot_red.." Время восстановления приостанавливается, пока {talent_name:%s} активно.\n"
+			.."\n"
+			..CNote("Pwr_note"),
 	},
-	--[+ ABILITY 2-1 - Channelled Aggression +]--	30.12.2025
-	["loc_talent_broker_ability_punk_rage_sub_1_desc"] = { -- rending: +25%, punk_rage: Rampage!, ability_progress: 50%, +colors
-		en = "While the duration of {punk_rage:%s} remains above {ability_progress:%s}, Heavy Attacks gain:\n"
+	--[+ ABILITY 2-1 - Channelled Aggression +]--	11.02.2026
+	["loc_talent_broker_ability_punk_rage_sub_1_desc_02"] = { -- rending: +25%, punk_rage: Rampage!, ability_progress: 50%, +colors
+		en = "While {punk_rage:%s} is active Heavy Attacks gain:\n"
 			..Dot_green.." {rending:%s} "..CKWord("Rending", "Rending_rgb")..".\n"
 			.."\n"
 			..CNote("Rend_note"),
-		ru = "Пока длительность {punk_rage:%s} остается выше {ability_progress:%s}, тяжёлые атаки получают:\n"
+		ru = "Пока активно {punk_rage:%s} тяжёлые атаки получают:\n"
 			..Dot_green.." {rending:%s} к "..CKWord("пробиванию", "probivaniu_rgb_ru").." брони.\n"
 			.."\n"
 			..CNote("Rend_note"),
@@ -362,36 +366,32 @@ local scum_localizations = {
 		en = Dot_green.." Melee Strikes against Elites, Specials, Monstrosities extend the duration of {punk_rage:%s} from "..CNumb("0.3", "n_0_3_rgb").." to {rage_duration_extend_elites:%s} second.\n"
 			.."\n"
 			..Dot_green.." Additionally, the time before extending becomes diminished is now {rage_duration_max_upgrade:%s} seconds.",
-		ru = Dot_green.." Удары в ближнем бою по элитным врагам, специалистам и чудовищам продлевают время действия {punk_rage:%s} с "..CNumb("0.3", "n_0_3_rgb").." до {rage_duration_extend_elites:%s} секунды.\n"
+		ru = Dot_green.." Удары в ближнем бою по элитным врагам, специалистам и чудовищам продлевают время действия способности {punk_rage:%s} с "..CNumb("0.3", "n_0_3_rgb").." до {rage_duration_extend_elites:%s} секунды.\n"
 			.."\n"
 			..Dot_green.." Дополнительно, ослабление эффекта продления времени за удары в ближнем бою увеличивается до {rage_duration_max_upgrade:%s} секунд.",
 	},
-	--[+ ABILITY 2-3 - Forge's Bellow +]--	30.12.2025
-	["loc_talent_broker_ability_punk_rage_sub_3_desc"] = { -- punk_rage: Rampage!, : +50%, duration: 5, s->seconds
+	--[+ ABILITY 2-3 - Forge's Bellow +]--	11.02.2026
+	["loc_talent_broker_ability_punk_rage_sub_3_desc_02"] = { -- punk_rage: Rampage!, : +50%, duration: 5, s->seconds
 		en = "Empowers {punk_rage:%s} to release a "..CKWord("Shout", "Shout_rgb").." on activation.\n"
-			..Dot_nc.." Range: "..CNumb("4.5", "n_4_5_rgb").." meters.\n"
+			..Dot_nc.." Radius: "..CNumb("4.5", "n_4_5_rgb").." meters.\n"
 			..Dot_nc.." Duration: {duration:%s} seconds.\n"
 			.."\n"
 			.."The "..CKWord("Shout", "Shout_rgb").." debuffs all enemies it strikes:\n"
 			..Dot_green.." {attack_speed_reduction:%s} time between their attacks.\n"
-			..Dot_green.." Inflicts a heavy "..CKWord("Stagger", "Stagger_rgb")..".\n"
-			.."If the target resists, it is subjected to a forced "..CKWord("Stagger", "Stagger_rgb").." lasting "..CNumb("2.5", "n_2_5_rgb").." seconds.\n"
+			..Dot_green.." Inflicts "..CKWord("Stagger", "Stagger_rgb")..".\n"
 			.."\n"
-			.."This "..CKWord("Shout", "Shout_rgb").." also triggers when {punk_rage:%s} ends.\n"
-			.."The forced "..CKWord("Stagger", "Stagger_rgb").." effect does not apply to enemies already "..CKWord("Staggered", "Staggered_rgb").." or to Captains with Void shield.\n"
+			.."The "..CKWord("Shout", "Shout_rgb").." repeats when {punk_rage:%s} ends.\n"
 			.."\n"
 			..CPhrs("Doesnt_Stack_Scm_eff"),
-		ru = "Усиливает способность {punk_rage:%s}, заставляя его издавать "..CKWord("Крик", "Shout_rgb_ru").." при активации.\n"
-			..Dot_nc.." Радиус: "..CNumb("4.5", "n_4_5_rgb").." метров.\n"
+		ru = "Усиливает способность {punk_rage:%s}, заставляя вас издавать "..CKWord("Крик", "Shout_rgb_ru").." при активации.\n"
+			..Dot_nc.." Радиус: "..CNumb("4.5", "n_4_5_rgb").." метра.\n"
 			..Dot_nc.." Длится: {duration:%s} секунд.\n"
 			.."\n"
 			..CKWord("Крик", "Shout_rgb_ru").." ослабляет всех врагов, которых поражает:\n"
 			..Dot_green.." {attack_speed_reduction:%s} к времени между их атаками.\n"
-			..Dot_green.." Наносит им сильное "..CKWord("ошеломление", "oshelomlenie_rgb_ru")..".\n"
-			.."Если цель сопротивляется "..CKWord("ошеломлению", "oshelomleniu_rgb_ru")..", она подвергается принудительному "..CKWord("ошеломлению", "oshelomleniu_rgb_ru").." на "..CNumb("2.5", "n_2_5_rgb").." секунды.\n"
+			..Dot_green.." Наносит "..CKWord("ошеломление", "oshelomlenie_rgb_ru")..".\n"
 			.."\n"
-			.."Этот "..CKWord("Крик", "Shout_rgb_ru").." также срабатывает, когда {punk_rage:%s} заканчивается.\n"
-			.."Эффект принудительного "..CKWord("ошеломления", "oshelomlenia_rgb_ru").." не применяется к уже "..CKWord("ошеломлённым", "oshelomlennym_rgb_ru").." врагам или к капитанам с пустотным щитом.\n"
+			.."Этот "..CKWord("Крик", "Shout_rgb_ru").." повторяется после окончания действия способности {punk_rage:%s}\n"
 			.."\n"
 			..CPhrs("Doesnt_Stack_Scm_eff"),
 	},
@@ -403,14 +403,14 @@ local scum_localizations = {
 			.."Every second while {punk_rage:%s} is active grants Stacks, up to {max_stacks:%s}.\n"
 			.."\n"
 			.."Per stack, you gain:\n"
-			..Dot_green.." {melee_power:%s} Melee "..CKWord("Strength", "Strength_rgb")..", up to "..CNumb("25%", "pc_25_rgb")..".",
-		ru = "Пока активен {punk_rage:%s} вы получаете:\n"
+			..Dot_green.." {melee_power:%s} Melee "..CKWord("Strength", "Strength_rgb")..", up to "..CNumb("+", "n_plus_rgb")..CNumb("25%", "pc_25_rgb")..".",
+		ru = "Пока активно {punk_rage:%s} вы получаете:\n"
 			..Dot_green.." {cleave:%s} к "..CKWord("рассечению", "rassecheniu_rgb_ru").." врагов.\n"
 			.."\n"
-			.."Каждую секунду, пока активен {punk_rage:%s}, даются заряды, до {max_stacks:%s}.\n"
+			.."Каждую секунду, пока активно {punk_rage:%s}, вам даются заряды, вплоть до {max_stacks:%s}.\n"
 			.."\n"
 			.."За каждый заряд вы получаете:\n"
-			..Dot_green.." {melee_power:%s} к "..CKWord("силе", "sile_rgb_ru").." атак ближнего боя, до "..CNumb("25%", "pc_25_rgb")..".",
+			..Dot_green.." {melee_power:%s} к "..CKWord("силе", "sile_rgb_ru").." атак ближнего боя, вплоть до "..CNumb("+", "n_plus_rgb")..CNumb("25%", "pc_25_rgb")..".",
 	},
 	--[+ ABILITY 3 - Stimm Supply +]--	30.12.2025
 	["loc_talent_broker_ability_stimm_field_desc_3"] = { -- duration: 20, total_corruption_heal: 40, stimm_field: Stimm Supply, cooldown: 60, s->seconds, +colors
@@ -481,9 +481,9 @@ local scum_localizations = {
 			..Dot_green.." Но его эффекты сохраняются {linger_duration:%s} секунд после выхода из области.",
 	},
 --[+ +KEYSTONES - КЛЮЧЕВЫЕ+ +]--
-	--[+ KEYSTONE 1 - Vulture’s Mark +]--	30.12.2025
+	--[+ KEYSTONE 1 - Vulture’s Mark +]--	11.02.2026
 	["loc_talent_broker_keystone_vultures_mark_on_kill_desc"] = { -- duration: 8, max_stacks: 3, ranged_damage: +5%, movement_speed: +5%, crit_chance: +5%, toughness: 15%, s->seconds, +colors
-		en = "Killing Special or Elite enemy with a Ranged weapon grants you a Stacks of "..CKWord("Vulture's Mark", "VultsMark_rgb")..".\n"
+		en = "Killing Special or Elite enemy with a Ranged weapon within "..CNumb("12.5", "n_12_5_rgb").." meters grants you a Stacks of "..CKWord("Vulture's Mark", "VultsMark_rgb")..".\n"
 			.."\n"
 			..Dot_nc.." Lasts {duration:%s} seconds.\n"
 			..Dot_nc.." Stacks {max_stacks:%s} times.\n"
@@ -496,7 +496,7 @@ local scum_localizations = {
 			.."\n"
 			.." While at Max Stacks, Special and Elite Ranged Kills restore to you and Allies in "..CKWord("Coherency", "Coherency_rgb")..":\n"
 			..Dot_green.." {toughness:%s} "..CKWord("Toughness", "Toughness_rgb")..".",
-		ru = "Убийство элитного врага или специалиста дальнобойным оружием даёт вам заряд "..CKWord("Метки стервятника", "VultsMark_rgb_ru")..".\n"
+		ru = "Убийство элитного врага или специалиста дальнобойным оружием в пределах "..CNumb("12.5", "n_12_5_rgb").." даёт вам заряд "..CKWord("Метки стервятника", "VultsMark_rgb_ru")..".\n"
 			.."\n"
 			..Dot_nc.." Длится {duration:%s} секунд.\n"
 			..Dot_nc.." Суммируется {max_stacks:%s} раза.\n"
@@ -675,28 +675,30 @@ local scum_localizations = {
 			.."\n"
 			..Dot_nc.." Уменьшается до {damage_far:%s} к "..CKWord("урону", "uronu_rgb_ru").." на дистанции от {range_far:%s} метров и далее.", -- В харю
 	},
-	--[+ Passive 2 - Quick and Deadly +]--	30.12.2025
+	--[+ Passive 2 - Quick and Deadly +]--	30.01.2026
 	["loc_talent_broker_passive_close_range_damage_on_dodge_desc"] = { -- damage_near: +15%, duration: 3, +colors
 		en = "After a Successful Dodge you gain for {duration:%s} seconds:\n"
-			..Dot_green.." {damage_near:%s} Ranged "..CKWord("Damage", "Damage_rgb").." against targets within "..CNumb("12.5", "n_12_5_rgb").." meters.\n"
-			.."\n"
+			..Dot_green.." {damage_near:%s} "..CKWord("Damage", "Damage_rgb").." against targets within "..CNumb("12.5", "n_12_5_rgb").." meters.\n"
+			-- .."\n"
 			.."_______________________________\n"
 			.."Distance ("..CNumb("m", "n_meter_rgb").."):   "..CNumb("1", "n_1_rgb").."| "..CNumb("12.5", "n_12_5_rgb").."|   "..CNumb("15", "n_15_rgb").."|  "..CNumb("20", "n_20_rgb").."|   "..CNumb("25", "n_25_rgb").."| "..CNumb("30", "n_30_rgb")..CNumb("+", "n_plus_rgb").."\n"
 			..CKWord("Damage", "Damage_rgb").." ("..CNumb("%", "pc_rgb").."):  "..CNumb("15", "n_15_rgb").."|    "..CNumb("15", "n_15_rgb").."| "..CKWord("~13", "n__13_rgb").."|   "..CKWord("~9", "n__9_rgb").."|   "..CKWord("~4", "n__4_rgb").."|   "..CNumb("0", "n_0_rgb").."\n"
 			.."_______________________________\n"
+			-- .."\n"
+			-- ..CPhrs("Can_proc_mult_str")
 			.."\n"
 			.."Procs on successfully Dodging:\n"
 			..Dot_nc.." Enemy Melee or Ranged attacks (except Gunners, Reaper, Sniper),\n"
 			..Dot_nc.." Disabler attacks (Pox Hound jump, Trapper net, Mutant grab).",
 		ru = "После успешного уклонения,вы получаете на {duration:%s} секунды:\n"
-			..Dot_green.." {damage_near:%s} к дальнобойному "..CKWord("урону", "uronu_rgb_ru").." по целям в пределах "..CNumb("12.5", "n_12_5_rgb").." метров.\n"
-			.."\n"
+			..Dot_green.." {damage_near:%s} к "..CKWord("урону", "uronu_rgb_ru").." по целям в пределах "..CNumb("12.5", "n_12_5_rgb").." метров.\n"
+			-- .."\n"
 			.."_______________________________\n"
 			.."Дистанция ("..CNumb("м", "n_metr_rgb").."):  "..CNumb("1", "n_1_rgb").."| "..CNumb("12.5", "n_12_5_rgb").."|  "..CNumb("15", "n_15_rgb").."| "..CNumb("20", "n_20_rgb").."| "..CNumb("25", "n_25_rgb").."| "..CNumb("30", "n_30_rgb")..CNumb("+", "n_plus_rgb").."\n"
 			..CKWord("Урон", "Uron_rgb_ru").." ("..CNumb("%", "pc_rgb").."):          "..CNumb("15", "n_15_rgb").."|    "..CNumb("15", "n_15_rgb").."| "..CKWord("~13", "n__13_rgb").."| "..CKWord("~9", "n__9_rgb").."|  "..CKWord("~4", "n__4_rgb").."|   "..CNumb("0", "n_0_rgb").."\n"
 			.."_______________________________\n"
-			.."\n"
-			..CPhrs("Can_proc_mult_str").."\n"
+			-- .."\n"
+			-- ..CPhrs("Can_proc_mult_str")
 			.."\n"
 			.."Срабатывает при успешном уклонении от:\n"
 			..Dot_nc.." Атак врагов в ближнем или дальнем бою (кроме стрельбы пулемётчика, жнеца, снайпера),\n"
@@ -747,8 +749,8 @@ local scum_localizations = {
 			.."\n"
 			..Dot_red.." Срабатывает раз за атаку ближнего боя независимо от количества поражённых врагов.",
 	},
-	--[+ Passive 6 - Speedloader +]--	30.12.2025
-	["loc_talent_broker_passive_reload_speed_on_close_kill_desc"] = { -- : +30%, : 8, +colors
+	--[+ Passive 6 - Speedloader +]--	11.02.2026
+	["loc_talent_broker_passive_reload_speed_on_close_kill_desc"] = { -- reload_speed: +30%, duration: 8, +colors
 		en = "On Ranged Kill within "..CNumb("12.5", "n_12_5_rgb").." meters you gain for {duration:%s} seconds:\n"
 			..Dot_green.." {reload_speed:%s} Reload Speed.\n"
 			.."\n"
@@ -844,24 +846,20 @@ local scum_localizations = {
 			..Dot_nc.." Атак врагов в ближнем или дальнем бою (кроме стрельбы пулемётчика, жнеца, снайпера),\n"
 			..Dot_nc.." Атак обездвиживающих врагов (прыжок чумной гончей, сетка скаба-ловца, захват мутанта).",
 	},
-	--[+ Passive 13 - Nimble +]--	30.12.2025
-	["loc_talent_broker_passive_improved_dodges_desc"] = { -- : +25%, : +50%, +colors
-		en = Dot_green.." {dodge_distance_modifier:%s} Dodge distance.\n"
+	--[+ Passive 13 - Nimble +]--	11.02.2026
+	["loc_talent_broker_passive_improved_dodges_desc_02"] = { -- dodge_distance_modifier: +25%, dodge_linger_time: +0.15, s->seconds, +colors
+		en = Dot_green.." {dodge_distance_modifier:%s} Dodge Speed.\n"
 			.."\n"
-			..Dot_green.." {dodge_linger_time:%s} Dodge duration.\n"
-			..Dot_nc.." Increases from "..CNumb("0.25", "n_0_25_rgb").." to "..CNumb("0.375", "n_0_375_rgb").." seconds.",
-		ru = Dot_green.." {dodge_distance_modifier:%s} к дальности уклонения.\n"
+			..Dot_green.." {dodge_linger_time:%s} seconds Dodge linger time.",
+		ru = Dot_green.." {dodge_distance_modifier:%s} к скорости уклонения.\n"
 			.."\n"
-			..Dot_green.." {dodge_linger_time:%s} к длительности уклонения.\n"
-			..Dot_nc.." Увеличивается с "..CNumb("0.25", "n_0_25_rgb").." до "..CNumb("0.375", "n_0_375_rgb").." секунды.",
+			..Dot_green.." {dodge_linger_time:%s} секунды к продолжительности уклонения.",
 	},
-	--[+ Passive 14 - Slippery Customer +]--	30.12.2025
-	["loc_talent_broker_passive_dodge_melee_on_slide_desc"] = {
-		en = "While sliding, gain:\n"
-			..Dot_green.." Melee Attack Immunity.",
-		ru = "При подкате вы получаете:\n"
-			..Dot_green.." Иммунитет к атакам ближнего боя.",
-	},
+	--[+ Passive 14 - Slippery Customer +]--	11.02.2026
+	-- ["loc_talent_broker_passive_dodge_melee_on_slide_desc"] = {
+		-- en = "While sliding, you count as Dodging against Melee Attacks.",
+		-- ru = "При подкате вы входите в состояние уклонения от атак ближнего боя.",
+	-- },
 	--[+ Passive 15 - Untouchable +]--	30.12.2025
 	["loc_talent_broker_passive_sprinting_reduces_threat_desc"] = { -- threshold: 1, threat_weight_multiplier: -12.5%, duration: 3, max_stacks: 4, +colors
 		en = "Sprinting and sliding actions generate Stacks.\n"
@@ -944,20 +942,24 @@ local scum_localizations = {
 		ru = Dot_green.." {clip_size:%s} к ёмкости магазина.\n"
 			..Dot_nc.." Округляется в большую сторону.",
 	},
-	--[+ Passive 21 - Unload +]--	30.12.2025
+	--[+ Passive 21 - Unload +]--	11.02.2026
 	["loc_talent_broker_passive_damage_on_reload_desc"] = { -- damage: +2%, duration: 7, ammo_per_stack: 10%, damage_per_stack: +2%, +colors
 		en = "Reloading your Ranged Weapon grants for {duration:%s} seconds:\n"
 			..Dot_green.." {damage:%s} Ranged "..CKWord("Damage", "Damage_rgb")..".\n"
 			.."\n"
 			.."Each {ammo_per_stack:%s} of magazine spent during the duration grants:\n"
 			..Dot_green.." {damage_per_stack:%s} additional Ranged "..CKWord("Damage", "Damage_rgb")..".\n"
-			..Dot_nc.." Rounded up.",
+			..Dot_nc.." Rounded down\n"
+			.."\n"
+			..CPhrs("Can_be_refr"),
 		ru = "Перезарядка дальнобойного оружия даёт на {duration:%s} секунд:\n"
 			..Dot_green.." {damage:%s} к дальнобойному "..CKWord("урону", "uronu_rgb_ru")..".\n"
 			.."\n"
 			.."Каждые {ammo_per_stack:%s} потраченных боеприпасов из магазина за время действия дают дополнительно:\n"
 			..Dot_green.." {damage_per_stack:%s} дальнобойного "..CKWord("урона", "urona_rgb_ru")..".\n"
-			..Dot_nc.." Округляется в большую сторону.",
+			..Dot_nc.." Округляется в меньшую сторону\n"
+			.."\n"
+			..CPhrs("Can_be_refr"),
 	},
 	--[+ Passive 22 - Swift Endurance +]--	30.12.2025
 	["loc_talent_broker_passive_stamina_grants_atk_speed_desc"] = { -- attack_speed_increase: +2%, +colors
@@ -984,10 +986,18 @@ local scum_localizations = {
 			.."\n"
 			..Dot_green.." Уклонение при беге доступно даже при нулевой "..CKWord("выносливости", "vynoslivost_rgb_ru")..".",
 	},
-	--[+ Passive 25 - Cheap Shots +]--	30.12.2025
-	["loc_talent_broker_passive_damage_vs_heavy_staggered_desc"] = { -- multiplier: +15%, +colors
-		en = Dot_green.." {multiplier:%s} "..CKWord("Damage", "Damage_rgb").." against enemies that are fully "..CKWord("Staggered", "Staggered_rgb")..".",
-		ru = Dot_green.." {multiplier:%s} к "..CKWord("урону", "uronu_rgb_ru").." по полностью "..CKWord("ошеломлённым", "oshelomlennym_rgb_ru").." врагам.",
+	--[+ Passive 25 - Cheap Shots +]--	11.02.2026
+	["loc_talent_broker_passive_damage_vs_heavy_staggered_desc_02"] = { -- power_light: +10%, power_heavy: +15%, +colors
+		en = Dot_green.." {power_light:%s} "..CKWord("Strength", "Strength_rgb").." against "..CKWord("Staggered", "Staggered_rgb").." Enemies.\n"
+			.."\n"
+			..Dot_green.." {power_heavy:%s} "..CKWord("Strength", "Strength_rgb").." against Medium and Heavy "..CKWord("Staggered", "Staggered_rgb").." Enemies.\n"
+			.."\n"
+			..CNote("Pwr_note"),
+		ru = Dot_green.." {power_light:%s} к "..CKWord("силе", "sile_rgb_ru").." против "..CKWord("ошеломлённых", "oshelomlennyh_rgb_ru").." врагов.\n"
+			.."\n"
+			..Dot_green.." {power_heavy:%s} к "..CKWord("силе", "sile_rgb_ru").." против средне и сильно "..CKWord("ошеломлённых", "oshelomlennyh_rgb_ru").." врагов.\n"
+			.."\n"
+			..CNote("Pwr_note"),
 	},
 	--[+ Passive 26 - Battering Strikes +]--	30.12.2025
 	["loc_talent_broker_passive_melee_cleave_on_melee_kill_desc"] = { -- duration: 5, multiplier: +10%, max_stacks: 5, +colors
@@ -1018,8 +1028,12 @@ local scum_localizations = {
 	},
 	--[+ Passive 29 - Coated Weaponry +]--	30.12.2025
 	["loc_talent_broker_passive_melee_attacks_apply_toxin_desc"] = { -- stacks: 1, toxin: Chem Toxin, +colors
-		en = Dot_green.." {stacks:%s} Stack of "..CKWord("Chem Toxin", "Chem_Tox_rgb").." applied to enemies by Melee "..CKWord("Critical Strikes", "Crit_strikes_rgb")..".",
-		ru = Dot_green.." {stacks:%s} заряд "..CKWord("Хим-токсина", "Chem_Toxa_rgb_ru").." накладывается на врагов "..CKWord("критическими ударами", "krit_udarami_rgb_ru").." в ближнем бою.",
+		en = Dot_green.." {stacks:%s} Stack of "..CKWord("Chem Toxin", "Chem_Tox_rgb").." applied to enemies by Melee "..CKWord("Critical Strikes", "Crit_strikes_rgb")..".\n"
+			.."\n"
+			..CPhrs("Can_appl_thr_shldsb"),
+		ru = Dot_green.." {stacks:%s} заряд "..CKWord("Хим-токсина", "Chem_Toxa_rgb_ru").." накладывается на врагов "..CKWord("критическими ударами", "krit_udarami_rgb_ru").." в ближнем бою.\n"
+			.."\n"
+			..CPhrs("Can_appl_thr_shldsb"),
 	},
 	--[+ Passive 30 - Pickpocket +]--	30.12.2025
 	["loc_talent_broker_passive_low_ammo_regen_desc"] = { -- ammo_threshold: +20% -> 20%, +colors
@@ -1032,10 +1046,14 @@ local scum_localizations = {
 	["loc_talent_broker_passive_melee_crit_instakill_desc"] = { -- threshold: 2, +colors
 		en = CKWord("Critical Strikes", "Crit_strikes_rgb").." instantly kill Human Sized Enemies if their current "..CKWord("Health", "Health_rgb").." is less than {threshold:%s} times the amount of "..CKWord("Damage", "Damage_rgb").." of the "..CKWord("Critical Strikes", "Crit_strikes_rgb")..".\n"
 			.."\n"
-			..Dot_nc.." Breeds that are NOT considered 'human-sized': Beast of Nurgle, Bulwark, Captains/Twins, Chaos Spawn, Crusher, Daemonhost, Plague Ogryn, Reaper.",
-		ru = CKWord("Критические удары", "Krit_udary_rgb_ru").." мгновенно убивают врагов человеческого размера, если их текущее "..CKWord("здоровье", "zdoroviu_rgb_ru").." в {threshold:%s} раза меньше "..CKWord("урона", "urona_rgb_ru").." от "..CKWord("критического удара", "krit_udara_rgb_ru")..".\n"
+			..Dot_nc.." ["..CKWord("Crit Damage", "Crt_dmg_r_rgb").."] x {threshold:%s}] "..CNumb(">", "n_greater_rgb").." ["..CKWord("Health", "Health_rgb").."]\n"
 			.."\n"
-			..Dot_nc.." Типы врагов, не человеческого размера: Зверь Нургла, Отродье Хаоса, Чумной огрин, бастион, демонхост, жнец, капитаны/близнецы, крушитель.",
+			..Dot_nc.." Breeds that are NOT considered 'human-sized': Beast of Nurgle, Bulwark, Captains/Twins, Chaos Spawn, Crusher, Daemonhost, Plague Ogryn, Reaper.",
+		ru = CKWord("Критические удары", "Krit_udary_rgb_ru").." мгновенно убивают врагов человеческого размера, если "..CKWord("урон критического удара", "krit_udar_uron_rgb_ru")..", умноженный на {threshold:%s}, больше, чем текущее "..CKWord("здоровье", "zdorovie_rgb_ru").." врага.\n"
+			.."\n"
+			.."["..CKWord("Крит. урон", "Krt_uron_rgb_ru").." x {threshold:%s}] "..CNumb(">", "n_greater_rgb").." ["..CKWord("Здоровье", "Zdorovie_rgb_ru").."]\n"
+			.."\n"
+			..Dot_nc.." Типы врагов НЕ человеческого размера: Зверь Нургла, Отродье Хаоса, Чумной огрин, бастион, демонхост, жнец, капитаны/близнецы, крушитель.",
 	},
 	--[+ Passive 32 - The Sweet Spot +]--	30.12.2025
 	["loc_talent_broker_passive_increased_weakspot_damage_desc"] = { -- weakspot_damage: +25%, +colors
@@ -1049,7 +1067,7 @@ local scum_localizations = {
 			.."Flat "..CKWord("Damage", "Damage_rgb").." buff equal to:\n"
 			..Dot_green.." {percentage:%s} of your Overkill "..CKWord("Damage", "Damage_rgb")..".\n"
 			.."\n"
-			..Dot_nc.." "..CKWord("Damage", "Damage_rgb").." Dealt "..CNumb("-", "n_minus_rgb").." Enemy's remaining "..CKWord("Health", "Health_rgb").." "..CNumb("=", "n_equal_rgb").." Overkill "..CKWord("Damage", "Damage_rgb")..".\n"
+			..Dot_nc.." [Overkill "..CKWord("Damage", "Damage_rgb").."] "..CNumb("=", "n_equal_rgb").." ["..CKWord("Damage", "Damage_rgb").." Dealt] "..CNumb("-", "n_minus_rgb").." [Enemy's remaining "..CKWord("Health", "Health_rgb").."].\n"
 			.."\n"
 			..Dot_nc.." The Buff's duration refreshes only if your new Overkill "..CKWord("Damage", "Damage_rgb").." is greater than the previous one.",
 		ru = "При убийстве вы получаете на {duration:%s} секунду усиление, добавляющее фиксированный "..CKWord("урон", "uron_rgb_ru").." к следующей атаке ближнего боя.\n"
@@ -1057,7 +1075,7 @@ local scum_localizations = {
 			.."Фиксированный "..CKWord("урон", "uron_rgb_ru").." равен:\n"
 			..Dot_green.." {percentage:%s} от избыточного "..CKWord("урона", "urona_rgb_ru")..".\n"
 			.."\n"
-			..Dot_nc.." Нанесённый "..CKWord("урон", "uron_rgb_ru").." "..CNumb("-", "n_minus_rgb").." остаток "..CKWord("здоровья", "zdorovia_rgb_ru").." врага "..CNumb("=", "n_equal_rgb").." избыточный "..CKWord("урон", "uron_rgb_ru")..".\n"
+			..Dot_nc.." [Избыточный "..CKWord("урон", "uron_rgb_ru").."] "..CNumb("=", "n_equal_rgb").." [Нанесённый "..CKWord("урон", "uron_rgb_ru").."] "..CNumb("-", "n_minus_rgb").." ["..CKWord("Здоровье", "Zdorovie_rgb_ru").." врага оставшееся]\n"
 			.."\n"
 			..Dot_nc.." Длительность усиления обновляется только если новый избыточный "..CKWord("урон", "uron_rgb_ru").." больше предыдущего.",
 	},
@@ -1081,27 +1099,33 @@ local scum_localizations = {
 	["loc_talent_broker_passive_stimm_cd_on_kill_desc"] = { -- restore: 1%, restore_toxined: 2%, +colors
 		en = "Killing an enemy with any Attack reduces the remaining "..CKWord("Cooldown", "Cd_rgb").." of "..CKWord("Cartel Special Stimm", "Cartel_Stimm_rgb")..".\n"
 			.."\n"
-			.."Reduction amount:\n"
-			..Dot_green.." Normal enemy: "..CNumb("-", "n_minus_rgb").."{restore:%s}.\n"
-			..Dot_green.." "..CKWord("Chem Toxin", "Chem_Tox_rgb").."-infected enemy: "..CNumb("-", "n_minus_rgb").."{restore_toxined:%s}.\n"
+			.."Reduction amount per kill:\n"
+			..Dot_green.." Any attack: "..CNumb("-", "n_minus_rgb").."{restore:%s}.\n"
+			..Dot_green.." "..CKWord("Chem Toxin", "Chem_Tox_rgb").." tick: "..CNumb("-", "n_minus_rgb").."{restore_toxined:%s}.\n"
 			.."\n"
-			..CPhrs("Can_proc_mult")
-			.."\n"
-			..Dot_nc.." This Talent only works after "..CKWord("Cartel Special Stimm", "Cartel_Stimm_rgb").."'s active effect has ended.",
+			..CPhrs("Can_proc_mult"),
+			-- .."\n"
+			-- ..Dot_nc.." This Talent only works after "..CKWord("Cartel Special Stimm", "Cartel_Stimm_rgb").."'s active effect has ended.",
 		ru = "Убийство врага любой атакой сокращает оставшееся время восстановления "..CKWord("Особого стима Картеля", "Cartel_Stimm_rgb_ru")..".\n"
 			.."\n"
 			.."Сокращение восстановления за убийство врага:\n"
-			..Dot_green.." Обычный враг: "..CNumb("-", "n_minus_rgb").."{restore:%s}.\n"
-			..Dot_green.." Заражённый "..CKWord("Хим-токсином", "Chem_Toxom_rgb_ru")..": "..CNumb("-", "n_minus_rgb").."{restore_toxined:%s}.\n"
+			..Dot_green.." Любой атакой: "..CNumb("-", "n_minus_rgb").."{restore:%s}.\n"
+			..Dot_green.." "..CKWord("Хим-токсином", "Chem_Toxom_rgb_ru")..": "..CNumb("-", "n_minus_rgb").."{restore_toxined:%s}.\n"
 			.."\n"
-			..CPhrs("Can_proc_mult")
-			.."\n"
-			..Dot_nc.." Этот талант срабатывает только после окончания действия "..CKWord("Особого стима Картеля", "Cartel_Stimm_rgb_ru")..".",
+			..CPhrs("Can_proc_mult"),
+			-- .."\n"
+			-- ..Dot_nc.." Этот талант срабатывает только после окончания действия "..CKWord("Особого стима Картеля", "Cartel_Stimm_rgb_ru")..".",
 	},
-	--[+ Passive 37 - Pocket Toxin +]--	30.12.2025
-	["loc_talent_broker_passive_blitz_inflicts_toxin_desc"] = { -- stacks: 3, +colors
-		en = Dot_green.." Blitz explosions infect Enemies with {stacks:%s} Stacks of "..CKWord("Chem Toxin", "Chem_Tox_rgb")..".",
-		ru = Dot_green.." Взрывы ваших блицов заражают врагов {stacks:%s} зарядами "..CKWord("Хим-токсина", "Chem_Toxa_rgb_ru")..".",
+	--[+ Passive 37 - Pocket Toxin +]--	11.02.2026
+	["loc_talent_broker_passive_blitz_inflicts_toxin_desc_02"] = { -- blinder_stacks: 3, missile_launcher_stacks: 6, chem_grenade_stacks: 10, +colors
+		en = "Blitz explosions infect Enemies with Stacks of "..CKWord("Chem Toxin", "Chem_Tox_rgb").." differently, depending on your chosen Blitz:\n"
+			..Dot_green.." {blinder:%s}: {blinder_stacks:%s} Stacks to all targets within "..CNumb("3.5", "n_3_5_rgb").." meters radius.\n"
+			..Dot_green.." {missile_launcher:%s}: {missile_launcher_stacks:%s} Stacks to all targets within "..CNumb("7", "n_7_rgb").." meters radius.\n"
+			..Dot_green.." {chem_grenade:%s}: {chem_grenade_stacks:%s} Stacks to all targets within "..CNumb("4", "n_4_rgb").." meters radius.",
+		ru = "Взрывы ваших блицов заражают врагов зарядами "..CKWord("Хим-токсина", "Chem_Toxa_rgb_ru").." в зависимости от выбранного блица:\n"
+			..Dot_green.." {blinder:%s}: {blinder_stacks:%s} заряда всем целям в радиусе "..CNumb("3.5", "n_3_5_rgb").." метров.\n"
+			..Dot_green.." {missile_launcher:%s}: {missile_launcher_stacks:%s} зарядов всем целям в радиусе "..CNumb("7", "n_7_rgb").." метров.\n"
+			..Dot_green.." {chem_grenade:%s}: {chem_grenade_stacks:%s} зарядов всем целям в радиусе "..CNumb("4", "n_4_rgb").." метров.",
 	},
 	--[+ Passive 38 - Toxin Mania +]--	30.12.2025
 	["loc_talent_broker_damage_after_toxined_enemies_desc"] = { -- damage: +5%, damage_max: +15%, +colors
@@ -1162,28 +1186,34 @@ local scum_localizations = {
 
 --[+ +STIMM LAB - СТИМ ЛАБА+ +]--
 	--[+ Barrage I-IV / Tank / Regain +]--
-		["loc_talent_stat_toughness_regen_rate_modifier"] = { -- toughness_regen_rate_modifier: +20%, +colors
-			en = Dot_green.." {toughness_regen_rate_modifier:%s} "..CKWord("Coherency", "Coherency_rgb").." "..CKWord("Toughness", "Toughness_rgb").." Regen."
+		["loc_talent_buff_toughness_on_stimm"] = { -- toughness_amount: 6.25%, +colors
+			en = Dot_green.." {toughness_amount:%s} "..CKWord("Toughness", "Toughness_rgb").." replenished on Stimm use."
 			.."\n",
-			ru = Dot_green.." {toughness_regen_rate_modifier:%s} к восстановлению "..CKWord("стойкости", "stoikosti_rgb_ru").." в "..CKWord("сплочённости", "splochennosti_rgb_ru").."."
+			ru = Dot_green.." {toughness_amount:%s} "..CKWord("стойкости", "stoikosti_rgb_ru").." восстанавливается при использовании стима."
 			.."\n",
 		},
-		["loc_talent_stat_damage_taken_modifier"] = { -- damage_taken_modifier: -4%, +colors
-			en = Dot_green.." {damage_taken_modifier:%s} "..CKWord("Damage", "Damage_rgb").." Taken.",
-			ru = Dot_green.." {damage_taken_modifier:%s} к получаемому "..CKWord("урону", "uronu_rgb_ru")..".",
+		["loc_talent_stat_toughness_replenish_modifier"] = { -- toughness_replenish_modifier: +5%, +colors
+			en = Dot_green.." {toughness_replenish_modifier:%s} "..CKWord("Toughness", "Toughness_rgb").." Replenishment by Melee kills, Talents, and select Weapon Blessings.\n"
+			..CPhrs("Dont_intw_coher_toughn").."\n",
+			ru = Dot_green.." {toughness_replenish_modifier:%s} к восстановлению "..CKWord("стойкости", "stoikosti_rgb_ru").." от убийств в ближнем бою, талантов и благословений оружия.\n"
+			..CPhrs("Dont_intw_coher_toughn").."\n",
 		},
-		["loc_talent_buff_toughness_on_stimm"] = { -- toughness_amount: 25%, +colors
-			en = Dot_green.." {toughness_amount:%s} "..CKWord("Toughness", "Toughness_rgb").." replenished."
-			.."\n",
-			ru = Dot_green.." {toughness_amount:%s} "..CKWord("стойкости", "stoikosti_rgb_ru").." восстанавливается."
-			.."\n",
+		["loc_talent_stat_damage_taken_multiplier"] = { -- damage_taken_multiplier: -4%, +colors
+			en = Dot_green.." "..CNumb("+", "n_plus_rgb").."{damage_taken_multiplier:%s} "..CKWord("Damage", "Damage_rgb").." Reduction.",
+			ru = Dot_green.." "..CNumb("-", "n_minus_rgb").."{damage_taken_multiplier:%s} к получаемому "..CKWord("урону", "uronu_rgb_ru")..".",
+		},
+		["loc_talent_buff_toughness_during_stimm"] = { -- toughness_amount: +5%, interval: 1, +colors
+			en = Dot_green.." {toughness_amount:%s} "..CKWord("Toughness", "Toughness_rgb").." replenished per second.\n" -- {interval:%s}
+			..Dot_red.." Disabled while knocked down.",
+			ru = Dot_green.." {toughness_amount:%s} "..CKWord("стойкости", "stoikosti_rgb_ru").." восстанавливается каждую секунду.\n" -- {interval:%s}
+			..Dot_red.." Не работает пока вы сбиты с ног.",
 		},
 	--[+ Wildfire I-V / Fury I-II / Vultoprene I-II +]--
 		["loc_talent_stat_power_level"] = { -- power_level: +4%, +colors
-			en = Dot_green.." {power_level:%s} "..CKWord("Strength", "Strength_rgb")..".\n"
+			en = Dot_green.." {power_level:%s} "..CKWord("Strength", "Strength_rgb").." of Melee and Ranged attacks, DoTs, and explosions.\n"
 				..CNote("Pwr_note")
 				.."\n",
-			ru = Dot_green.." {power_level:%s} к "..CKWord("силе", "sile_rgb_ru")..".\n"
+			ru = Dot_green.." {power_level:%s} к "..CKWord("силе", "sile_rgb_ru").." атак ближнего боя, дальнобойных атак, эффектов урона со временем и взрывов.\n"
 				..CNote("Pwr_note")
 				.."\n",
 		},
