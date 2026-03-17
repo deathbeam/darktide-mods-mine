@@ -12,7 +12,6 @@ guarantee_ability_activation
 -- Debugging
 creature_spawner
 show_crit_chance
-SoloPlay
 CombatStats
 WeaponStats
 
@@ -21,28 +20,20 @@ custom_hud
 Enhanced_descriptions
 modular_menu_buttons
 true_level
-InventoryStats
-TalentRefundBelow
 DumpStatFinder
 ItemSorting
-LetMePlayHavoc
-valkyrie
 BetterLoadouts
-InspectFromSocial
-InspectFromPartyFinder
 
 -- In Game HUD
 crosshair_hud
 markers_aio
 DynamicCrosshair
--- emperors_lantern
 machine_gods_beacon
 GasOutline
 Healthbars
 danger_zone
 DisableScreenEffects
 ScanHelper
-StimmSupplyRings
 
 -- In Game overlays
 SpawnFeed
