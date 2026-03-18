@@ -4,7 +4,7 @@
 Perspectives
 AutoAbilities
 Skitarius
-DefaultSprint
+SimpleMovement
 guarantee_weapon_swap
 guarantee_special_action
 guarantee_ability_activation
@@ -26,7 +26,7 @@ BetterLoadouts
 
 -- In Game HUD
 crosshair_hud
-markers_aio
+-- markers_aio -- broken
 DynamicCrosshair
 machine_gods_beacon
 GasOutline
