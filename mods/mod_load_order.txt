@@ -33,7 +33,6 @@ GasOutline
 Healthbars
 danger_zone
 DisableScreenEffects
-AuspexHelper
 
 -- In Game overlays
 SpawnFeed
