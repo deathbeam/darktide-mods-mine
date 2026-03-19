@@ -26,14 +26,14 @@ BetterLoadouts
 
 -- In Game HUD
 crosshair_hud
--- markers_aio -- broken
+markers_aio
 DynamicCrosshair
 machine_gods_beacon
 GasOutline
 Healthbars
 danger_zone
 DisableScreenEffects
-ScanHelper
+AuspexHelper
 
 -- In Game overlays
 SpawnFeed
