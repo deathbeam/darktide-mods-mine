@@ -19,6 +19,7 @@ WeaponStats
 custom_hud
 Enhanced_descriptions
 modular_menu_buttons
+MissionBrief
 true_level
 DumpStatFinder
 ItemSorting
