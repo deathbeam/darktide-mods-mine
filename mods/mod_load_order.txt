@@ -23,11 +23,11 @@ MissionBrief
 true_level
 DumpStatFinder
 ItemSorting
-BetterLoadouts
 
 -- In Game HUD
 crosshair_hud
 markers_aio
+ColorMyStamina
 DynamicCrosshair
 machine_gods_beacon
 GasOutline
