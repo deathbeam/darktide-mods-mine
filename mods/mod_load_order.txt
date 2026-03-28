@@ -35,6 +35,7 @@ Healthbars
 danger_zone
 DisableScreenEffects
 AuspexHelper
+Radar
 
 -- In Game overlays
 SpawnFeed
