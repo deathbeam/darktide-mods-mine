@@ -23,7 +23,6 @@ MissionBrief
 true_level
 DumpStatFinder
 ItemSorting
-LogMeIn
 
 -- In Game HUD
 crosshair_hud
@@ -36,7 +35,6 @@ Healthbars
 danger_zone
 DisableScreenEffects
 AuspexHelper
-Radar
-pointer
+-- Radar
 SpawnFeed
 Killfeed Details
