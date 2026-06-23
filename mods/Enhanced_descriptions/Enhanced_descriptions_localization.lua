@@ -5,17 +5,17 @@
 local mod = get_mod("Enhanced_descriptions")
 local InputUtils = require("scripts/managers/input/input_utils")
 
--- LOCALIZATION CONFIGURATION
+-- LOCALIZATION CONFIGURATION - КОНФИГУРАЦИЯ ЛОКАЛИЗАЦИИ
 local LOCALIZATION_GROUPS = {
-	-- Groups
+	-- Groups - Группы
 	"general_settings_group",
 	"main_modules_group",
 	"language_group",
 
-	-- Language settings
+	-- Language settings - Настройки языков
 	"language_override",
 
-	-- Main modules
+	-- Main modules - Основные модули
 	"enable_menus_file",
 	"enable_curious_file",
 	"enable_penances_file",
@@ -48,7 +48,7 @@ local LOCALIZATION_GROUPS = {
 	"toughness",
 	"weakspot",
 
-	-- Classes and abilities
+	-- Classes and Abilities - Классы и способности
 	"class_psyker",
 	"precision",
 	"class_ogryn",
@@ -68,7 +68,7 @@ local LOCALIZATION_GROUPS = {
 	"class_scum",
 	"chemtox",
 
-	-- Misc
+	-- Misc - Разное
 	"talents",
 	"talents_penances",
 	"numbers",
@@ -76,7 +76,7 @@ local LOCALIZATION_GROUPS = {
 	"note",
 	"warning",
 
-	-- Difficulty
+	-- Difficulty - Сложность
 	"sedition",
 	"uprising",
 	"malice",
@@ -89,7 +89,7 @@ local LOCALIZATION_GROUPS = {
 	"dump_stat3",
 }
 
--- UTILITY FUNCTIONS
+-- UTILITY FUNCTIONS - ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 local function readable(text)
 	local tokens = string.split(text, "_")
 	for i, token in ipairs(tokens) do
@@ -127,6 +127,7 @@ local localizations = {
 	mod_name = {
 		en = "{#color(192, 255, 26)} Enhanced Descriptions{#reset()}",
 		ru = "{#color(192, 255, 26)} Улучшенные описания{#reset()}",
+		fr = "{#color(192, 255, 26)} Descriptions améliorées{#reset()}",
 		["zh-tw"] = "{#color(192, 255, 26)} 描述改善{#reset()}",
 		["zh-cn"] = "{#color(192, 255, 26)} 描述增强{#reset()}",
 		de = "{#color(192, 255, 26)} Erweiterte Beschreibungen{#reset()}",
@@ -152,7 +153,7 @@ local localizations = {
 		es = "Mejora la legibilidad resaltando números y palabras clave en descripciones de Talentos, Bendiciones, Penitencias, Curiosidades y otros textos de menú. También corrige localizaciones y añade claridad a algunas descripciones.",
 	},
 
--- MAIN MODULES
+-- Main modules - Основные модули
 	general_settings_group = {
 		en = "General settings",
 		ru = "Основные настройки",
@@ -198,7 +199,7 @@ local localizations = {
 		es = "Configuración de color",
 	},
 
-	-- Language Override
+	-- Language Override - Переопределение языка
 	language_group = {
 		en = "Language settings",
 		ru = "Настройки языка",
@@ -266,7 +267,7 @@ local localizations = {
 			 "• Manual: Forzar un idioma específico para todas las descripciones",
 	},
 
-	-- Language options для dropdown
+	-- Language options for dropdown - Опции языка для выпадающего списка
 	language_auto = {
 		en = "Auto (Game Language)",
 		ru = "Авто (Язык игры)",
@@ -707,21 +708,21 @@ local localizations = {
 		es = "{#color(255, 35, 5)}¡SOLO PARA DESARROLLADORES!{#reset()}\nEste módulo habilita comandos de depuración y utilidades para pruebas y solución de problemas. Usar con precaución.",
 	},
 
---[+DUMP STATS+]--
+--[+Dump stats - Мусорные статы +]--
 	dump_stat_colour = {
 		en = "Dump Stats"
 			.."\n{#size(17)}{#color(95, 95, 95)}// Mobility, Melee Damage, Warp Resistance{#reset()}",
 		ru = "Мусорные статы"
 			.."\n{#size(17)}{#color(95, 95, 95)}// Мобильность, Урон рукопашный, Сопротивление варпу{#reset()}",
 	},
---[+DUMP STATS 2+]--
+--[+Dump stats 2 - Мусорные статы 2+]--
 	dump_stat2_colour = {
 		en = "Dump Stats 2"
 			.."\n{#size(17)}{#color(95, 95, 95)}// Ammo, Defences, Heat Management{#reset()}",
 		ru = "Мусорные статы 2"
 			.."\n{#size(17)}{#color(95, 95, 95)}// Боеприпасы, Защита, Отведение тепла{#reset()}",
 	},
---[+DUMP STATS 3+]--
+--[+Dump stats 3 - Мусорные статы 3+]--
 	dump_stat3_colour = {
 		en = "Dump Stats 3"
 			.."\n{#size(17)}{#color(95, 95, 95)}// Damage{#reset()}",
@@ -729,7 +730,7 @@ local localizations = {
 			.."\n{#size(17)}{#color(95, 95, 95)}// Урон {#reset()}", -- {#size(14)}(Игольный пистолет, Огнемёт и др., наносят урон со временем, на который не влияет эта стата).
 	},
 
---[+MAIN+]--
+--[+Main - Основные+]--
 	bleed_colour = {
 		en = " Bleed",
 		fr = " Saignement",
@@ -1039,7 +1040,7 @@ local localizations = {
 		es = " Punto Débil",
 	},
 
---[+PSYKER+]--
+--[+Psyker - Псайкер+]--
 	class_psyker_colour = {
 		en = " Psyker",
 		fr = " Psyker",
@@ -1069,7 +1070,7 @@ local localizations = {
 		es = " Precisión",
 	},
 
---[+OGRYN+]--
+--[+Ogryn - Огрин+]--
 	class_ogryn_colour = {
 		en = " Ogryn",
 		fr = " Ogryn",
@@ -1127,7 +1128,7 @@ local localizations = {
 		es = " Arrollar",
 	},
 
---[+ZEALOT+]--
+--[+Zealot - Изувер+]--
 	class_zealot_colour = {
 		en = " Zealot",
 		fr = " Zélote",
@@ -1185,7 +1186,7 @@ local localizations = {
 		es = " Sigilo",
 	},
 
---[+VETERAN+]--
+--[+Veteran - Ветеран+]--
 	class_veteran_colour = {
 		en = " Veteran",
 		fr = " Vétéran",
@@ -1257,7 +1258,7 @@ local localizations = {
 		es = " Especialista a Distancia",
 	},
 
---[+ARBITRATOR+]--
+--[+Arbites - Арбитес/Арбитратор+]--
 	class_arbites_colour = {
 		en = " Arbitrator",
 		fr = " Arbitre",
@@ -1273,37 +1274,37 @@ local localizations = {
 		es = " Árbitro",
 	},
 
---[+HIVE SCUM+]--
+--[+Hive Scum - Отребье Улья+]--
 	class_scum_colour = {
 		en = " Hive Scum",
-		-- fr = "",
+		fr = " Racaille de la Ruche",
 		ru = " Отребье Улья",
-		-- ["zh-tw"] = "",
-		-- ["zh-cn"] = "",
-		-- de = "",
-		-- it = "",
-		-- ja = "",
-		-- ko = "",
-		-- pl = "",
-		-- ["pt-br"] = "",
-		-- es = "",
+		["zh-tw"] = " 蜂巢敗類",
+		["zh-cn"] = " 蜂巢残渣",
+		de = " Schwarmabschaum",
+		it = " Feccia dell'alveare",
+		ja = " ハイブの屑",
+		ko = " 하이브 찌꺼기",
+		pl = " Szumowiny ulowe",
+		["pt-br"] = " Escória da colmeia",
+		es = " Escoria de la colmena",
 	},
 	chemtox_colour = {
 		en = " Chem Toxin",
-		-- fr = "",
+		fr = " Toxine chimique",
 		ru = " Хим-токсин",
-		-- ["zh-tw"] = "",
-		-- ["zh-cn"] = "",
-		-- de = "",
-		-- it = "",
-		-- ja = "",
-		-- ko = "",
-		-- pl = "",
-		-- ["pt-br"] = "",
-		-- es = "",
+		["zh-tw"] = " 化學毒素",
+		["zh-cn"] = " 化学毒素",
+		de = " Chemisches Toxin",
+		it = " Tossina chimica",
+		ja = " 化学毒素",
+		ko = " 화학 독소",
+		pl = " Toksyna chemiczna",
+		["pt-br"] = " Toxina química",
+		es = " Toxina química",
 	},
 
---[+MISC+]--
+--[+Misc - Опции+]--
 	talents_colour = {
 		en = " Talents",
 		fr = " Talents",
@@ -1389,7 +1390,7 @@ local localizations = {
 		es = " Advertencia",
 	},
 
---[+DIFFICULTIES+]--
+--[+Difficulties - Сложность+]--
 	sedition_colour = {
 		en = "Sedition",
 		fr = "Sédition",
@@ -1476,13 +1477,13 @@ local localizations = {
 	},
 }
 
--- INITIALIZATION
--- Add color picker localizations for all groups
+-- INITIALIZATION - ИНИЦИАЛИЗАЦИЯ
+-- Add color picker localizations for all groups - Добавляем локализацию палитры цветов для всех групп
 for _, group_name in ipairs(LOCALIZATION_GROUPS) do
 	add_localisation_entry(localizations, group_name)
 end
 
--- Add color names localizations
+-- Add color names localizations - Добавляем локализацию названий цветов
 add_color_localizations(localizations)
 
 return localizations

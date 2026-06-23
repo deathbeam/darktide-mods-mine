@@ -2,8 +2,11 @@
 -- ZEALOT TALENT MODULE -- МОДУЛЬ ТАЛАНТОВ ИЗУВЕРА
 
 local mod = get_mod("Enhanced_descriptions")
+
+-- Using cached utilities - Используем кэшированные утилиты
 local Utils = mod.get_utils()
 
+-- Importing all necessary functions and constants - Импорт всех нужных функций и констант
 local create_template = Utils.create_template
 local loc_text = Utils.loc_text
 local CKWord = Utils.CKWord
@@ -14,7 +17,7 @@ local Dot_nc = Utils.DOT_NC or "•"
 local Dot_red = Utils.DOT_RED or "•"
 local Dot_green = Utils.DOT_GREEN or "•"
 
--- LOCALIZATION OF ZEALOT TALENTS -- ЛОКАЛИЗАЦИИ ТАЛАНТОВ ИЗУВЕРА
+-- Localization of Zealot talents -- Локализации талантов изувера
 local zealot_localizations = {
 --[+ ++ZEALOT - ИЗУВЕР++ +]--
 --[+ +BLITZ - БЛИЦ+ +]--
@@ -582,22 +585,29 @@ local zealot_localizations = {
 		en = "Up to {cooldown_regen:%s} "..CKWord("Ability Cooldown", "Ability_cd_rgb").." Regeneration based on Missing "..CKWord("Health", "Health_rgb")..". Max reached at {current_health:%s} current "..CKWord("Health", "Health_rgb")..".",
 		ru = "До {cooldown_regen:%s} к скорости восстановления "..CKWord("боевой способности", "boeva_sposobnost_rgb_ru").." в зависимости от потерянного "..CKWord("здоровья", "zdorovia_rgb_ru")..". Максимум достигается при {current_health:%s} текущего "..CKWord("здоровья", "zdorovia_rgb_ru")..".",
 	},
-	--[+ KEYSTONE 3 - Inexorable Judgement +]--	27.03.2026
+	--[+ KEYSTONE 3 - Inexorable Judgement +]--	09.06.2026
 	["loc_talent_zealot_quickness_desc"] = { -- max_stacks: 20, melee_attack_speed: +1%, ranged_attack_speed: +1%, damage_modifier: +1%, duration: 6, +colors, note
 		en = "Moving grants you "..CKWord("Momentum", "Momentum_rgb")..".\n"
+			..Dot_green.." Sprinting generates Stacks twice as fast.\n"
 			..Dot_nc.." Stacks {max_stacks:%s} times.\n"
 			.."\n"
 			.."When you Hit an Enemy, spend all "..CKWord("Momentum", "Momentum_rgb").." and gain per Stack for {duration:%s} seconds:\n"
 			..Dot_green.." {damage_modifier:%s} "..CKWord("Damage", "Damage_rgb")..",\n"
 			..Dot_green.." {melee_attack_speed:%s} Melee Attack Speed,\n"
-			..Dot_green.." {ranged_attack_speed:%s} Ranged Attack Speed.",
+			..Dot_green.." {ranged_attack_speed:%s} Ranged Attack Speed,\n"
+			..Dot_green.." "..CNumb("+", "n_plus_rgb")..CNumb("0.5", "pc_0_5_rgb").." Dodge Speed,\n"
+			..Dot_green.." "..CNumb("+", "n_plus_rgb")..CNumb("0.5", "pc_0_5_rgb").." Dodge distance,\n"
+			..Dot_green.." "..CNumb("-", "n_minus_rgb")..CNumb("1", "pc_1_rgb").." Dodge count reset time.",
 		ru = "Движение даёт вам заряды "..CKWord("Моментума", "Momentum_rgb_ru")..".\n" -- Неумолимый приговор -- руоф Безжалостностный приговор
 			..Dot_nc.." Суммируется до {max_stacks:%s} раз.\n"
 			.."\n"
 			.."При попадании по врагу вы тратите все заряды "..CKWord("Моментума", "Momentum_rgb_ru").." и за каждый заряд получаете на {duration:%s} секунд:\n"
 			..Dot_green.." {damage_modifier:%s} к "..CKWord("урону", "uronu_rgb_ru")..",\n"
 			..Dot_green.." {melee_attack_speed:%s} к скорости атаки ближнего боя,\n"
-			..Dot_green.." {ranged_attack_speed:%s} к скорости атаки дальнего боя.",
+			..Dot_green.." {ranged_attack_speed:%s} к скорости атаки дальнего боя,\n"
+			..Dot_green.." "..CNumb("+", "n_plus_rgb")..CNumb("0.5", "pc_0_5_rgb").." к скорости уклонения,\n"
+			..Dot_green.." "..CNumb("+", "n_plus_rgb")..CNumb("0.5", "pc_0_5_rgb").." к расстоянию уклонения,\n"
+			..Dot_green.." "..CNumb("-", "n_minus_rgb")..CNumb("1", "pc_1_rgb").." сброса времени счётчика уклонений.",
 		-- fr = "Vos déplacement vous octroient "..CKWord("Élan", "Momentum_rgb_fr")..". Se cumule {max_stacks:%s} fois.\nLorsque vous touchez un ennemi, dépensez tout les cumuls de "..CKWord("Élan", "Momentum_rgb_fr").." et gagnez par cumul pendant {duration:%s} secondes:\n{damage_modifier:%s} de "..CKWord("Dégâts", "Damage_rgb_fr")..",\n{melee_attack_speed:%s} Vitesse d'attaque de mêlée,\n{ranged_attack_speed:%s} Vitesse d'attaque à distance."..TALENTS_Enh_desc_fr.ED_ZEA_Keystone_3_rgb_fr,
 		-- ["zh-tw"] = "移動時會獲得 "..CKWord("動能", "Momentum_rgb_tw").."。\n"
 			-- .."- 上限 {max_stacks:%s} 層。\n"
@@ -995,7 +1005,7 @@ local zealot_localizations = {
 	},
 }
 
--- CREATING TEMPLATES -- СОЗДАЁМ ШАБЛОНЫ
+-- Creating templates -- Создаём шаблоны
 local zealot_templates = {}
 
 for loc_key, locales in pairs(zealot_localizations) do

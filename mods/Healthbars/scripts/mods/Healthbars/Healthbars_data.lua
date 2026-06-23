@@ -47,19 +47,48 @@ local widgets = {
 				default_value = true,
 			},
 			{
+				setting_id = "show_vanilla_boss_bar_indicators",
+				type = "checkbox",
+				default_value = true,
+			},
+			{
 				setting_id = "show_damage_numbers",
 				type = "checkbox",
 				default_value = true,
+
+				sub_widgets = {
+					{
+						setting_id = "show_dps",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "show_armour_type",
+						type = "checkbox",
+						default_value = true,
+
+						sub_widgets = {
+							{
+								setting_id = "show_armour_type_display",
+								type = "dropdown",
+								default_value = "armour_type",
+								options = {
+									{ text = "display_armour_type", value = "armour_type" },
+									{ text = "display_enemy_name", value = "enemy_name" },
+								},
+							},
+						},
+					},
+				},
 			},
 			{
-				setting_id = "show_dps",
-				type = "checkbox",
-				default_value = true,
-			},
-			{
-				setting_id = "show_armour_type",
-				type = "checkbox",
-				default_value = true,
+				setting_id = "post_kill_display_duration",
+				type = "numeric",
+				default_value = 3,
+				range = { 1, 10 },
+				decimals_number = 0,
+				step_size_value = 1,
+				tooltip = "post_kill_display_duration_tooltip",
 			},
 			{
 				setting_id = "bleed",
@@ -72,9 +101,161 @@ local widgets = {
 				default_value = true,
 			},
 			{
+				setting_id = "warpfire",
+				type = "checkbox",
+				default_value = true,
+
+				sub_widgets = {
+					{
+						setting_id = "warpfire_color_option",
+						type = "dropdown",
+						default_value = "warpfire_color_option_three",
+						options = {
+							{ text = "warpfire_color_option_one",   value = "warpfire_color_option_one" },
+							{ text = "warpfire_color_option_two",   value = "warpfire_color_option_two" },
+							{ text = "warpfire_color_option_three", value = "warpfire_color_option_three" },
+							{ text = "warpfire_color_option_four",  value = "warpfire_color_option_four" },
+							{ text = "warpfire_color_option_five",  value = "warpfire_color_option_five" },
+						},
+					},
+				},
+			},
+			{
 				setting_id = "toxin",
 				type = "checkbox",
 				default_value = true,
+			},
+			{
+				setting_id = "dot_text_font_size",
+				type = "numeric",
+				default_value = 14,
+				range = { 10, 24 },
+				step_size_value = 1,
+			},
+			{
+				setting_id = "debuff_text_font_size",
+				type = "numeric",
+				default_value = 14,
+				range = { 10, 24 },
+				step_size_value = 1,
+			},
+			{
+				setting_id = "dot_numbers_only",
+				type = "checkbox",
+				default_value = false,
+			},
+			{
+				setting_id = "brittleness_indicator",
+				type = "checkbox",
+				default_value = true,
+
+				sub_widgets = {
+					{
+						setting_id = "brittleness_indicator_display",
+						type = "dropdown",
+						default_value = "icon_text",
+						options = {
+							{ text = "display_icon_text", value = "icon_text" },
+							{ text = "display_icon_only", value = "icon_only" },
+							{ text = "display_time",      value = "time" },
+						},
+					},
+				},
+			},
+			{
+				setting_id = "electrocuted",
+				type = "checkbox",
+				default_value = true,
+			},
+			{
+				setting_id = "skullcrusher",
+				type = "checkbox",
+				default_value = true,
+
+				sub_widgets = {
+					{
+						setting_id = "skullcrusher_display",
+						type = "dropdown",
+						default_value = "stacks",
+						options = {
+							{ text = "display_stacks",    value = "stacks" },
+							{ text = "display_percent",   value = "percent" },
+							{ text = "display_icon_only", value = "icon_only" },
+							{ text = "display_time",      value = "time" },
+						},
+					}
+				},
+			},
+			{
+				setting_id = "thunderstrike",
+				type = "checkbox",
+				default_value = true,
+
+				sub_widgets = {
+					{
+						setting_id = "thunderstrike_display",
+						type = "dropdown",
+						default_value = "stacks",
+						options = {
+							{ text = "display_stacks",    value = "stacks" },
+							{ text = "display_percent",   value = "percent" },
+							{ text = "display_icon_only", value = "icon_only" },
+							{ text = "display_time",      value = "time" },
+						},
+					},
+				},
+			},
+			{
+				setting_id = "melee_damage_taken",
+				type = "checkbox",
+				default_value = true,
+
+				sub_widgets = {
+					{
+						setting_id = "melee_damage_taken_display",
+						type = "dropdown",
+						default_value = "icon_only",
+						options = {
+							{ text = "display_icon_text", value = "icon_text" },
+							{ text = "display_icon_only", value = "icon_only" },
+						},
+					}
+				},
+			},
+			{
+				setting_id = "damage_taken",
+				type = "checkbox",
+				default_value = true,
+
+				sub_widgets = {
+					{
+						setting_id = "damage_taken_display",
+						type = "dropdown",
+						default_value = "icon_text",
+						options = {
+							{ text = "display_icon_text", value = "icon_text" },
+							{ text = "display_icon_only", value = "icon_only" },
+						},
+					},
+				},
+			},
+			{
+				setting_id = "empyric_shock",
+				type = "checkbox",
+				default_value = true,
+
+				sub_widgets = {
+					{
+						setting_id = "empyric_shock_display",
+						type = "dropdown",
+						default_value = "stacks",
+						options = {
+							{ text = "display_stacks",  value = "stacks" },
+							{ text = "display_percent", value = "percent" },
+							{ text = "display_time",    value = "time" },
+						},
+					},
+				},
 			},
 		},
 	},

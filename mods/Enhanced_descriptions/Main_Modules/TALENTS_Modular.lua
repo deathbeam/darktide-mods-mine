@@ -2,10 +2,10 @@
 
 local mod = get_mod("Enhanced_descriptions")
 
--- ИСПОЛЬЗУЕМ КЭШИРОВАННЫЕ УТИЛИТЫ
+-- Using cached utilities - Используем кэшированные утилиты
 local Utils = mod.get_utils()
 
--- ИМПОРТ ВСЕХ НУЖНЫХ ФУНКЦИЙ И КОНСТАНТ
+-- Importing all necessary functions and constants - Импорт всех нужных функций и констант
 local create_template = Utils.create_template
 local loc_text = Utils.loc_text
 local CKWord = Utils.CKWord
@@ -16,7 +16,7 @@ local Dot_nc = Utils.DOT_NC or "•"
 local Dot_red = Utils.DOT_RED or "•"
 local Dot_green = Utils.DOT_GREEN or "•"
 
--- Функция для безопасной загрузки модуля
+-- Function for safe loading of a module - Функция для безопасной загрузки модуля
 local function load_talent_module(module_name)
 	local file_path = "Enhanced_descriptions/Main_Modules/TALENTS/" .. module_name
 	local success, result = pcall(function()
@@ -38,7 +38,7 @@ local function load_talent_module(module_name)
 	end
 end
 
--- Список модулей классов
+-- List of modules of all classes - Список модулей классов
 local class_modules = {
 	"TALENTS_Psyker",
 	"TALENTS_Veteran",
@@ -48,7 +48,7 @@ local class_modules = {
 	"TALENTS_Scum",
 }
 
--- Основные данные локализации (общие для всех классов)
+-- Main localization data - Основные данные локализации
 local talent_localizations = {
 	-- TEMPLATE
 		-- ["loc_code"] = {
@@ -386,10 +386,10 @@ local talent_localizations = {
 }
 
 
--- СОБИРАЕМ ВСЕ ШАБЛОНЫ
+-- Collecting all the templates - Собираем все шаблоны
 local all_templates = {}
 
--- 1. Добавляем общие локализации из текущего файла
+-- 1. Adding common localizations from the current file - Добавляем общие локализации из текущего файла
 for loc_key, locales in pairs(talent_localizations) do
 	for locale, text in pairs(locales) do
 		table.insert(all_templates, create_template(
@@ -404,7 +404,7 @@ end
 mod:info("+++---------------------------------------------+++")
 mod:info("// ✅ Shared Talents: %d templates created", #all_templates)
 
--- 2. Загружаем модули классов
+-- 2. Loading class modules - Загружаем модули классов
 local loaded_modules_count = 0
 local total_talents_count = 0
 
