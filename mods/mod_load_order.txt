@@ -19,7 +19,6 @@ WeaponStats
 custom_hud
 Enhanced_descriptions
 modular_menu_buttons
-MissionBrief
 true_level
 DumpStatFinder
 ItemSorting
@@ -34,7 +33,5 @@ GasOutline
 Healthbars
 danger_zone
 DisableScreenEffects
-AuspexHelper
--- Radar
 SpawnFeed
 Killfeed Details
