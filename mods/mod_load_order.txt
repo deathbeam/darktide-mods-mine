@@ -11,9 +11,9 @@ guarantee_ability_activation
 
 -- Debugging
 creature_spawner
-show_crit_chance
+-- show_crit_chance
 CombatStats
-WeaponStats
+-- WeaponStats
 
 -- General HUD
 custom_hud
