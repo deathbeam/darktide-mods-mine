@@ -8,7 +8,6 @@ local mod = get_mod("show_crit_chance")
 -- ##################################################
 
 local WeaponTemplate = require("scripts/utilities/weapon/weapon_template")
-local HudElementCritSettings = mod:io_dofile("show_crit_chance/scripts/mods/show_crit_chance/hud/hud_element_crit_settings")
 
 -- ##################################################
 -- Mod variables
@@ -34,8 +33,8 @@ mod._font_size = mod:get("font_size")
 mod._show_floating_point = mod:get("show_floating_point")
 mod._only_in_training_grounds = mod:get("only_in_training_grounds")
 mod._crit_chance_indicator_icon = mod._crit_chance_indicator_icon_table[mod:get("crit_chance_indicator_icon")]
-mod._crit_chance_indicator_horizontal_offset = HudElementCritSettings.widget_horizontal_offset + mod:get("crit_chance_indicator_horizontal_offset")
-mod._crit_chance_indicator_vertical_offset = HudElementCritSettings.widget_vertical_offset + -1 * mod:get("crit_chance_indicator_vertical_offset")
+mod._crit_chance_indicator_horizontal_offset = mod:get("crit_chance_indicator_horizontal_offset")
+mod._crit_chance_indicator_vertical_offset = -1 * mod:get("crit_chance_indicator_vertical_offset")
 mod._crit_chance_indicator_appearance = {
     mod:get("crit_chance_indicator_opacity"),
     mod:get("crit_chance_indicator_R"),
@@ -183,23 +182,39 @@ mod.player_unit_loaded = function(self)
     mod:recreate_hud()
 end
 
+local _update_local_weapon_state = function(weapon_extension)
+    local player = weapon_extension and weapon_extension._player
+    if not player or player.viewport_name ~= "player1" then
+        return
+    end
+
+    local weapon_template = weapon_extension.weapon_template and weapon_extension:weapon_template()
+    if not weapon_template then
+        local weapon_action_component = weapon_extension._weapon_action_component
+        weapon_template = weapon_action_component and WeaponTemplate.current_weapon_template(weapon_action_component)
+    end
+
+    mod._weapon_handling_template = weapon_extension:weapon_handling_template() or {}
+    mod._is_ranged = weapon_template ~= nil and WeaponTemplate.is_ranged(weapon_template) == true
+    mod._is_melee = weapon_template ~= nil and WeaponTemplate.is_melee(weapon_template) == true
+    mod._player = player
+end
+
 -- ##################################################
 -- Hooks
 -- ##################################################
 
--- Weapon handling template needs to be constantly updated
 mod:hook_safe("PlayerUnitWeaponExtension", "update", function (self, unit, dt, t)
-    mod._weapon_handling_template = self:weapon_handling_template() or {}
+    _update_local_weapon_state(self)
 end)
 
 -- Get properties on weapon switch
 mod:hook_safe("PlayerUnitWeaponExtension", "on_slot_wielded", function(self, slot_name, t, skip_wield_action)
-    local weapon_action_component = self._weapon_action_component
-    local weapon_template = weapon_action_component and WeaponTemplate.current_weapon_template(weapon_action_component)
-	mod._is_ranged = weapon_template and WeaponTemplate.is_ranged(weapon_template)
-	mod._is_melee = weapon_template and WeaponTemplate.is_melee(weapon_template)
+    _update_local_weapon_state(self)
+end)
 
-    mod._player = self._player
+mod:hook_safe("PlayerUnitWeaponExtension", "server_correction_occurred", function(self, unit)
+    _update_local_weapon_state(self)
 end)
 
 -- Add hud element to hud
