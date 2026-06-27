@@ -239,8 +239,6 @@ local melee_sequence_options = {
     { text = "light_attack",        value = "light_attack" },
     { text = "heavy_attack",        value = "heavy_attack" },
     { text = "special_action",      value = "special_action" },
-    { text = "special_heavy",       value = "special_heavy" },
-    { text = "special_invert",      value = "special_invert" },
     { text = "block",               value = "block" },
     { text = "push",                value = "push" },
     { text = "push_attack",         value = "push_attack" },
@@ -472,7 +470,7 @@ return {
                         setting_id = "special_buff_stacks",
                         type = "numeric",
                         default_value = 0,
-                        range = { 0, 6 },
+                        range = { 0, 3 },
                         unit_text = "buff_stacks",
                     },
                     {
@@ -690,7 +688,7 @@ return {
                         setting_id = "rate_of_fire_ads",
                         type = "numeric",
                         default_value = 0,
-                        range = { 0, 800 },
+                        range = { 0, 500 },
                         unit_text = "rate_of_fire",
                         decimals_number = 0
                     },
@@ -698,7 +696,7 @@ return {
                         setting_id = "rate_of_fire_hip",
                         type = "numeric",
                         default_value = 0,
-                        range = { 0, 800 },
+                        range = { 0, 500 },
                         unit_text = "rate_of_fire",
                         decimals_number = 0
                     },
