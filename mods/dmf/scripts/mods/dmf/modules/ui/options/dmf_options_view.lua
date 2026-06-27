@@ -1,3 +1,4 @@
+---@class DMFMod
 local dmf = get_mod("DMF")
 
 local _widgets_by_name
@@ -900,20 +901,22 @@ DMFOptionsView._set_tooltip_data = function (self, widget)
   if current_widget ~= widget or current_widget == widget and new_y ~= current_y then
     self._tooltip_data = {
       widget = widget,
-      text = localized_text
+      text = localized_text,
     }
     self._widgets_by_name.tooltip.content.text = localized_text
+
     local text_style = self._widgets_by_name.tooltip.style.text
     local x_pos = starting_point[1] + widget.offset[1]
     local width = widget.content.size[1] * 0.5
     local _, text_height = self:_text_size(localized_text, text_style, {
       width,
-      0
+      0,
     })
     local height = text_height
+
     self._widgets_by_name.tooltip.content.size = {
       width,
-      height
+      height,
     }
     self._widgets_by_name.tooltip.offset[1] = x_pos - width * 0.8
     self._widgets_by_name.tooltip.offset[2] = math.max(new_y - height, 20)
@@ -943,6 +946,11 @@ DMFOptionsView._update_settings_content_widgets = function (self, dt, t, input_s
 
       if update then
         update(self, widget, input_service, dt, t)
+      end
+
+      -- Allows text_input widgets to stop typing with escape, without closing the entire mod options menu
+      if widget.content.is_writing then
+        self._selected_settings_widget = widget
       end
     end
 
@@ -1065,39 +1073,39 @@ DMFOptionsView._present_keybind_popup_grid = function (self, display_name, value
   local layout = {
     {
       widget_type = "header",
-      text = display_name
+      text = display_name,
     },
     {
       widget_type = "dynamic_spacing",
       size = {
         grid_size[1],
-        15
-      }
-    }
+        15,
+      },
+    },
   }
 
   if cancel_keys then
     local cancel_key = cancel_keys[1]
     local description_text = Localize("loc_setting_keybinding_press_new_button", true, {
-      cancel_input = InputUtils.key_axis_locale(cancel_key)
+      cancel_input = InputUtils.key_axis_locale(cancel_key),
     })
 
     layout[#layout + 1] = {
       widget_type = "description",
-      text = description_text
+      text = description_text,
     }
     layout[#layout + 1] = {
       widget_type = "dynamic_spacing",
       size = {
         grid_size[1],
-        10
-      }
+        10,
+      },
     }
   end
 
   layout[#layout + 1] = {
     widget_type = "value",
-    text = value and InputUtils.localized_string_from_key_info(value) or self:_localize("loc_keybind_unassigned")
+    text = value and InputUtils.localized_string_from_key_info(value) or self:_localize("loc_keybind_unassigned"),
   }
 
   popup._text_grid:present_grid_layout(layout, definitions.grid_blueprints, nil, nil, nil, nil, callback(popup, "cb_on_grid_layout_changed"), nil)
