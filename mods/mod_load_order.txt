@@ -1,5 +1,8 @@
 -- vim: set filetype=lua :
 
+-- Base
+Alfs_DMF_Extensions
+
 -- Gameplay
 Perspectives
 AutoAbilities
@@ -11,6 +14,7 @@ guarantee_ability_activation
 
 -- Debugging
 creature_spawner
+controlled_chaos
 show_crit_chance
 CombatStats
 WeaponStats
@@ -25,12 +29,11 @@ ItemSorting
 
 -- In Game HUD
 crosshair_hud
+enemies_improved
 markers_aio
 ColorMyStamina
 DynamicCrosshair
 machine_gods_beacon
-GasOutline
-Healthbars
 danger_zone
 DisableScreenEffects
 SpawnFeed
