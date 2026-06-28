@@ -54,7 +54,7 @@ return {
 		en = c("ui_red_light", "The Final Toll"),
 	},
 	buff_final_toll_description = {
-		en = "Gains the following buffs under 50% HP:\nStagger immune\n+50% hit mass\n+25% movement speed\n+20% size (human-sized)\n+10% size (ogryn)",
+		en = "Gains the following buffs under 50% HP:\nStagger immune\n+50% hit mass\n+25% movement speed",
 	},
 	buff_rampaging_enemies = {
 		en = c("item_rarity_5", "Rampaging Enemies"),
@@ -72,13 +72,13 @@ return {
 		en = c("yellow_green", "Nurgle's Blessing"),
 	},
 	buff_nurgles_blessing_description = {
-		en = "-35% armour damage modifier\n+100% stagger resistance\n+20% ranged attack speed\n+25% movement speed\nCan fire more shots per volley",
+		en = "-35% damage taken\n+100% stagger resistance\n+20% ranged attack speed\n+25% movement speed\nCan fire more shots per volley",
 	},
 	buff_stimm_blue = {
 		en = c("dodger_blue", "Contaminated Stimm: Blue"),
 	},
 	buff_stimm_blue_description = {
-		en = "Carapace armour override\n+100% hit mass\n-60% armour damage modifier",
+		en = "Carapace armour override\n+100% hit mass\n-55% damage taken (Carapace)\n-60% damage taken (non-Carapace)",
 	},
 	buff_stimm_green = {
 		en = c("lime", "Contaminated Stimm: Green"),
@@ -96,6 +96,6 @@ return {
 		en = c("citadel_dorn_yellow", "Contaminated Stimm: Yellow"),
 	},
 	buff_stimm_yellow_description = {
-		en = "+400% weakspot damage\n-35% armour damage modifier\n+30% ranged attack speed\n+30% melee attack speed\nCan fire more shots per volley",
+		en = "-35% damage taken\n+400% weakspot damage bonus\n+30% ranged attack speed\n+30% melee attack speed\nCan fire more shots per volley",
 	},
 }

@@ -6,6 +6,7 @@ Alfs_DMF_Extensions
 -- Gameplay
 Perspectives
 AutoAbilities
+AutoMark
 Skitarius
 SimpleMovement
 guarantee_weapon_swap

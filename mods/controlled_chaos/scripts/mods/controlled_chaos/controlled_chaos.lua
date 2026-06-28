@@ -15,6 +15,9 @@ local _player_debuff_handles = {}
 
 local _danger_entry = nil
 local _tg_view_open = false
+local _pw_havoc_selected = false
+local _pw_active = nil
+local _pw_refresh_havoc_text
 local _name_translations = { en = "Havoc 40" }
 local _breed_chances_by_buff = {}
 local _ignored_kw_by_buff = {}
@@ -591,6 +594,8 @@ local function _build_difficulty()
 	entry.difficulty = (base.difficulty or 5) + 1
 	entry.loc_name = nil
 	entry.display_name = "havoc_training_difficulty_name"
+	entry.icon = "content/ui/materials/icons/generic/havoc"
+	entry.digital_icon = "content/ui/materials/icons/generic/havoc"
 	entry.color = { 255, 180, 50, 210 }
 	entry.is_unlocked = true
 	entry.unlocks_at = 1
@@ -697,6 +702,7 @@ end
 mod.on_setting_changed = function(setting_id)
 	if setting_id == "havoc_level" then
 		_update_name()
+		if _pw_refresh_havoc_text then _pw_refresh_havoc_text() end
 		if _in_meatgrinder and _havoc_active then
 			_refresh_havoc_live()
 		end
@@ -735,6 +741,320 @@ local function _remove_havoc_entry()
 	if i then _DangerSettings[i] = nil end
 end
 
+--------------------------------------------------------------------------------
+-- PSYCH WARD DIFFICULTY PICKER (character-select; optional integration)
+--------------------------------------------------------------------------------
+
+local PW_MAX_VANILLA = 5
+local PW_HAVOC = PW_MAX_VANILLA + 1
+local PW_PICKER = "difficulty_picker"
+local PW_STEPPER = "difficulty_stepper"
+local PW_STEPPER_HOTSPOTS = { "hotspot_1", "hotspot_2", "hotspot_3", "hotspot_4", "hotspot_5", "hotspot_6" }
+local PW_STEPPER_BARS = {
+	difficulty_bar_1 = true, difficulty_bar_2 = true, difficulty_bar_3 = true,
+	difficulty_bar_4 = true, difficulty_bar_5 = true,
+}
+local PW_PIP_OFFSETS = { -40, -16, 8, 32, 56, 80 }
+
+local function _pw_havoc_pip_change(content, style)
+	local min_danger = content.min_danger or 1
+	local max_danger = content.max_danger or PW_HAVOC
+	local index = PW_HAVOC
+	if min_danger > index or max_danger < index then
+		style.color[1] = 127
+		style.size[1] = 10
+		style.size[2] = 10
+	elseif index <= (content._hover_index_1 or 0) then
+		style.color[1] = 255
+		style.size[1] = 18
+		style.size[2] = 36
+	elseif index <= (content._hover_index_2 or 0) then
+		style.color[1] = 127
+		style.size[1] = 18
+		style.size[2] = 36
+	else
+		style.color[1] = 64
+		style.size[1] = 18
+		style.size[2] = 36
+	end
+	if _danger_entry and _danger_entry.color then
+		style.color[2] = _danger_entry.color[2]
+		style.color[3] = _danger_entry.color[3]
+		style.color[4] = _danger_entry.color[4]
+	end
+end
+
+local _pw_add_live_pip
+
+local function _psych_ward()
+	if not mod:is_enabled() then return nil end
+	local pw = get_mod("psych_ward")
+	if pw and pw:is_enabled() then return pw end
+	return nil
+end
+
+local function _pw_havoc_text()
+	return _danger_entry and Localize(_danger_entry.display_name) or "Havoc"
+end
+
+local function _pw_text_for(level)
+	if level == PW_HAVOC then return _pw_havoc_text() end
+	local d = _DangerSettings and _DangerSettings[level]
+	return d and Localize(d.display_name) or tostring(level)
+end
+
+local function _pw_pip_level(pw)
+	if _pw_havoc_selected then return PW_HAVOC end
+	local v = tonumber(pw:get("selected_difficulty")) or 3
+	if v < 1 then v = 1 elseif v > PW_MAX_VANILLA then v = PW_MAX_VANILLA end
+	return v
+end
+
+local function _pw_apply_pip(widget, level)
+	local content, style = widget.content, widget.style
+	local color
+	if level == PW_HAVOC then
+		color = _danger_entry and _danger_entry.color
+	else
+		local d = _DangerSettings and _DangerSettings[level]
+		color = d and d.color
+	end
+	content.difficulty_text = _pw_text_for(level)
+	content.current_level = level
+	if color then
+		content.level_color = color
+		if style.difficulty_text then style.difficulty_text.text_color = { color[1], color[2], color[3], color[4] } end
+		if style.accent_bar then style.accent_bar.color = { color[1], color[2], color[3], color[4] } end
+	end
+end
+
+local function _pw_picker_change_6(content, style)
+	local level = content.current_level or 1
+	local active = PW_HAVOC <= level
+	style.color[1] = active and 255 or 40
+	if active then
+		local c = content.level_color
+		if c then style.color[2] = c[2] style.color[3] = c[3] style.color[4] = c[4] end
+	else
+		style.color[2] = 100 style.color[3] = 100 style.color[4] = 100
+	end
+end
+
+local function _pw_add_live_pip_picker(widget)
+	if not widget.style or not widget.passes or not widget.content then return end
+	if widget.style.pip_6 then return end
+	local p1, p2 = widget.style.pip_1, widget.style.pip_2
+	if not p1 or not p1.offset or not p1.size or not p2 or not p2.offset then return end
+
+	local step = p2.offset[1] - p1.offset[1]
+	local new_start = p1.offset[1] - step / 2
+	for i = 1, PW_MAX_VANILLA do
+		local st = widget.style["pip_" .. i]
+		if st and st.offset then st.offset[1] = new_start + (i - 1) * step end
+	end
+
+	local UIWidget = require("scripts/managers/ui/ui_widget")
+	local UIPasses = require("scripts/managers/ui/ui_passes")
+	UIWidget.add_definition_pass(widget, {
+		pass_type = "rect",
+		style_id = "pip_6",
+		change_function = _pw_picker_change_6,
+		style = {
+			horizontal_alignment = "left",
+			vertical_alignment = "top",
+			size = { p1.size[1], p1.size[2] },
+			offset = { new_start + PW_MAX_VANILLA * step, p1.offset[2], p1.offset[3] or 2 },
+			color = { 255, 100, 100, 100 },
+		},
+	})
+	local p = widget.passes[#widget.passes]
+	local ui_pass = UIPasses[p.pass_type]
+	if ui_pass and ui_pass.init then
+		local ok, data = pcall(ui_pass.init, p)
+		p.data = (ok and data) or {}
+	else
+		p.data = p.data or {}
+	end
+
+	widget.dirty = true
+end
+
+local function _pw_setup_pip(pw, widget)
+	if not widget.content.hotspot or not widget.style then return end
+	_pw_add_live_pip_picker(widget)
+	_pw_apply_pip(widget, _pw_pip_level(pw))
+	widget.content.hotspot.pressed_callback = function()
+		local nxt = _pw_pip_level(pw) % PW_HAVOC + 1
+		if nxt == PW_HAVOC then
+			_pw_havoc_selected = true
+			pw:set("selected_difficulty", PW_MAX_VANILLA)
+		else
+			_pw_havoc_selected = false
+			pw:set("selected_difficulty", nxt)
+		end
+		_pw_apply_pip(widget, nxt)
+	end
+	_pw_active = { widget = widget, kind = "pip" }
+end
+
+local function _pw_setup_stepper(pw, widget)
+	local content = widget.content
+	if type(content.value_id_1) == "function" and not content.__cc_havoc then
+		content.value_id_1 = function(pass, ui_renderer, logic_style, c, position, size)
+			if c.disabled then return end
+			local min_danger, max_danger = 1, PW_HAVOC
+			c.min_danger = min_danger
+			c.max_danger = max_danger
+			if not c.danger or c.danger < min_danger then c.danger = min_danger end
+			if c.danger > max_danger then c.danger = max_danger end
+			local danger = c.danger
+			local input_service = ui_renderer.input_service
+			local left = (c.hotspot_left and c.hotspot_left.on_released) or input_service:get("navigate_primary_left_pressed")
+			local right = (c.hotspot_right and c.hotspot_right.on_released) or input_service:get("navigate_primary_right_pressed")
+			if left and min_danger < danger then
+				danger = danger - 1
+			elseif right and danger < max_danger then
+				danger = danger + 1
+			end
+			local hover_index = c.danger
+			for i = min_danger, max_danger do
+				local hs = c[PW_STEPPER_HOTSPOTS[i]]
+				if hs then
+					if hs.on_pressed then
+						danger = i
+						break
+					elseif hs.is_hover then
+						hover_index = i
+					end
+				end
+			end
+			if c.last_danger ~= danger then
+				c.difficulty_text = _pw_text_for(danger)
+				c.last_danger = danger
+				c.danger = danger
+				local cb = c.on_changed_callback
+				if cb then cb() end
+			end
+			c._hover_index_1 = math.min(hover_index, danger)
+			c._hover_index_2 = math.max(hover_index, danger)
+			c.hover_danger = hover_index
+		end
+
+		if widget.passes then
+			for i = 1, #widget.passes do
+				local pass = widget.passes[i]
+				if pass.style_id and PW_STEPPER_BARS[pass.style_id] and not pass.__cc_havoc then
+					local orig = pass.change_function
+					pass.change_function = function(c, style, animations, dt)
+						if orig then orig(c, style, animations, dt) end
+						if (c.hover_danger or c.danger) == PW_HAVOC and _danger_entry and _danger_entry.color then
+							local a = style.color[1]
+							style.color[2] = _danger_entry.color[2]
+							style.color[3] = _danger_entry.color[3]
+							style.color[4] = _danger_entry.color[4]
+							style.color[1] = a
+						end
+					end
+					pass.__cc_havoc = true
+				end
+			end
+		end
+
+		content.__cc_havoc = true
+	end
+	_pw_add_live_pip(widget)
+	content.last_danger = nil
+	content.difficulty_text = _pw_text_for(content.danger or 1)
+	_pw_active = { widget = widget, kind = "stepper" }
+end
+
+local function _pw_setup_picker(self)
+	local pw = _psych_ward()
+	if not pw or not self._widgets_by_name then return end
+	_load_refs()
+	local pip = self._widgets_by_name[PW_PICKER]
+	local stepper = self._widgets_by_name[PW_STEPPER]
+	if pip and pip.content and pip.content.hotspot and pip.style then
+		_pw_setup_pip(pw, pip)
+	elseif stepper and stepper.content and stepper.style then
+		_pw_setup_stepper(pw, stepper)
+	end
+end
+
+_pw_add_live_pip = function(widget)
+	if not widget.style or not widget.passes or not widget.content then return end
+	if widget.style.difficulty_bar_6 then return end
+
+	local UIWidget = require("scripts/managers/ui/ui_widget")
+	local UIPasses = require("scripts/managers/ui/ui_passes")
+	local function _init_last(content_arg)
+		local p = widget.passes[#widget.passes]
+		local ui_pass = UIPasses[p.pass_type]
+		if ui_pass and ui_pass.init then
+			local ok, data = pcall(ui_pass.init, p, content_arg, widget.style)
+			p.data = (ok and data) or {}
+		else
+			p.data = p.data or {}
+		end
+	end
+
+	UIWidget.add_definition_pass(widget, {
+		pass_type = "rect",
+		style_id = "difficulty_bar_6",
+		change_function = _pw_havoc_pip_change,
+		style = {
+			horizontal_alignment = "center",
+			vertical_alignment = "center",
+			color = { 255, 255, 255, 255 },
+			size = { 18, 36 },
+			offset = { PW_PIP_OFFSETS[6], 15, 2 },
+		},
+	})
+	_init_last(widget.content)
+
+	UIWidget.add_definition_pass(widget, {
+		content_id = "hotspot_6",
+		pass_type = "hotspot",
+		style = {
+			horizontal_alignment = "center",
+			vertical_alignment = "center",
+			size = { 24, 36 },
+			offset = { PW_PIP_OFFSETS[6], 15, 2 },
+		},
+	})
+	_init_last(widget.content.hotspot_6)
+
+	for i = 1, PW_MAX_VANILLA do
+		local bar = widget.style["difficulty_bar_" .. i]
+		if bar and bar.offset then bar.offset[1] = PW_PIP_OFFSETS[i] end
+	end
+	local center = (PW_PIP_OFFSETS[1] + PW_PIP_OFFSETS[#PW_PIP_OFFSETS]) / 2
+	for _, pass in ipairs(widget.passes) do
+		local n = pass.content_id and string.match(pass.content_id, "^hotspot_(%d)$")
+		if n then
+			local st = pass.style_id and widget.style[pass.style_id]
+			if st and st.offset then st.offset[1] = PW_PIP_OFFSETS[tonumber(n)] end
+		elseif pass.value_id == "difficulty_text" then
+			local st = pass.style_id and widget.style[pass.style_id]
+			if st and st.offset then st.offset[1] = center end
+		end
+	end
+
+	widget.dirty = true
+end
+
+_pw_refresh_havoc_text = function()
+	local active = _pw_active
+	if not active then return end
+	local widget = active.widget
+	if not widget or not widget.content then return end
+	if active.kind == "pip" then
+		if _pw_havoc_selected then _pw_apply_pip(widget, PW_HAVOC) end
+	elseif widget.content.danger == PW_HAVOC then
+		widget.content.difficulty_text = _pw_havoc_text()
+	end
+end
+
 local function _patch_stepper(self)
 	if not _tg_view_open then return end
 	local widget = self._widgets_by_name and self._widgets_by_name.difficulty_stepper
@@ -763,6 +1083,28 @@ local function _patch_stepper(self)
 	end
 
 	content.__cc_patched = true
+end
+
+local function _shrink_havoc_icon(self)
+	if not _tg_view_open then return end
+	local indicators = self._difficulty_indicator_widgets
+	if not indicators then return end
+	for i = 1, #indicators do
+		local entry = _DangerSettings and _DangerSettings[i]
+		local widget = indicators[i]
+		if widget and widget.style and entry and entry.name == "havoc_training" and not widget.__cc_icon_sized then
+			local icon = widget.style.icon
+			if icon then
+				local new_icon = _shallow(icon)
+				new_icon.size = { 16, 16 }
+				new_icon.default_size = { 16, 16 }
+				new_icon.active_size = { 34, 34 }
+				new_icon.offset = { -17, -17, (icon.offset and icon.offset[3]) or 51 }
+				widget.style.icon = new_icon
+				widget.__cc_icon_sized = true
+			end
+		end
+	end
 end
 
 mod:hook(TG_VIEW, "on_enter", function(func, self)
@@ -798,7 +1140,29 @@ mod:hook("ViewElementMissionBoardDifficultySelector", "initialize_data", functio
 	end
 	local result = func(self, optional_difficulty_index)
 	_patch_stepper(self)
+	_shrink_havoc_icon(self)
 	return result
+end)
+
+mod:hook_safe("MainMenuView", "_setup_interactions", function(self)
+	_pw_setup_picker(self)
+end)
+
+mod:hook_safe("MainMenuView", "on_exit", function(self)
+	_pw_active = nil
+end)
+
+mod:hook("MechanismManager", "change_mechanism", function(func, self, mechanism_name, context)
+	if _psych_ward() and context and context.mission_name == "tg_shooting_range"
+		and not (Managers.state and Managers.state.game_mode) then
+		local danger = tonumber(context.challenge_level)
+		local is_havoc = _pw_havoc_selected or danger == PW_HAVOC
+		_havoc_armed = is_havoc and true or false
+		if is_havoc and danger and danger > PW_MAX_VANILLA then
+			context.challenge_level = PW_MAX_VANILLA
+		end
+	end
+	return func(self, mechanism_name, context)
 end)
 
 --------------------------------------------------------------------------------
