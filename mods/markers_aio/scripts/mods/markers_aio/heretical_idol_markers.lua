@@ -8,8 +8,6 @@ local UIWidget = require("scripts/managers/ui/ui_widget")
 
 mod.heretical_idols = {}
 mod._world_markers_list = {}
-local markers_list_to_remove = {}
-local processed_idols = {}
 
 local get_max_distance = function()
 	local max_distance = mod:get("heretical_idol_max_distance")
@@ -70,11 +68,7 @@ DestructibleExtension._add_damage = function(self, damage_amount, attack_directi
 		destruction_info.health = math.max(0, health_after_damage)
 
 		if health_after_damage <= 0 then
-			for i, unit in pairs(totem_units) do
-				if self._unit == unit then
-					table.remove(totem_units, i)
-				end
-			end
+			mod.remove_totem_from_tracking(self._unit)
 
 			if self._collectible_data then
 				if self._collectible_data.unit and self._collectible_data.section_id then
@@ -108,11 +102,7 @@ DestructibleExtension.rpc_destructible_last_destruction = function(self)
 
 	Unit.flow_event(self._unit, "lua_last_destruction")
 
-	for i, unit in pairs(totem_units) do
-		if self._unit == unit then
-			table.remove(totem_units, i)
-		end
-	end
+	mod.remove_totem_from_tracking(self._unit)
 
 	if self._collectible_data then
 		if self._collectible_data.unit and self._collectible_data.section_id then
@@ -156,7 +146,6 @@ mod.remove_heretical_idol_marker = function(self, unit, section_id)
 					marker.draw = false
 					marker.widget.visible = false
 					marker.widget.alpha_multiplier = 0
-					table.insert(markers_list_to_remove, marker)
 					Managers.event:trigger("remove_world_marker", marker.id)
 				end
 			end
@@ -168,21 +157,24 @@ mod.update_marker_icon = function(self, marker)
 	if marker then
 		local max_distance = get_max_distance()
 
-		if marker.type and marker.type == "heretical_idol" then
+		if marker.type and (marker.type == "heretical_idol") then
 			marker.markers_aio_type = "heretical_idol"
 			-- force hide marker to start, to prevent "pop in" where the marker will briefly appear at max opacity
 			marker.widget.alpha_multiplier = 0
 			marker.draw = false
 
 			marker.widget.content.icon = "content/ui/materials/hud/interactions/icons/enemy"
-			marker.widget.style.icon.color = {
+
+			mod.set_colour_argb(
+				marker.widget.style.icon.color,
 				255,
 				mod:get("icon_colour_R"),
 				mod:get("icon_colour_G"),
-				mod:get("icon_colour_B"),
-			}
-			marker.widget.style.ring.color = mod.lookup_colour(mod:get("idol_border_colour"))
-			marker.widget.style.background.color = mod.lookup_colour(mod:get("marker_background_colour"))
+				mod:get("icon_colour_B")
+			)
+			mod.set_colour(marker.widget.style.ring.color, mod.lookup_colour(mod:get("idol_border_colour")))
+
+			mod.set_colour(marker.widget.style.background.color, mod.lookup_colour(mod:get("marker_background_colour")))
 			marker.template.screen_clamp = mod:get("heretical_idol_keep_on_screen")
 			marker.block_screen_clamp = false
 
@@ -192,14 +184,6 @@ mod.update_marker_icon = function(self, marker)
 			marker.template.max_distance = max_distance
 			marker.template.fade_settings.distance_max = max_distance
 			marker.template.fade_settings.distance_min = max_distance - marker.template.evolve_distance * 2
-
-			-- for i = 0, #markers_list_to_remove do
-			--    local remove_marker = markers_list_to_remove[i]
-			--    if remove_marker and remove_marker.id == marker.id then
-			--        marker.widget.style.icon.color = {255, 255, 0, 0}
-			--        table.remove(markers_list_to_remove, i)
-			--    end
-			-- end
 		end
 	end
 end

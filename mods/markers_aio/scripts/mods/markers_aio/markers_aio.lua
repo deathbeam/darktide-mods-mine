@@ -14,6 +14,7 @@ mod:io_dofile("markers_aio/scripts/mods/markers_aio/stolen_rations_markers")
 mod:io_dofile("markers_aio/scripts/mods/markers_aio/atonement_markers")
 mod:io_dofile("markers_aio/scripts/mods/markers_aio/unknown_markers")
 mod:io_dofile("markers_aio/scripts/mods/markers_aio/expedition_markers")
+mod:io_dofile("markers_aio/scripts/mods/markers_aio/servo_skull_markers")
 
 mod:io_dofile("markers_aio/scripts/mods/markers_aio/markers_aio_localization")
 
@@ -28,21 +29,65 @@ local HudElementWorldMarkers = require("scripts/ui/hud/elements/world_markers/hu
 local UIWidget = require("scripts/managers/ui/ui_widget")
 local UIScenegraph = require("scripts/managers/ui/ui_scenegraph")
 local HudElementSmartTagging = require("scripts/ui/hud/elements/smart_tagging/hud_element_smart_tagging")
+local SpecialRulesSettings = require("scripts/settings/ability/special_rules_settings")
+local CompanionServoSkullSettings = require("scripts/settings/companion/companion_servo_skull_settings")
+
+-- Guide widget element registration
+local GUIDE_WIDGET_PATH = "markers_aio/scripts/mods/markers_aio/martyrs_skull_guide_widget"
+mod:add_require_path(GUIDE_WIDGET_PATH)
+
+local guide_element_def = {
+	class_name = "MartyrsSkullGuideElement",
+	filename = GUIDE_WIDGET_PATH,
+	visibility_groups = {
+		"dead",
+		"alive",
+		"player_in_danger_zone",
+	},
+}
+
+mod:hook(
+	"UIManager",
+	"create_player_hud",
+	function(original_func, self, peer_id, local_player_id, elements, visibility_groups)
+		table.insert(elements, guide_element_def)
+		return original_func(self, peer_id, local_player_id, elements, visibility_groups)
+	end
+)
+
+mod:hook(
+	"UIManager",
+	"create_spectator_hud",
+	function(original_func, self, world_viewport_name, peer_id, local_player_id, elements, visibility_groups)
+		table.insert(elements, guide_element_def)
+		return original_func(self, world_viewport_name, peer_id, local_player_id, elements, visibility_groups)
+	end
+)
+
+mod.guide_widget_set_content = function(header, body, steps)
+	local hud = Managers.ui and Managers.ui:get_hud()
+	if not hud then
+		return
+	end
+	local element = hud._elements and hud._elements["MartyrsSkullGuideElement"]
+	if element then
+		element:set_content(header, body, steps)
+	end
+end
+
+mod.guide_widget_clear = function()
+	local hud = Managers.ui and Managers.ui:get_hud()
+	if not hud then
+		return
+	end
+	local element = hud._elements and hud._elements["MartyrsSkullGuideElement"]
+	if element then
+		element:clear()
+	end
+end
 
 -- Per-frame computed settings
 mod.frame_settings = {}
-
--- Global colour lookup (no per-call table allocs)
-local COLOUR_LOOKUP = {
-	Gold = { 255, 232, 188, 109 },
-	Silver = { 255, 187, 198, 201 },
-	Steel = { 255, 161, 166, 169 },
-	Black = { 255, 35, 31, 32 },
-	Brass = { 255, 226, 199, 126 },
-	Terminal = Color.terminal_background(200, true),
-	Default = { 255, 161, 166, 169 },
-	Tarnished = { 255, 130, 115, 102 },
-}
 
 mod:hook_safe(CLASS.HudElementWorldMarkers, "init", function(self)
 	-- add new marker templates to templates table
@@ -56,23 +101,158 @@ mod:hook_safe(CLASS.HudElementWorldMarkers, "init", function(self)
 	-- reset runtime state on (re)init to avoid growth across missions/hot-joins
 	mod.active_chests = {}
 	mod.current_heretical_idol_markers = {}
-	processed_idols = {}
+	mod.totem_units = {}
+	mod.medical_crate_charges = {}
 	mod.reset_martyrs_skull_guides()
+
+	-- scan for nurgle totems that already exist (covers menu→game transition after mod reload)
+	mod._needs_totem_scan = true
+
+	-- Register AIO marker display names in the game's localization string cache.
+	-- This prevents "unlocalized" errors when the base game tries to re-localize
+	-- our resolved display names (e.g., "Chest") through _lookup().
+	local loc = Managers and Managers.localization
+	if loc and loc._string_cache then
+		local cache = loc._string_cache
+		local mod_names = {
+			"mod_marker_chest_name",
+			"mod_marker_item_name",
+			"mod_marker_medicae_station_name",
+			"mod_marker_heretical_idol_name",
+			"mod_marker_stimm_name",
+			"mod_marker_power_stimm_name",
+			"mod_marker_speed_stimm_name",
+			"mod_marker_boost_stimm_name",
+			"mod_marker_medic_stimm_name",
+			"mod_marker_broker_stimm_name",
+			"mod_marker_tome_name",
+			"mod_marker_material_name",
+			"mod_marker_luggable_name",
+			"mod_marker_expedition_name",
+			"mod_marker_event_name",
+			"mod_marker_servo_skull_name",
+			"mod_marker_unknown_name",
+		}
+		for _, key in ipairs(mod_names) do
+			local resolved = mod:localize(key)
+			if resolved then
+				cache[resolved] = resolved
+			end
+		end
+	end
+end)
+
+mod.totem_units = {}
+
+mod.is_totem_unit = function(unit)
+	if not unit or not Unit.alive(unit) then
+		return false
+	end
+	local ude = ScriptUnit.has_extension(unit, "unit_data_system")
+	if not ude then
+		return false
+	end
+	if ude._breed and ude._breed.name == "nurgle_totem" then
+		return true
+	end
+	local armor_name = Unit.get_data(unit, "armor_data_name")
+	if armor_name == "nurgle_totem" then
+		return true
+	end
+	return false
+end
+
+mod.find_totem_marker_by_unit = function(unit)
+	local ui_manager = Managers.ui
+	if not ui_manager then
+		return
+	end
+	local hud = ui_manager:get_hud()
+	if not hud then
+		return
+	end
+	local world_markers = hud:element("HudElementWorldMarkers")
+	if not world_markers then
+		return
+	end
+	local markers = world_markers._markers_by_type and world_markers._markers_by_type["nurgle_totem"]
+	if not markers then
+		return
+	end
+	for i = 1, #markers do
+		local marker = markers[i]
+		if marker.unit == unit then
+			return marker
+		end
+	end
+end
+
+mod.add_totem_marker = function(unit)
+	if not unit or not Unit.alive(unit) then
+		return
+	end
+	if not mod.totem_units then
+		mod.totem_units = {}
+	end
+	if mod.totem_units[unit] then
+		return
+	end
+	local existing = mod.find_totem_marker_by_unit(unit)
+	if existing then
+		mod.totem_units[unit] = existing.id
+		return
+	end
+	local marker_id
+	Managers.event:trigger("add_world_marker_unit", "nurgle_totem", unit, function(id)
+		marker_id = id
+	end)
+	mod.totem_units[unit] = marker_id
+end
+
+mod.remove_totem_from_tracking = function(unit)
+	if not mod.totem_units or not unit then
+		return
+	end
+	local marker_id = mod.totem_units[unit]
+	if marker_id then
+		Managers.event:trigger("remove_world_marker", marker_id)
+	end
+	mod.totem_units[unit] = nil
+end
+
+mod.scan_for_existing_totems = function()
+	if not Managers.world then
+		return
+	end
+	local world = Managers.world:world("level_world")
+	if not world then
+		return
+	end
+	local units = World.units(world)
+	if not units then
+		return
+	end
+	for i = 1, #units do
+		local unit = units[i]
+		if Unit.alive(unit) and mod.is_totem_unit(unit) then
+			mod.add_totem_marker(unit)
+		end
+	end
+end
+
+mod:hook_safe(CLASS.PropUnitDataExtension, "setup_from_component", function(self, prop_data_name)
+	if prop_data_name == "nurgle_totem" then
+		mod.add_totem_marker(self._unit)
+	end
+end)
+
+mod:hook_safe(CLASS.DestructibleExtension, "destroy", function(self)
+	mod.remove_totem_from_tracking(self._unit)
 end)
 
 mod:hook_safe(CLASS.MissionObjectiveSystem, "hot_join_sync", function(self, sender, channel)
 	mod.reset_martyrs_skull_guides()
-end)
-
-local totem_units = {}
-_G.totem_units = totem_units -- expose for other modules without polluting with multiple instances
--- add a marker to nurgle totems...
-mod:hook_safe(CLASS.PropUnitDataExtension, "setup_from_component", function(self, prop_data_name)
-	if prop_data_name == "nurgle_totem" then
-		local totem_unit = self._unit
-		Managers.event:trigger("add_world_marker_unit", "nurgle_totem", totem_unit)
-		table.insert(totem_units, totem_unit)
-	end
+	mod.scan_for_existing_totems()
 end)
 
 local function build_frame_settings(mod)
@@ -99,25 +279,86 @@ local function build_frame_settings(mod)
 	fs.ads_los_opacity = (mod:get("ads_los_opacity")) / 100
 	fs.ads_blend = math.lerp(fs.ads_blend or 0, is_ads and 1 or 0, 0.25)
 
+	fs.distance_text_enable = mod:get("distance_text_enable")
+	fs.distance_text_position = mod:get("distance_text_position")
+	fs.distance_text_scale = mod:get("distance_text_scale")
+
 	fs.med_station_max_distance = mod:get("med_station_max_distance")
 
 	-- Feature toggles
-	fs.enable = {
-		tome = mod:get("tome_enable"),
-		material = mod:get("material_enable"),
-		ammo_med = mod:get("ammo_med_enable"),
-		stimm = mod:get("stimm_enable"),
-		chest = mod:get("chest_enable"),
-		heretical_idol = mod:get("heretical_idol_enable"),
-		tainted = mod:get("tainted_enable"),
-		tainted_skull = mod:get("tainted_skull_enable"),
-		luggable = mod:get("luggable_enable"),
-		martyrs_skull = mod:get("martyrs_skull_enable"),
-		rations = mod:get("rations_enable"),
-		atonement = mod:get("atonement_enable"),
-		expedition = mod:get("expedition_enable"),
-		unknown = mod:get("unknown_enable"),
-	}
+	fs.enable = fs.enable or {}
+	fs.enable.tome = mod:get("tome_enable")
+	fs.enable.material = mod:get("material_enable")
+	fs.enable.ammo_med = mod:get("ammo_med_enable")
+	fs.enable.stimm = mod:get("stimm_enable")
+	fs.enable.chest = mod:get("chest_enable")
+	fs.enable.heretical_idol = mod:get("heretical_idol_enable")
+	fs.enable.event = mod:get("event_enable")
+	fs.enable.luggable = mod:get("luggable_enable")
+	fs.enable.martyrs_skull = mod:get("martyrs_skull_enable")
+	fs.enable.rations = mod:get("event_enable")
+	fs.enable.atonement = mod:get("event_enable")
+	fs.enable.expedition = mod:get("expedition_enable")
+	fs.enable.servo_skull = mod:get("servo_skull_enable")
+	fs.enable.unknown = mod:get("unknown_enable")
+	fs.enable.servo_skull_enable_assistance_module = mod:get("servo_skull_enable_assistance_module")
+	-- Check if local player has the Cryptic servo skull blitz equipped
+	fs.servo_skull_equipped = false
+	local p_check = Managers.player:local_player(1)
+	if p_check and p_check.player_unit and Unit.alive(p_check.player_unit) then
+		local talent_ext = ScriptUnit.has_extension(p_check.player_unit, "talent_system")
+		if talent_ext then
+			local sr = SpecialRulesSettings.special_rules
+			fs.servo_skull_equipped = talent_ext:has_special_rule(sr.cryptic_servo_skull_hack)
+				or talent_ext:has_special_rule(sr.cryptic_servo_skull_inject_ally)
+				or talent_ext:has_special_rule(sr.cryptic_servo_skull_flamethrower)
+		end
+	end
+
+	-- Inject ally servo skull state
+	fs.inject_ally = nil
+	local p = Managers.player:local_player(1)
+	if p and p.player_unit and Unit.alive(p.player_unit) then
+		local talent_ext = ScriptUnit.has_extension(p.player_unit, "talent_system")
+		if
+			talent_ext
+			and talent_ext:has_special_rule(SpecialRulesSettings.special_rules.cryptic_servo_skull_inject_ally)
+		then
+			local spawner_ext = ScriptUnit.has_extension(p.player_unit, "companion_spawner_system")
+			if spawner_ext then
+				local comp_unit =
+					spawner_ext:spawned_unit_lookup(SpecialRulesSettings.special_rules.cryptic_servo_skull_inject_ally)
+				if comp_unit and Unit.alive(comp_unit) then
+					local ability_ext = ScriptUnit.has_extension(p.player_unit, "ability_system")
+					if
+						ability_ext
+						and ability_ext:remaining_ability_charges("grenade_ability")
+							>= CompanionServoSkullSettings.ability_charges.inject_ally
+					then
+						fs.inject_ally = {
+							companion_unit = comp_unit,
+						}
+					end
+				end
+			end
+		end
+	end
+
+	-- Check if the inject_ally skull is actively performing an injection
+	fs.servo_skull_injecting = false
+	if fs.inject_ally then
+		local comp_unit = fs.inject_ally.companion_unit
+		if comp_unit and Unit.alive(comp_unit) then
+			local game_session = Managers.state.game_session:game_session()
+			local go_id = Managers.state.unit_spawner:game_object_id(comp_unit)
+			if game_session and go_id then
+				local state = GameSession.game_object_field(game_session, go_id, "state")
+				if state == "inject_ally" then
+					fs.servo_skull_injecting = true
+				end
+			end
+		end
+	end
 end
 
 mod.get_marker_pickup_type = function(marker)
@@ -133,8 +374,49 @@ mod.get_marker_pickup_type = function(marker)
 	return Unit.get_data(marker.unit, "pickup_type")
 end
 
+mod.set_colour = function(dst, src)
+	if not dst or not src then
+		return
+	end
+
+	dst[1] = src[1] or 255
+	dst[2] = src[2] or 255
+	dst[3] = src[3] or 255
+	dst[4] = src[4] or 255
+end
+
+mod.set_colour_argb = function(dst, a, r, g, b)
+	if not dst then
+		return
+	end
+
+	dst[1] = a or 255
+	dst[2] = r or 255
+	dst[3] = g or 255
+	dst[4] = b or 255
+end
+
+local LOOKUP_COLOUR_DEFAULT = { 255, 255, 255, 255 }
+
+local COLOUR_LOOKUP = {
+	Gold = { 255, 232, 188, 109 },
+	Silver = { 255, 187, 198, 201 },
+	Steel = { 255, 161, 166, 169 },
+	Black = { 255, 35, 31, 32 },
+	Brass = { 255, 226, 199, 126 },
+	Terminal = Color.terminal_background(225, true),
+	Default = { 255, 161, 166, 169 },
+	Tarnished = { 255, 130, 115, 102 },
+}
+
 mod.lookup_colour = function(colour_string)
-	return COLOUR_LOOKUP[colour_string] or COLOUR_LOOKUP.Default
+	local color = LOOKUP_COLOUR_DEFAULT
+
+	if colour_string then
+		color = COLOUR_LOOKUP[colour_string]
+	end
+
+	return color
 end
 
 mod.get_marker_by_id = function(id)
@@ -200,6 +482,8 @@ HudElementWorldMarkers._get_fade = function(self, fade_settings, distance)
 	end
 end
 
+local temp_drawable_markers = {}
+
 local HudElementWorldMarkersSettings =
 	require("scripts/ui/hud/elements/world_markers/hud_element_world_markers_settings")
 
@@ -210,7 +494,8 @@ HudElementWorldMarkers._draw_markers = function(self, dt, t, input_service, ui_r
 	end
 
 	local markers_by_type = self._markers_by_type
-	local drawable_markers = {}
+	local drawable_markers = temp_drawable_markers
+	table.clear(drawable_markers)
 
 	for _, markers in pairs(markers_by_type) do
 		for i = 1, #markers do
@@ -247,12 +532,15 @@ HudElementWorldMarkers._draw_markers = function(self, dt, t, input_service, ui_r
 		local widget = marker.widget
 		local offset = widget.offset
 
-		offset[3] = BASE_Z + (i * Z_STRIDE)
-
-		if widget.content.marker_text and widget.content.marker_text ~= "" then
-			widget.style.marker_text.offset[3] = offset[3] + 2
+		if offset then
+			offset[3] = BASE_Z + (i * Z_STRIDE)
 		end
 
+		widget.alpha_multiplier = widget.alpha_multiplier or 1
+
+		if offset and widget.style.marker_text and widget.content.marker_text and widget.content.marker_text ~= "" then
+			widget.style.marker_text.offset[3] = offset[3] + 2
+		end
 		UIWidget.draw(widget, ui_renderer)
 	end
 end
@@ -306,17 +594,13 @@ local function compute_distance_alpha(marker, max_distance)
 end
 
 HudElementWorldMarkers._calculate_markers = function(self, dt, t, input_service, ui_renderer, render_settings)
-	-- Global throttle for marker updates...
-	--local update_interval = 0.02
-	--update_time = (update_time or 0) + dt
-
-	--if update_time < update_interval then
-	--	return
-	--end
-	--update_time = 0
-
 	-- Build frame state
 	build_frame_settings(mod)
+
+	if mod._needs_totem_scan then
+		mod._needs_totem_scan = false
+		mod.scan_for_existing_totems()
+	end
 
 	local raycasts_allowed = self._raycast_frame_counter == 0
 
@@ -343,6 +627,8 @@ HudElementWorldMarkers._calculate_markers = function(self, dt, t, input_service,
 		local markers_by_type = self._markers_by_type
 		local ALIVE = ALIVE
 
+		table.clear(temp_marker_raycast_queue)
+
 		for marker_type, markers in pairs(markers_by_type) do
 			for i = 1, #markers do
 				-- DEFAULT STUFF
@@ -352,215 +638,221 @@ HudElementWorldMarkers._calculate_markers = function(self, dt, t, input_service,
 				local update = markers_by_id[id] ~= nil
 				local remove = marker.remove
 				local widget = marker.widget
-				local content = widget.content
-				local screen_clamp = template.screen_clamp and not marker.block_screen_clamp
-				local screen_margins = template.screen_margins
 
-				local max_distance = template.max_distance
-				if marker.markers_aio_type then
-					max_distance = mod:get(marker.markers_aio_type .. "_max_distance")
-				end
+				if widget then
+					local content = widget.content
+					local screen_clamp = template.screen_clamp and not marker.block_screen_clamp
+					local screen_margins = template.screen_margins
 
-				-- Never distance-cull base game objective markers
-				if marker.type == "objective" or (template and template.name == "objective") then
-					max_distance = nil
-				end
+					local max_distance = template.max_distance
+					if marker.markers_aio_type then
+						max_distance = mod:get(marker.markers_aio_type .. "_max_distance")
+					end
 
-				if marker.block_max_distance then
-					max_distance = math.huge
-				end
+					-- Never distance-cull base game objective markers
+					if marker.type == "objective" or (template and template.name == "objective") then
+						max_distance = nil
+					end
 
-				local life_time = template.life_time
-				local check_line_of_sight = template.check_line_of_sight
-				local marker_position
+					if marker.block_max_distance then
+						max_distance = math.huge
+					end
 
-				if update then
-					local world_position = marker.world_position
+					local life_time = template.life_time
+					local check_line_of_sight = template.check_line_of_sight
+					local marker_position
 
-					if world_position then
-						marker_position = world_position:unbox()
-					else
-						local unit = marker.unit
+					if update then
+						local world_position = marker.world_position
 
-						if ALIVE[unit] then
-							local unit_node = template.unit_node
-							local node = unit_node and Unit.has_node(unit, unit_node) and Unit.node(unit, unit_node)
-								or 1
-							marker_position = Unit.world_position(unit, node)
+						if world_position then
+							marker_position = world_position:unbox()
 						else
-							remove = true
-						end
-					end
+							local unit = marker.unit
 
-					if life_time then
-						local duration = marker.duration or 0
-						duration = math.min(duration + dt, life_time)
-
-						if life_time <= duration then
-							remove = true
-						else
-							marker.duration = duration
-						end
-					end
-				end
-
-				if remove then
-					update = false
-					temp_array_markers_to_remove[#temp_array_markers_to_remove + 1] = marker
-				end
-
-				if update then
-					local position_offset = template.position_offset
-
-					if position_offset then
-						marker_position.x = marker_position.x + position_offset[1]
-						marker_position.y = marker_position.y + position_offset[2]
-						marker_position.z = marker_position.z + position_offset[3]
-					end
-
-					Vector3Box.store(marker.position, marker_position)
-
-					local distance = Vector3.distance(marker_position, camera_position)
-
-					content.distance = distance
-					marker.distance = distance
-
-					local out_of_reach = max_distance and max_distance < distance
-					local draw = not out_of_reach
-
-					if not out_of_reach then
-						local marker_direction = Vector3.normalize(marker_position - camera_position)
-						marker_direction = Vector3.normalize(marker_direction)
-
-						local forward_dot_dir = Vector3.dot(camera_direction, marker_direction)
-						local is_inside_frustum = Camera.inside_frustum(camera, marker_position) > 0
-						local camera_left = Vector3.cross(camera_direction, Vector3.up())
-						local left_dot_dir = Vector3.dot(camera_left, marker_direction)
-						local angle = math.atan2(left_dot_dir, forward_dot_dir)
-						local is_behind = forward_dot_dir < 0 and true or false
-						local is_under = marker_position.z < camera_position.z
-						local x, y = self:_convert_world_to_screen_position(camera, marker_position)
-						local pixel_offset = template.pixel_offset
-
-						if pixel_offset then
-							x = x + pixel_offset[1]
-							y = y + pixel_offset[2]
-						end
-
-						local screen_x, screen_y = self:_get_screen_offset(scale)
-
-						x = x - screen_x
-						y = y - screen_y
-
-						local is_clamped, is_clamped_left, is_clamped_right, is_clamped_up, is_clamped_down =
-							false, false, false, false, false
-
-						if screen_clamp then
-							local clamped_x, clamped_y
-
-							clamped_x, clamped_y, is_clamped_left, is_clamped_right, is_clamped_up, is_clamped_down =
-								self:_clamp_to_screen(
-									x,
-									y,
-									screen_margins,
-									is_behind,
-									is_under,
-									marker_position,
-									camera_position_center,
-									camera_position_left,
-									camera_position_right,
-									camera_position_up,
-									camera_position_down
-								)
-							is_clamped = is_clamped_left or is_clamped_right or is_clamped_up or is_clamped_down
-							x = clamped_x
-							y = clamped_y
-						end
-
-						if not is_clamped then
-							if is_behind then
-								draw = false
-							elseif not is_inside_frustum then
-								local vertical_pixel_overlap, horizontal_pixel_overlap
-
-								if x < 0 then
-									horizontal_pixel_overlap = math.abs(x)
-								elseif x > root_size[1] then
-									horizontal_pixel_overlap = x - root_size[1]
-								end
-
-								if y < 0 then
-									vertical_pixel_overlap = math.abs(y)
-								elseif y > root_size[2] then
-									vertical_pixel_overlap = y - root_size[2]
-								end
-
-								if vertical_pixel_overlap or horizontal_pixel_overlap then
-									draw = false
-
-									local check_widget_visible = template.check_widget_visible
-
-									if check_widget_visible then
-										draw = check_widget_visible(
-											widget,
-											vertical_pixel_overlap,
-											horizontal_pixel_overlap
-										)
-									end
-								else
-									draw = false
-								end
+							if ALIVE[unit] then
+								local unit_node = template.unit_node
+								local node = unit_node and Unit.has_node(unit, unit_node) and Unit.node(unit, unit_node)
+									or 1
+								marker_position = Unit.world_position(unit, node)
+							else
+								remove = true
 							end
-						elseif is_clamped_left or is_clamped_right then
-							if is_clamped_left then
-								angle = 0
-							elseif is_clamped_right then
-								angle = math.pi
-							end
-						elseif is_clamped_up then
-							angle = math.pi * 0.5
-						elseif is_clamped_down then
-							angle = -math.pi * 0.5
 						end
 
-						content.is_inside_frustum = is_inside_frustum
-						content.is_clamped = is_clamped
-						content.is_under = is_under
+						if life_time then
+							local duration = marker.duration or 0
+							duration = math.min(duration + dt, life_time)
+
+							if life_time <= duration then
+								remove = true
+							else
+								marker.duration = duration
+							end
+						end
+					end
+
+					if remove then
+						update = false
+						temp_array_markers_to_remove[#temp_array_markers_to_remove + 1] = marker
+					end
+
+					if update then
+						local position_offset = template.position_offset
+
+						if position_offset then
+							marker_position.x = marker_position.x + position_offset[1]
+							marker_position.y = marker_position.y + position_offset[2]
+							marker_position.z = marker_position.z + position_offset[3]
+						end
+
+						-- Health station: push marker up so it's not inside the mesh
+						if marker.data and marker.data._active_interaction_type == "health_station" then
+							marker_position.z = marker_position.z
+						end
+
+						Vector3Box.store(marker.position, marker_position)
+
+						local distance = Vector3.distance(marker_position, camera_position)
+
 						content.distance = distance
-						content.angle = angle
-						marker.is_inside_frustum = is_inside_frustum
-						marker.is_clamped = is_clamped
-						marker.is_under = is_under
 						marker.distance = distance
-						marker.angle = angle
 
-						local offset = widget.offset
+						local out_of_reach = max_distance and max_distance < distance
+						local draw = not out_of_reach
 
-						offset[1] = x * inverse_scale
-						offset[2] = y * inverse_scale
+						if not out_of_reach then
+							local marker_direction = Vector3.normalize(marker_position - camera_position)
+							marker_direction = Vector3.normalize(marker_direction)
 
-						marker.raycast_frame_count = (marker.raycast_frame_count or 0) + 1
+							local forward_dot_dir = Vector3.dot(camera_direction, marker_direction)
+							local is_inside_frustum = Camera.inside_frustum(camera, marker_position) > 0
+							local camera_left = Vector3.cross(camera_direction, Vector3.up())
+							local left_dot_dir = Vector3.dot(camera_left, marker_direction)
+							local angle = math.atan2(left_dot_dir, forward_dot_dir)
+							local is_behind = forward_dot_dir < 0 and true or false
+							local is_under = marker_position.z < camera_position.z
+							local x, y = self:_convert_world_to_screen_position(camera, marker_position)
+							local pixel_offset = template.pixel_offset
 
-						if raycasts_allowed then
-							temp_marker_raycast_queue[#temp_marker_raycast_queue + 1] = marker
+							if pixel_offset then
+								x = x + pixel_offset[1]
+								y = y + pixel_offset[2]
+							end
+
+							local screen_x, screen_y = self:_get_screen_offset(scale)
+
+							x = x - screen_x
+							y = y - screen_y
+
+							local is_clamped, is_clamped_left, is_clamped_right, is_clamped_up, is_clamped_down =
+								false, false, false, false, false
+
+							if screen_clamp then
+								local clamped_x, clamped_y
+
+								clamped_x, clamped_y, is_clamped_left, is_clamped_right, is_clamped_up, is_clamped_down =
+									self:_clamp_to_screen(
+										x,
+										y,
+										screen_margins,
+										is_behind,
+										is_under,
+										marker_position,
+										camera_position_center,
+										camera_position_left,
+										camera_position_right,
+										camera_position_up,
+										camera_position_down
+									)
+								is_clamped = is_clamped_left or is_clamped_right or is_clamped_up or is_clamped_down
+								x = clamped_x
+								y = clamped_y
+							end
+
+							if not is_clamped then
+								if is_behind then
+									draw = false
+								elseif not is_inside_frustum then
+									local vertical_pixel_overlap, horizontal_pixel_overlap
+
+									if x < 0 then
+										horizontal_pixel_overlap = math.abs(x)
+									elseif x > root_size[1] then
+										horizontal_pixel_overlap = x - root_size[1]
+									end
+
+									if y < 0 then
+										vertical_pixel_overlap = math.abs(y)
+									elseif y > root_size[2] then
+										vertical_pixel_overlap = y - root_size[2]
+									end
+
+									if vertical_pixel_overlap or horizontal_pixel_overlap then
+										draw = false
+
+										local check_widget_visible = template.check_widget_visible
+
+										if check_widget_visible then
+											draw = check_widget_visible(
+												widget,
+												vertical_pixel_overlap,
+												horizontal_pixel_overlap
+											)
+										end
+									else
+										draw = false
+									end
+								end
+							elseif is_clamped_left or is_clamped_right then
+								if is_clamped_left then
+									angle = 0
+								elseif is_clamped_right then
+									angle = math.pi
+								end
+							elseif is_clamped_up then
+								angle = math.pi * 0.5
+							elseif is_clamped_down then
+								angle = -math.pi * 0.5
+							end
+
+							content.is_inside_frustum = is_inside_frustum
+							content.is_clamped = is_clamped
+							content.is_under = is_under
+							content.distance = distance
+							content.angle = angle
+							marker.is_inside_frustum = is_inside_frustum
+							marker.is_clamped = is_clamped
+							marker.is_under = is_under
+							marker.distance = distance
+							marker.angle = angle
+
+							local offset = widget.offset
+
+							offset[1] = x * inverse_scale
+							offset[2] = y * inverse_scale
+
+							marker.raycast_frame_count = (marker.raycast_frame_count or 0) + 1
+
+							if raycasts_allowed then
+								temp_marker_raycast_queue[#temp_marker_raycast_queue + 1] = marker
+							end
 						end
+
+						marker.draw = draw
 					end
 
-					marker.draw = draw
+					marker.update = update
 				end
-
-				marker.update = update
 			end
 		end
 
 		if raycasts_allowed then
 			self:_raycast_markers(temp_marker_raycast_queue)
+			table.clear(temp_marker_raycast_queue)
 		end
 
-		dbg_markers = markers_by_type
-
 		-- MARKERS AIO
-
 		for marker_type, markers in pairs(markers_by_type) do
 			for i = 1, #markers do
 				local marker = markers[i]
@@ -573,6 +865,17 @@ HudElementWorldMarkers._calculate_markers = function(self, dt, t, input_service,
 
 					if update_function then
 						update_function(self, ui_renderer, marker.widget, marker, template, dt, t)
+					end
+
+					-- Hide distance text on objective markers for decoder devices
+					if marker.type == "objective" and marker.widget then
+						local unit = marker.unit
+						if unit and Unit.alive(unit) then
+							local decoder_ext = ScriptUnit.has_extension(unit, "decoder_device_system")
+							if decoder_ext and decoder_ext:unit_is_enabled() and not decoder_ext:is_finished() then
+								marker.widget.content.text = ""
+							end
+						end
 					end
 
 					local fs = mod.frame_settings
@@ -594,33 +897,30 @@ HudElementWorldMarkers._calculate_markers = function(self, dt, t, input_service,
 					if fs.enable.heretical_idol then
 						mod.update_marker_icon(self, marker)
 					end
-					if fs.enable.tainted then
-						mod.update_TaintedDevices_markers(self, marker)
-					end
-					if fs.enable.tainted_skull then
-						mod.update_tainted_skull_markers(self, marker)
-					end
 					if fs.enable.luggable then
 						mod.update_luggable_markers(self, marker)
 					end
 					if fs.enable.martyrs_skull then
 						mod.update_martyrs_skull_markers(self, marker)
 					end
-					if fs.enable.rations then
-						mod.update_stolenrations_markers(self, marker)
-					end
-					if fs.enable.atonement then
-						mod.update_atonement_markers(self, marker)
-					end
 					if fs.enable.expedition then
 						mod.update_expedition_markers(self, marker)
 					end
-
+					if fs.enable.servo_skull and marker.type ~= "objective" and marker.type ~= "player_assistance" then
+						mod.update_servo_skull_markers(self, marker)
+					end
+					if fs.enable.event then
+						mod.update_tainted_skull_markers(self, marker)
+						mod.update_TaintedDevices_markers(self, marker)
+						mod.update_stolenrations_markers(self, marker)
+						mod.update_atonement_markers(self, marker)
+					end
 					-- Unknown markers will get subtle changes so they work with distance/occlusion and have same background colour
 					if not marker.markers_aio_type and fs.enable.unknown then
 						mod.update_unknown_markers(self, marker)
 					end
 
+					--[[
 					if marker.widget and marker.distance and not marker.markers_aio_type then
 						local template = marker.template
 						local max_distance = template and template.max_distance
@@ -631,7 +931,7 @@ HudElementWorldMarkers._calculate_markers = function(self, dt, t, input_service,
 
 							marker.widget.alpha_multiplier = (marker.widget.alpha_multiplier or 1) * dist_alpha
 						end
-					end
+					end]]
 
 					if marker.markers_aio_type then
 						mod.adjust_los_requirement(marker)
@@ -639,7 +939,62 @@ HudElementWorldMarkers._calculate_markers = function(self, dt, t, input_service,
 						mod.fade_icon_not_in_los(marker, ui_renderer)
 					end
 
-					mod.adjust_scale(self, marker, ui_renderer)
+					mod.adjust_scale(self, marker, ui_renderer, t)
+
+					-- apply marker distance text if enabled
+					local widget = marker.widget
+					if
+						marker.markers_aio_type
+						and widget.style.marker_distance_text
+						and widget.content.marker_distance_text ~= nil
+						and marker.distance
+						and widget.style.background
+						and widget.style.icon
+					then
+						-- adjust based on if the setting is on or not...
+						if fs.distance_text_enable then
+							widget.content.marker_distance_text = tostring(math.floor(marker.distance) .. "m")
+						else
+							widget.content.marker_distance_text = ""
+						end
+
+						local distance_text_pos = fs.distance_text_position
+						local distance_text_scale = fs.distance_text_scale / 100
+						widget.style.marker_distance_text.font_size = (widget.style.icon.size[2] / 2)
+							* distance_text_scale
+
+						if distance_text_pos == "Top" then
+							widget.style.marker_distance_text.offset[2] = -widget.style.background.size[2]
+								/ 2
+								* distance_text_scale
+							widget.style.marker_distance_text.offset[1] = 0
+						elseif distance_text_pos == "Left" then
+							widget.style.marker_distance_text.offset[1] = -widget.style.background.size[1]
+									/ 2
+									* distance_text_scale
+								- 8
+							widget.style.marker_distance_text.offset[2] = 0
+						elseif distance_text_pos == "Right" then
+							widget.style.marker_distance_text.offset[1] = widget.style.background.size[1]
+									/ 2
+									* distance_text_scale
+								+ 8
+							widget.style.marker_distance_text.offset[2] = 0
+						elseif distance_text_pos == "Center" then
+							widget.style.marker_distance_text.offset[2] = 0
+							widget.style.marker_distance_text.offset[1] = 0
+							widget.style.marker_distance_text.offset[3] = widget.style.ring.offset[3] + 1
+							widget.style.icon.color[1] = 150
+							widget.style.marker_distance_text.font_size = (widget.style.icon.size[2] / 2.4)
+								* distance_text_scale
+						else
+							-- default to  Bottom if errors/nil
+							widget.style.marker_distance_text.offset[2] = widget.style.background.size[2]
+								/ 2
+								* distance_text_scale
+							widget.style.marker_distance_text.offset[1] = 0
+						end
+					end
 				end
 			end
 		end
@@ -673,9 +1028,17 @@ HudElementInteraction._update_interactee_data = function(self, interactee_unit, 
 	local marker = nil
 
 	-- MARKERS AIO OVERRIDE
+	-- Keep markers alive for decoder devices as long as the device is enabled
+	-- and not finished, even while the skull is actively hacking (show_marker
+	-- returns false when the minigame is active). Use the decoder extension
+	-- directly instead of interaction_type since the interaction may change or
+	-- deactivate during the skull's hacking cycle.
+	local decoder_ext = ScriptUnit.has_extension(interactee_unit, "decoder_device_system")
+	local is_decoder_device = decoder_ext and decoder_ext:unit_is_enabled() and not decoder_ext:is_finished()
+
 	local max_spawn_distance_sq = 10000 -- 100m
 
-	if render_marker and camera_position then
+	if interactee_unit ~= player_unit and render_marker and camera_position then
 		local interactee_position = Unit.world_position(interactee_unit, 1)
 		local distance_sq = Vector3.distance_squared(interactee_position, camera_position)
 
@@ -697,7 +1060,7 @@ HudElementInteraction._update_interactee_data = function(self, interactee_unit, 
 
 			Managers.event:trigger("add_world_marker_unit", marker_type, interactee_unit, marker_callback, extension)
 		end
-	elseif interaction_units[interactee_unit] then
+	elseif interaction_units[interactee_unit] and not is_decoder_device then
 		local marker_id = interaction_units[interactee_unit].marker_id
 
 		if marker_id then
@@ -706,6 +1069,19 @@ HudElementInteraction._update_interactee_data = function(self, interactee_unit, 
 		end
 	end
 end
+mod.auspex_active = false
+mod:hook_safe(CLASS.AuspexEffects, "wield", function(self)
+	if self._is_husk then
+		return
+	end
+	mod.auspex_active = true
+end)
+mod:hook_safe(CLASS.AuspexEffects, "unwield", function(self)
+	if self._is_husk then
+		return
+	end
+	mod.auspex_active = false
+end)
 
 -- Fade out markers that are behind objects, depending on the set "los_opacity"
 mod.fade_icon_not_in_los = function(marker, ui_renderer)
@@ -719,19 +1095,13 @@ mod.fade_icon_not_in_los = function(marker, ui_renderer)
 	end
 
 	local fs = mod.frame_settings
-	local mod_alpha = mod:get(marker.markers_aio_type .. "_alpha")
-	local mod_max_distance = mod:get(marker.markers_aio_type .. "_max_distance")
+	local mod_alpha = mod:get(marker.markers_aio_type .. "_alpha") or 1
+	local mod_max_distance = mod:get(marker.markers_aio_type .. "_max_distance") or 30
 
-	-- Pinged markers are always fully visible
-	if widget.content and widget.content.tagged == true then
-		widget.alpha_multiplier = mod_alpha
-		return widget.alpha_multiplier
-	end
-
-	-- Health station exception
-	if marker.data and marker.data._active_interaction_type == "health_station" then
-		widget.alpha_multiplier = mod_alpha
-		return widget.alpha_multiplier
+	-- force increase max distance of marker if tagged
+	local is_tagged = marker.widget and marker.widget.content and marker.widget.content.tagged
+	if is_tagged then
+		mod_max_distance = 100
 	end
 
 	-- No raycast yet = assume blocked LOS
@@ -772,7 +1142,7 @@ mod.fade_icon_not_in_los = function(marker, ui_renderer)
 	------------------------------------------------
 	-- LOS logic
 	------------------------------------------------
-	local target_alpha = base_alpha
+	local target_alpha = base_alpha or 1
 
 	-- Apply ADS opacity globally (both LOS and non-LOS)
 	if fs.is_ads and (marker.raycast_result == false) then
@@ -792,6 +1162,10 @@ mod.fade_icon_not_in_los = function(marker, ui_renderer)
 		end
 	end
 
+	if mod.auspex_active then
+		target_alpha = 0.05
+	end
+
 	------------------------------------------------
 	-- Init + smoothing
 	------------------------------------------------
@@ -802,31 +1176,24 @@ mod.fade_icon_not_in_los = function(marker, ui_renderer)
 	return target_alpha
 end
 
-local function can_draw(marker)
-	return true
-end
-
 local do_draw = function(marker)
-	if can_draw(marker) then
-		marker.draw = true
-	else
-		marker.draw = false
-	end
+	marker.draw = true
 end
 
 local dont_draw = function(marker)
 	if not marker then
 		return
 	end
+	local mod_keep_on_screen = mod:get(marker.markers_aio_type .. "_keep_on_screen")
+	local is_tagged = marker.widget and marker.widget.content and marker.widget.content.tagged
 
-	-- Tagged markers still must respect transform readiness
-	if
-		marker.is_inside_frustum
-		and marker.widget
-		and marker.widget.content
-		and marker.widget.content.tagged == true
-		and can_draw(marker)
-	then
+	if marker.is_inside_frustum then
+		if is_tagged then
+			marker.draw = true
+		else
+			marker.draw = false
+		end
+	elseif is_tagged and mod_keep_on_screen then
 		marker.draw = true
 	else
 		marker.draw = false
@@ -839,42 +1206,28 @@ mod.adjust_los_requirement = function(marker)
 	end
 
 	local fs = mod.frame_settings
-	local mod_require_los = mod:get(marker.markers_aio_type .. "_require_line_of_sight")
-	local mod_keep_on_screen = mod:get(marker.markers_aio_type .. "_keep_on_screen")
-
-	-- Absolute health station override
-	if marker.data and marker.data._active_interaction_type == "health_station" then
-		if marker.is_inside_frustum then
-			do_draw(marker)
-		else
-			dont_draw(marker)
-		end
-		return
+	local mod_require_los = marker.aio_check_line_of_sight
+	if mod_require_los == nil then
+		mod_require_los = mod:get(marker.markers_aio_type .. "_require_line_of_sight")
 	end
+	local mod_keep_on_screen = mod:get(marker.markers_aio_type .. "_keep_on_screen")
+	local is_tagged = marker.widget and marker.widget.content and marker.widget.content.tagged
+	local is_blocked = not marker.raycast_result
 
 	if mod_require_los then
 		if marker.is_inside_frustum then
-			if marker.raycast_result == false then
+			if is_blocked or is_tagged then
 				do_draw(marker)
 			else
 				dont_draw(marker)
 			end
-		elseif marker.raycast_result == false and mod_keep_on_screen then
+		elseif (is_blocked and mod_keep_on_screen) or (is_tagged and mod_keep_on_screen) then
 			do_draw(marker)
 		else
 			dont_draw(marker)
 		end
 	else
-		if marker.is_inside_frustum or mod_keep_on_screen then
-			do_draw(marker)
-		else
-			dont_draw(marker)
-		end
-	end
-
-	-- Health station exception (cached distance)
-	if marker.data and marker.data._active_interaction_type == "health_station" then
-		if marker.is_inside_frustum and marker.distance and marker.distance < (fs.med_station_max_distance or 20) then
+		if (marker.is_inside_frustum or mod_keep_on_screen) or (marker.is_inside_frustum and is_tagged) then
 			do_draw(marker)
 		else
 			dont_draw(marker)
@@ -883,7 +1236,7 @@ mod.adjust_los_requirement = function(marker)
 end
 
 -- Adjust the scale of markers, according to their percentage scale setting.
-mod.adjust_scale = function(self, marker, ui_renderer)
+mod.adjust_scale = function(self, marker, ui_renderer, t)
 	marker.scale_original = marker.scale
 
 	local widget = marker.widget
@@ -900,12 +1253,21 @@ mod.adjust_scale = function(self, marker, ui_renderer)
 	local mod_scale = scale
 
 	if marker.markers_aio_type then
-		mod_scale = mod:get(marker.markers_aio_type .. "_scale") / 100
+		local mod_scale = mod:get(marker.markers_aio_type .. "_scale") or 100
+		mod_scale = mod_scale / 100
 		scale = mod_scale
 	end
 
 	marker.scale = self:_get_scale(scale_settings, distance)
 	local new_scale = marker.ignore_scale and 1 or marker.scale * scale
+
+	if marker.servo_skull_pulse and t then
+		local pulse_speed = 2
+		local pulse_amplitude = 0.2
+		local pulse = (math.sin(t * pulse_speed * math.pi * 2) + 1) / 2
+		new_scale = new_scale * (1 + pulse * pulse_amplitude)
+	end
+
 	marker.scale = new_scale
 
 	self:_apply_scale(widget, new_scale)
@@ -988,34 +1350,59 @@ end
 HudElementSmartTagging._is_marker_valid_for_tagging = function(self, player_unit, marker, distance)
 	local template = marker.template
 
-	if not template.using_smart_tag_system then
+	if template.using_smart_tag_system and not template.get_smart_tag_id then
 		return false
 	end
 
-	-- don't calculate if marker isnt even drawn lol
-	if not marker.draw then
-		return
-	end
-	-- don't allow if alpha is too low
-	if marker.widget and marker.widget.alpha_multiplier < 0.1 then
-		return
+	if not template.using_smart_tag_system then
+		local unit = marker.unit
+		if unit and Unit.alive(unit) then
+			local ie = ScriptUnit.has_extension(unit, "interactee_system")
+			if not (ie and ie:interaction_type() == "decoding") then
+				return false
+			end
+		else
+			return false
+		end
 	end
 
 	local marker_unit = marker.unit
 	local smart_tag_extension = marker_unit and ScriptUnit.has_extension(marker_unit, "smart_tag_system")
+	local tag_id = template.get_smart_tag_id and template.get_smart_tag_id(marker)
 
-	local aio_type = marker.markers_aio_type
-	if marker_unit and not smart_tag_extension then
-		return false
+	-- Allow AIO custom markers (chest, heretical idol, ammo/med, servo skull) without smart_tag_extension or tag_id
+	if marker_unit and not smart_tag_extension and not tag_id then
+		if marker.markers_aio_type then
+			-- AIO marker without native smart tag support: allow through, tag_id stays nil
+		else
+			-- Also allow hackable terminals (servo skull targets) even before markers_aio_type is set
+			local ie = ScriptUnit.has_extension(marker_unit, "interactee_system")
+			if not (ie and ie:interaction_type() == "decoding") then
+				return false
+			end
+		end
 	end
 
-	local tag_id = template.get_smart_tag_id(marker)
 	local in_line_of_sight = not marker.raycast_result
 
-	--if not tag_id and not in_line_of_sight then
-	--	mod:echo("not tag_id and not in_line_of_sight " .. tostring(aio_type))
-	--	return false
-	--end
+	-- For AIO markers, only require LOS if the per-marker/aio-type LOS setting says so.
+	-- Allows interaction prompts (and tagging) through walls when LOS is toggled off.
+	if not tag_id and not in_line_of_sight then
+		if marker.markers_aio_type then
+			local check_los = marker.aio_check_line_of_sight
+			if check_los == nil then
+				check_los = mod:get(marker.markers_aio_type .. "_require_line_of_sight")
+			end
+			if check_los ~= false then
+				return false
+			end
+		else
+			local ie = ScriptUnit.has_extension(marker_unit, "interactee_system")
+			if not (ie and ie:interaction_type() == "decoding") then
+				return false
+			end
+		end
+	end
 
 	if not marker.is_inside_frustum or marker.is_clamped then
 		return false
@@ -1030,6 +1417,241 @@ HudElementSmartTagging._is_marker_valid_for_tagging = function(self, player_unit
 
 		if max_distance and distance and max_distance <= distance then
 			return false
+		end
+	end
+
+	return true
+end
+
+HudElementSmartTagging._handle_selected_marker = function(self, marker)
+	local marker_template = marker.template
+	local tag_id = marker_template.get_smart_tag_id and marker_template.get_smart_tag_id(marker)
+	if tag_id then
+		self:_trigger_smart_tag_interaction(tag_id)
+	else
+		local marker_unit = marker.unit
+		if marker_unit then
+			self:_trigger_smart_tag_unit_contextual(marker_unit)
+		end
+	end
+end
+
+HudElementSmartTagging._handle_interaction_draw = function(self, dt, t, input_service, ui_renderer, render_settings)
+	local can_present_tag_interaction = self:_can_present_tag_interaction()
+
+	if not can_present_tag_interaction then
+		self._active_interaction_data = nil
+
+		return
+	end
+
+	if self._interaction_scan_delay_duration > 0 then
+		self._interaction_scan_delay_duration = self._interaction_scan_delay_duration - dt
+	else
+		local force_update_targets = false
+		local best_marker, best_unit, _ =
+			self:_find_best_smart_tag_interaction(ui_renderer, render_settings, force_update_targets)
+		local parent = self._parent
+		local player = parent:player()
+		local player_unit = player.player_unit
+		local smart_tag_system = Managers.state.extension:system("smart_tag_system")
+		local previous_active_interaction_data = self._active_interaction_data
+
+		if not best_marker and best_unit then
+			local marker = self:_find_marker_by_unit(best_unit)
+
+			best_marker = marker
+		end
+
+		if best_marker then
+			if not previous_active_interaction_data or previous_active_interaction_data.marker ~= best_marker then
+				local marker_id = best_marker.id
+				local smart_tag_presentation_data = self._presented_smart_tags_by_marker_id[marker_id]
+				local tag_id = smart_tag_presentation_data and smart_tag_presentation_data.tag_id
+				local tag_template, display_name
+
+				if tag_id then
+					local tag = smart_tag_system:tag_by_id(tag_id)
+
+					if tag then
+						display_name = tag:display_name()
+						tag_template = tag:template()
+					end
+				end
+
+				-- Treat "n/a" as unresolved (common for custom markers with game tags that lack proper display_name)
+				if display_name == "n/a" then
+					display_name = nil
+				end
+
+				if not display_name then
+					local marker_unit = best_marker.unit
+					local smart_tag_extension = marker_unit
+						and ScriptUnit.has_extension(marker_unit, "smart_tag_system")
+
+					if smart_tag_extension then
+						tag_template = smart_tag_extension:contextual_tag_template(player_unit)
+						display_name = smart_tag_extension:display_name(player_unit)
+					elseif best_marker.markers_aio_type then
+						local aio_type = best_marker.markers_aio_type
+
+						if aio_type == "chest" then
+							display_name = mod:localize("mod_marker_chest_name")
+						elseif aio_type == "ammo_med" then
+							if best_marker.data and best_marker.data._active_interaction_type == "health_station" then
+								display_name = mod:localize("mod_marker_medicae_station_name")
+							else
+								display_name = mod:localize("mod_marker_item_name")
+							end
+						elseif aio_type == "heretical_idol" then
+							display_name = mod:localize("mod_marker_heretical_idol_name")
+						elseif aio_type == "stimm" then
+							local pickup_type = mod.get_marker_pickup_type(best_marker)
+								or (best_marker.data and best_marker.data.type)
+
+							if pickup_type == "syringe_power_boost_pocketable" then
+								display_name = mod:localize("mod_marker_power_stimm_name")
+							elseif pickup_type == "syringe_speed_boost_pocketable" then
+								display_name = mod:localize("mod_marker_speed_stimm_name")
+							elseif pickup_type == "syringe_ability_boost_pocketable" then
+								display_name = mod:localize("mod_marker_boost_stimm_name")
+							elseif pickup_type == "syringe_corruption_pocketable" then
+								display_name = mod:localize("mod_marker_medic_stimm_name")
+							elseif pickup_type == "syringe_broker_pocketable" then
+								display_name = mod:localize("mod_marker_broker_stimm_name")
+							else
+								display_name = mod:localize("mod_marker_stimm_name")
+							end
+						elseif aio_type == "martyrs_skull" then
+							display_name = best_marker.guide_step_text or mod:localize("mod_marker_item_name")
+						elseif aio_type == "tome" then
+							display_name = mod:localize("mod_marker_tome_name")
+						elseif aio_type == "material" then
+							display_name = mod:localize("mod_marker_material_name")
+						elseif aio_type == "luggable" then
+							display_name = mod:localize("mod_marker_luggable_name")
+						elseif aio_type == "expedition" then
+							display_name = mod:localize("mod_marker_expedition_name")
+						elseif aio_type == "event" then
+							display_name = mod:localize("mod_marker_event_name")
+						elseif aio_type == "servo_skull" then
+							display_name = mod:localize("mod_marker_servo_skull_name")
+						elseif aio_type == "unknown" then
+							display_name = mod:localize("mod_marker_unknown_name")
+						else
+							display_name = mod:localize("mod_marker_item_name")
+						end
+
+						tag_template = {}
+					end
+				end
+
+				if not display_name then
+					display_name = "Item"
+				end
+
+				self._active_interaction_data = {
+					display_name = display_name,
+					intro_anim_duration = 0.2,
+					intro_anim_progress = 0,
+					intro_anim_time = 0,
+					marker = best_marker,
+					marker_id = best_marker.id,
+					tag_id = tag_id,
+					tag_template = tag_template,
+					unit = best_unit or best_marker.unit,
+				}
+			end
+		else
+			self._active_interaction_data = nil
+		end
+
+		self._interaction_scan_delay_duration = self._interaction_scan_delay
+	end
+
+	self:_update_tags_interaction_hover_status()
+
+	local active_interaction_data = self._active_interaction_data
+	local marker = active_interaction_data and active_interaction_data.marker
+
+	if marker and marker.deleted then
+		self._active_interaction_data = nil
+	elseif marker then
+		self:_update_tag_interaction_information(active_interaction_data)
+		self:_update_tag_interaction_animation(dt, t)
+		self:_draw_active_interaction_line(dt, t, input_service, ui_renderer, render_settings)
+	end
+end
+
+-- Override widget text after base game's _update_tag_interaction_information to avoid
+-- "unlocalized" errors. The base game re-localizes display_name through Localize(),
+-- but our AIO marker names are resolved strings that aren't valid localization keys.
+-- Only override when display_name is a mod-resolved string (doesn't start with "loc_");
+-- game localization keys are already properly resolved by Localize() in the base function.
+mod:hook_safe(HudElementSmartTagging, "_update_tag_interaction_information", function(self, data)
+	if data and data.marker then
+		local widget = self._interaction_line_widget
+		if widget and widget.content then
+			if data.marker.guide_step_text then
+				widget.content.description_text = data.marker.guide_step_text
+			elseif data.marker.markers_aio_type and data.display_name then
+				if not string.find(data.display_name, "^loc_") then
+					widget.content.description_text = data.display_name
+				end
+			end
+			-- Set word wrap and max width on description text so long guide text wraps
+			local style = widget.style and widget.style.description_text
+
+			if style and not style.word_wrap then
+				style.size = { 500, 100 }
+				style.word_wrap = true
+			end
+
+			if not data.tag_template or data.tag_template == {} or not data.tag_template.name then
+				widget.content.input_text = ""
+			end
+		end
+	end
+end)
+
+HudElementSmartTagging._can_present_tag_interaction = function(self)
+	local parent = self._parent
+	local player = parent:player()
+
+	if not player then
+		return false
+	end
+
+	local player_unit = player.player_unit
+
+	if not ALIVE[player_unit] then
+		return false
+	end
+
+	local interactor_extension = ScriptUnit.has_extension(player_unit, "interactor_system")
+
+	if interactor_extension then
+		local interactee_unit = interactor_extension:target_unit()
+		local focus_unit = interactor_extension:focus_unit()
+
+		if ALIVE[focus_unit] and interactor_extension:hud_block_text() then
+			return false
+		end
+
+		if ALIVE[interactee_unit] and interactor_extension:can_interact(interactee_unit) then
+			if ScriptUnit.has_extension(interactee_unit, "smart_tag_system") then
+				if self._world_markers_list then
+					for i = 1, #self._world_markers_list do
+						local marker = self._world_markers_list[i]
+
+						if marker.unit == interactee_unit and marker.markers_aio_type then
+							return true
+						end
+					end
+				end
+
+				return false
+			end
 		end
 	end
 
@@ -1060,12 +1682,8 @@ mod.tome_toggle_los = function()
 	mod.toggle_los("tome")
 end
 
-mod.tainted_toggle_los = function()
-	mod.toggle_los("tainted")
-end
-
-mod.tainted_skull_toggle_los = function()
-	mod.toggle_los("tainted_skull")
+mod.event_toggle_los = function()
+	mod.toggle_los("event")
 end
 
 mod.luggable_toggle_los = function()
@@ -1074,6 +1692,10 @@ end
 
 mod.martyrs_skull_toggle_los = function()
 	mod.toggle_los("martyrs_skull")
+end
+
+mod.servo_skull_toggle_los = function()
+	mod.toggle_los("servo_skull")
 end
 
 mod.toggle_los = function(marker_type)
@@ -1085,3 +1707,140 @@ mod.toggle_los = function(marker_type)
 		end
 	end
 end
+
+-- UPDATE COLOURS IN SETTINGS PAGE IN REAL TIME (OH YES)
+mod.on_setting_changed = function(setting_id)
+	if not setting_id then
+		return
+	end
+
+	if setting_id == "martyrs_skull_guide_x_offset" or setting_id == "martyrs_skull_guide_y_offset" then
+		local hud = Managers.ui and Managers.ui:get_hud()
+		if not hud then
+			return
+		end
+		local element = hud._elements and hud._elements["MartyrsSkullGuideElement"]
+		if element then
+			element:set_guide_offset(
+				mod:get("martyrs_skull_guide_x_offset") or 0,
+				mod:get("martyrs_skull_guide_y_offset") or 0
+			)
+		end
+		return
+	end
+
+	-- Only trigger for color settings
+	if
+		string.find(setting_id, "_colour_R")
+		or string.find(setting_id, "_colour_G")
+		or string.find(setting_id, "_colour_B")
+	then
+		local dmf = get_mod("DMF")
+		local mod_name = mod:get_name()
+
+		-- extract base key (e.g. "marker_colour")
+		local base_key = string.gsub(setting_id, "_R$", "")
+		base_key = string.gsub(base_key, "_G$", "")
+		base_key = string.gsub(base_key, "_B$", "")
+
+		local old_title = mod:localize(base_key)
+		local new_title = nil
+
+		-- Recompute localization table
+		local updated_localization = mod.apply_colours()
+
+		-- GET CURRENT UPDATED VALUE FROM UPDATED_LOCALIZATION
+		for id, data in pairs(updated_localization) do
+			if id == base_key then
+				local lang = Managers.localization:language()
+				local text = data[lang] or data.en
+
+				new_title = text
+			end
+		end
+
+		if not new_title then
+			return
+		end
+
+		-- OVERRIDE CURRENT DISPLAYED TEXT VALUES ON THE SETTINGS PAGES IN DMF
+		for i, mod_data in ipairs(dmf.options_widgets_data) do
+			if mod_data[1] and mod_data[1].mod_name == mod_name then
+				for j = 1, #mod_data do
+					if mod_data[j].setting_id == base_key then
+						mod_data[j].title = new_title
+						break
+					end
+				end
+			end
+		end
+
+		local view = Managers.ui:view_instance("dmf_options_view")
+
+		if view and view._settings_category_widgets and view._settings_category_widgets[mod:localize("mod_name")] then
+			for _, data in ipairs(view._settings_category_widgets[mod:localize("mod_name")]) do
+				local widget = data.widget
+				if not widget or not widget.content.text then
+					break
+				end
+
+				local clean = string.gsub(new_title, "{#.-}", "")
+				local clean2 = string.gsub(widget.content.text, "{#.-}", "")
+
+				if clean == clean2 then
+					if widget.content.entry then
+						widget.content.entry.display_name = new_title
+					end
+					widget.content.text = new_title
+					break
+				end
+			end
+		end
+	end
+end
+
+-- save scroll position
+-- Author: Alfthebigheaded
+local last_scroll_amount = 0
+local last_category = nil
+
+local function is_my_category(self)
+	return self._selected_category == mod:localize("mod_name")
+		or self._selected_category == mod:localize("mod_name_pizazz")
+end
+
+mod:hook_safe(CLASS.BaseView, "on_exit", function(self)
+	last_category = nil
+end)
+
+mod:hook_safe(CLASS.BaseView, "update", function(self)
+	if self.view_name ~= "dmf_options_view" then
+		return
+	end
+
+	local grid = self._navigation_grids
+	if not (grid and grid[2] and grid[2]._scrollbar_widget) then
+		return
+	end
+
+	local scrollbar_widget = grid[2]._scrollbar_widget
+	local current_category = self._selected_category
+	local in_my_category = is_my_category(self)
+
+	--  Detect category switch into my mod
+	if in_my_category and (last_category ~= current_category or last_category == nil) then
+		scrollbar_widget.content.scroll_value = last_scroll_amount
+		scrollbar_widget.content.value = last_scroll_amount
+	end
+
+	--  Always track scroll while inside my mod
+	if in_my_category then
+		if grid[2]._scroll_progress and last_scroll_amount ~= grid[2]._scroll_progress then
+			last_scroll_amount = grid[2]._scroll_progress
+		end
+	end
+
+	last_category = current_category
+end)
+
+mod._needs_totem_scan = true

@@ -70,10 +70,12 @@ end
 mod.update_chest_markers = function(self, marker)
 	local max_distance = get_max_distance()
 
-	for _, chest in pairs(mod.active_chests) do
-		if chest and chest._current_state ~= "closed" then
-			mod.remove_chest_markers(chest._unit, self._markers)
-			mod.active_chests[_] = nil
+	for chest_unit, chest in pairs(mod.active_chests) do
+		if not Unit.alive(chest_unit) or (chest and chest._current_state ~= "closed") then
+			if chest then
+				mod.remove_chest_markers(chest._unit, self._markers)
+			end
+			mod.active_chests[chest_unit] = nil
 		end
 	end
 
@@ -199,16 +201,8 @@ mod.update_chest_markers = function(self, marker)
 
 			marker.markers_aio_type = "chest"
 
-			marker.widget.style.ring.color = mod.lookup_colour(mod:get("chest_border_colour"))
-
-			marker.widget.style.icon.color = {
-				255,
-				95,
-				158,
-				160,
-			}
-			marker.widget.style.background.color = mod.lookup_colour(mod:get("marker_background_colour"))
-
+			mod.set_colour(marker.widget.style.ring.color, mod.lookup_colour(mod:get("chest_border_colour")))
+			mod.set_colour(marker.widget.style.background.color, mod.lookup_colour(mod:get("marker_background_colour")))
 			marker.template.screen_clamp = mod:get("chest_keep_on_screen")
 			marker.block_screen_clamp = false
 
@@ -234,12 +228,14 @@ mod.update_chest_markers = function(self, marker)
 				self.fade_settings.distance_min = max_distance - self.evolve_distance * 2
 			end
 
-			marker.widget.style.icon.color = {
+			mod.set_colour_argb(
+				marker.widget.style.icon.color,
 				255,
 				mod:get("chest_icon_colour_R"),
 				mod:get("chest_icon_colour_G"),
-				mod:get("chest_icon_colour_B"),
-			}
+				mod:get("chest_icon_colour_B")
+			)
+
 			marker.widget.content.icon = mod:get("chest_icon")
 		end
 	end

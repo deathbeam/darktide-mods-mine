@@ -13,7 +13,7 @@ local icon_size = { max_size_value / 2, max_size_value / 2 }
 local background_size = { max_size_value, max_size_value }
 local line_size = { 250, 5 }
 local bar_size = { 210, 10 }
-local scale_fraction = 1
+local scale_fraction = 0.75
 
 template.size = size
 template.name = "med_marker"
@@ -27,16 +27,13 @@ template.check_line_of_sight = mod:get("ammo_med_require_line_of_sight")
 template.screen_clamp = mod:get("ammo_med_keep_on_screen")
 
 template.evolve_distance = 1
-template.max_distance = 15
+template.max_distance = 20
 
 template.data = { type = "medical_crate_deployable" }
 
 template.scale = 1
 
 template.line_of_sight_speed = 15
-
-template.min_size = { size[1] * scale_fraction, size[2] * scale_fraction }
-template.max_size = { size[1], size[2] }
 
 template.min_size = { size[1] * scale_fraction, size[2] * scale_fraction }
 template.max_size = { size[1], size[2] }
@@ -62,9 +59,25 @@ template.ping_max_size = { ping_size[1], ping_size[2] }
 template.position_offset = { 0, 0, 1 }
 template.screen_margins = { down = 0.23148148148148148, left = 0.234375, right = 0.234375, up = 0.23148148148148148 }
 
+template.using_smart_tag_system = true
+
+template.get_smart_tag_id = function(marker)
+	local marker_unit = marker.unit
+
+	if marker_unit then
+		local extension = ScriptUnit.extension(marker_unit, "smart_tag_system")
+
+		if extension and extension.get_smart_tag_id then
+			return extension:get_smart_tag_id()
+		end
+	end
+
+	return nil
+end
+
 template.scale_settings = {
 	scale_from = 0.4,
-	scale_to = 1,
+	scale_to = 0.9,
 	distance_max = template.max_distance,
 	distance_min = template.evolve_distance,
 	easing_function = math.easeCubic,
@@ -94,6 +107,7 @@ template.create_widget_defintion = function(template, scenegraph_id)
 	title_text_style.text_color = Color.ui_hud_green_super_light(255, true)
 	title_text_style.text_horizontal_alignment = "center"
 	title_text_style.text_vertical_alignment = "center"
+	title_text_style.font_type = mod:get("font_type")
 
 	return UIWidget.create_definition({
 		{
@@ -211,7 +225,7 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				},
 			},
 			visibility_function = function(content, style)
-				return content.icon ~= nil
+				return content.field_improv ~= nil and content.field_improv ~= ""
 			end,
 		},
 	}, scenegraph_id)
@@ -246,6 +260,11 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 	marker.ignore_scale = false
 	local global_scale = marker.ignore_scale and 1 or marker.scale
 
+	local check_los = marker.aio_check_line_of_sight
+	if check_los == nil then
+		check_los = template.check_line_of_sight
+	end
+
 	if marker.raycast_initialized then
 		local raycast_result = marker.raycast_result
 		local line_of_sight_speed = 8
@@ -255,16 +274,12 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 		else
 			line_of_sight_progress = math.min(line_of_sight_progress + dt * line_of_sight_speed, 1)
 		end
-	elseif not template.check_line_of_sight then
+	elseif not check_los then
 		line_of_sight_progress = 1
 	end
 
 	local default_size = template.min_size
 	local max_size = template.max_size
-	local ring_size = style.ring.size
-
-	ring_size[1] = (default_size[1] + (max_size[1] - default_size[1])) * marker.scale
-	ring_size[2] = (default_size[2] + (max_size[2] - default_size[2])) * marker.scale
 
 	local ping_min_size = template.ping_min_size
 	local ping_max_size = template.ping_max_size
@@ -273,14 +288,6 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 	local ping_speed = 7
 	local ping_anim_progress = 0.5 + math.sin(Application.time_since_launch() * ping_speed) * 0.5
 	local ping_pulse_size_increase = ping_anim_progress * 15
-
-	ping_size[1] = (ping_min_size[1] + (ping_max_size[1] - ping_min_size[1]) + ping_pulse_size_increase) * marker.scale
-	ping_size[2] = (ping_min_size[2] + (ping_max_size[2] - ping_min_size[2]) + ping_pulse_size_increase) * marker.scale
-
-	local ping_pivot = ping_style.pivot
-
-	ping_pivot[1] = ping_size[1] * 0.5
-	ping_pivot[2] = ping_size[2] * 0.5
 
 	-- icon & background scaling
 	local icon_max_size = template.icon_max_size
@@ -301,15 +308,28 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 	icon_style_size[2] = i_sy * marker.scale
 	field_improv_style_size[1] = i_sx * marker.scale
 	field_improv_style_size[2] = i_sy * marker.scale
-	field_improv_style_offset[1] = 45 * marker.scale
+	field_improv_style_offset[1] = 50 * marker.scale
 
 	local b_sx = background_min_size[1] + (background_max_size[1] - background_min_size[1]) * scale_progress
 	local b_sy = background_min_size[2] + (background_max_size[2] - background_min_size[2]) * scale_progress
 	bg_style_size[1] = b_sx * marker.scale
 	bg_style_size[2] = b_sy * marker.scale
 
-	style.marker_text.font_size = 18 * marker.scale
-	style.marker_text.default_font_size = 18 * marker.scale
+	local ring_size = style.ring.size
+
+	ring_size[1] = b_sx * marker.scale
+	ring_size[2] = b_sy * marker.scale
+
+	ping_size[1] = (b_sx + ping_pulse_size_increase) * marker.scale
+	ping_size[2] = (b_sy + ping_pulse_size_increase) * marker.scale
+
+	local ping_pivot = ping_style.pivot
+
+	ping_pivot[1] = ping_size[1] * 0.5
+	ping_pivot[2] = ping_size[2] * 0.5
+
+	style.marker_text.font_size = 16 * marker.scale
+	style.marker_text.default_font_size = 16 * marker.scale
 
 	local animating = (scale_progress ~= content.scale_progress)
 
@@ -321,6 +341,15 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 	if data then
 		data.distance = distance
 	end
+
+	local smart_tag_system = Managers.state.extension:system("smart_tag_system")
+	local marker_unit = marker.unit
+	local is_tagged = marker_unit and smart_tag_system:unit_tag_id(marker_unit) ~= nil
+
+	content.tagged = is_tagged
+	marker.block_fade_settings = is_tagged
+	marker.block_max_distance = is_tagged
+	marker.block_screen_clamp = not is_tagged
 
 	return animating
 end
