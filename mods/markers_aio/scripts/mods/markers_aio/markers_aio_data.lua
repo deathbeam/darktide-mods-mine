@@ -71,6 +71,29 @@ local luggable_icons = {
 	},
 }
 
+local player_assistance_icons = {
+	{
+		text = "Help",
+		value = "content/ui/materials/hud/interactions/icons/help",
+		icon = "content/ui/materials/hud/interactions/icons/help",
+	},
+	{
+		text = "Medkit",
+		value = "content/ui/materials/hud/interactions/icons/pocketable_medkit",
+		icon = "content/ui/materials/hud/interactions/icons/pocketable_medkit",
+	},
+	{
+		text = "Respawn",
+		value = "content/ui/materials/hud/interactions/icons/respawn",
+		icon = "content/ui/materials/hud/interactions/icons/respawn",
+	},
+	{
+		text = "Stimm",
+		value = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_stimmed_minions",
+		icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_stimmed_minions",
+	},
+}
+
 local servo_skull_icons = {
 	{
 		text = "Terminal",
@@ -157,7 +180,7 @@ return {
 			{
 				setting_id = "aio_settings",
 				type = "group",
-				tab = "General",
+				tab = mod:localize("tab_general"),
 				sub_widgets = {
 					{
 						setting_id = "mod_name_pizazz_toggle",
@@ -230,7 +253,7 @@ return {
 
 				setting_id = "ammo_med_markers_settings",
 				type = "group",
-				tab = "Ammo & Med",
+				tab = mod:localize("tab_ammo_med"),
 				sub_widgets = {
 					{
 						setting_id = "ammo_med_enable",
@@ -575,7 +598,7 @@ return {
 
 				setting_id = "chest_markers_settings",
 				type = "group",
-				tab = "Chests",
+				tab = mod:localize("tab_chests"),
 				sub_widgets = {
 					{
 						setting_id = "chest_enable",
@@ -682,7 +705,7 @@ return {
 
 				setting_id = "heretical_idol_markers_settings",
 				type = "group",
-				tab = "Heretical Idol",
+				tab = mod:localize("tab_heretical_idol"),
 				sub_widgets = {
 					{
 						setting_id = "heretical_idol_enable",
@@ -784,7 +807,7 @@ return {
 
 				setting_id = "material_markers_settings",
 				type = "group",
-				tab = "Materials",
+				tab = mod:localize("tab_materials"),
 				sub_widgets = {
 					{
 						setting_id = "material_enable",
@@ -947,7 +970,7 @@ return {
 
 				setting_id = "stimm_markers_settings",
 				type = "group",
-				tab = "Stimms",
+				tab = mod:localize("tab_stimms"),
 				sub_widgets = {
 					{
 						setting_id = "stimm_enable",
@@ -1247,7 +1270,7 @@ return {
 
 				setting_id = "tome_markers_settings",
 				type = "group",
-				tab = "Tomes",
+				tab = mod:localize("tab_tomes"),
 				sub_widgets = {
 					{
 						setting_id = "tome_enable",
@@ -1377,7 +1400,7 @@ return {
 
 				setting_id = "luggable_markers_settings",
 				type = "group",
-				tab = "Luggables",
+				tab = mod:localize("tab_luggables"),
 				sub_widgets = {
 					{
 						setting_id = "luggable_enable",
@@ -1484,7 +1507,7 @@ return {
 
 				setting_id = "martyrs_skull_markers_settings",
 				type = "group",
-				tab = "Martyr's Skull",
+				tab = mod:localize("tab_martyrs_skull"),
 				sub_widgets = {
 					{
 						setting_id = "martyrs_skull_enable",
@@ -1618,7 +1641,7 @@ return {
 
 				setting_id = "expedition_markers_settings",
 				type = "group",
-				tab = "Expedition",
+				tab = mod:localize("tab_expedition"),
 				sub_widgets = {
 					{
 						setting_id = "expedition_enable",
@@ -1889,7 +1912,7 @@ return {
 
 				setting_id = "event_markers_settings",
 				type = "group",
-				tab = "Event",
+				tab = mod:localize("tab_event"),
 				sub_widgets = {
 					{
 						setting_id = "event_enable",
@@ -1987,7 +2010,7 @@ return {
 			{
 				setting_id = "servo_skull_settings",
 				type = "group",
-				tab = "Servo Skull/Assistance",
+				tab = mod:localize("tab_decoding"),
 				sub_widgets = {
 					{
 						setting_id = "servo_skull_enable",
@@ -2062,12 +2085,7 @@ return {
 						default_value = true,
 						tooltip = "pulse_when_stalled_tooltip",
 					},
-					{
-						setting_id = "servo_skull_enable_assistance_module",
-						type = "checkbox",
-						default_value = true,
-						tooltip = "servo_skull_enable_assistance_module_tooltip",
-					},
+
 					{
 						setting_id = "servo_skull_default_colour",
 						type = "group",
@@ -2181,12 +2199,205 @@ return {
 					},
 				},
 			},
+			-- PLAYER ASSISTANCE MARKERS
+			{
+				setting_id = "player_assistance_settings",
+				type = "group",
+				tab = mod:localize("tab_player_assistance"),
+				sub_widgets = {
+					{
+						setting_id = "player_assistance_enable",
+						type = "checkbox",
+						default_value = true,
+						tooltip = "enable_tooltip",
+					},
+					{
+						setting_id = "player_assistance_servo_skull_icon",
+						type = "dropdown",
+						options = servo_skull_icons,
+						default_value = "content/ui/materials/backgrounds/scanner/scanner_decoration_skull",
+						tooltip = "icon_tooltip",
+					},
+					{
+						setting_id = "player_assistance_icon",
+						type = "dropdown",
+						options = player_assistance_icons,
+						default_value = "content/ui/materials/hud/interactions/icons/help",
+						tooltip = "icon_tooltip",
+					},
+					{
+						setting_id = "player_assistance_keep_on_screen",
+						type = "checkbox",
+						default_value = false,
+						tooltip = "keep_on_screen_tooltip",
+					},
+					{
+						setting_id = "player_assistance_require_line_of_sight",
+						type = "checkbox",
+						default_value = true,
+						tooltip = "require_line_of_sight_tooltip",
+					},
+					{
+						setting_id = "player_assistance_toggle_los",
+						type = "keybind",
+						function_name = "player_assistance_toggle_los",
+						default_value = {},
+						keybind_global = true,
+						keybind_trigger = "pressed",
+						keybind_type = "function_call",
+						tooltip = "toggle_los_tooltip",
+					},
+					{
+						setting_id = "player_assistance_max_distance",
+						type = "numeric",
+						default_value = 50,
+						range = { 0, 100 },
+						step_size_value = 1,
+						tooltip = "max_distance_tooltip",
+					},
+					{
+						setting_id = "player_assistance_scale",
+						type = "numeric",
+						default_value = 100,
+						range = { 50, 150 },
+						step_size_value = 1,
+						tooltip = "scale_tooltip",
+					},
+					{
+						setting_id = "player_assistance_alpha",
+						type = "numeric",
+						default_value = 1,
+						range = { 0.1, 1 },
+						decimals_number = 2,
+						step_size_value = 0.05,
+						tooltip = "alpha_tooltip",
+					},
+					{
+						setting_id = "player_assistance_pulse_when_stalled",
+						type = "checkbox",
+						default_value = true,
+						tooltip = "pulse_when_stalled_tooltip",
+					},
+
+					{
+						setting_id = "player_assistance_default_colour",
+						type = "group",
+						sub_widgets = {
+							{
+								setting_id = "player_assistance_default_colour_R",
+								type = "numeric",
+								default_value = 255,
+								range = { 0, 255 },
+								step_size_value = 1,
+								tooltip = "colour_R_tooltip",
+							},
+							{
+								setting_id = "player_assistance_default_colour_G",
+								type = "numeric",
+								default_value = 255,
+								range = { 0, 255 },
+								step_size_value = 1,
+								tooltip = "colour_G_tooltip",
+							},
+							{
+								setting_id = "player_assistance_default_colour_B",
+								type = "numeric",
+								default_value = 255,
+								range = { 0, 255 },
+								step_size_value = 1,
+								tooltip = "colour_B_tooltip",
+							},
+						},
+					},
+					{
+						setting_id = "player_assistance_stalled_colour",
+						type = "group",
+						sub_widgets = {
+							{
+								setting_id = "player_assistance_stalled_colour_R",
+								type = "numeric",
+								default_value = 255,
+								range = { 0, 255 },
+								step_size_value = 1,
+								tooltip = "colour_R_tooltip",
+							},
+							{
+								setting_id = "player_assistance_stalled_colour_G",
+								type = "numeric",
+								default_value = 200,
+								range = { 0, 255 },
+								step_size_value = 1,
+								tooltip = "colour_G_tooltip",
+							},
+							{
+								setting_id = "player_assistance_stalled_colour_B",
+								type = "numeric",
+								default_value = 0,
+								range = { 0, 255 },
+								step_size_value = 1,
+								tooltip = "colour_B_tooltip",
+							},
+						},
+					},
+					{
+						setting_id = "player_assistance_active_colour",
+						type = "group",
+						sub_widgets = {
+							{
+								setting_id = "player_assistance_active_colour_R",
+								type = "numeric",
+								default_value = 0,
+								range = { 0, 255 },
+								step_size_value = 1,
+								tooltip = "colour_R_tooltip",
+							},
+							{
+								setting_id = "player_assistance_active_colour_G",
+								type = "numeric",
+								default_value = 255,
+								range = { 0, 255 },
+								step_size_value = 1,
+								tooltip = "colour_G_tooltip",
+							},
+							{
+								setting_id = "player_assistance_active_colour_B",
+								type = "numeric",
+								default_value = 50,
+								range = { 0, 255 },
+								step_size_value = 1,
+								tooltip = "colour_B_tooltip",
+							},
+						},
+					},
+					{
+						setting_id = "player_assistance_border_colour",
+						type = "dropdown",
+						options = border_colours,
+						default_value = "Steel",
+						tooltip = "border_colour_tooltip",
+					},
+					{
+						setting_id = "player_assistance_stalled_border_colour",
+						type = "dropdown",
+						options = border_colours,
+						default_value = "Tarnished",
+						tooltip = "border_colour_tooltip",
+					},
+					{
+						setting_id = "player_assistance_active_border_colour",
+						type = "dropdown",
+						options = border_colours,
+						default_value = "Gold",
+						tooltip = "border_colour_tooltip",
+					},
+				},
+			},
 			-- UNKNOWN
 			{
 
 				setting_id = "unknown_markers_settings",
 				type = "group",
-				tab = "Unknown",
+				tab = mod:localize("tab_unknown"),
 				sub_widgets = {
 					{
 						setting_id = "unknown_enable",
