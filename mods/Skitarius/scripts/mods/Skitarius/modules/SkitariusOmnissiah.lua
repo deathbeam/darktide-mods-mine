@@ -518,11 +518,9 @@ SkitariusOmnissiah.action_to_step = function(self, action_name)
     local engram = self.engram
     local weapon_name = weapon_manager:weapon_name()
     local weapon_type = weapon_manager:weapon_type()
-
     if not (string.find(action_name, "push") or string.find(action_name, "find")) then
         weapon_manager:set_pushing(false)
     end
-
     -- MELEE
     if string.find(action_name, "start") and (not string.find(action_name, "start_special") or string.find(weapon_name, "combatsword_p2")) then
         return "start_attack"
@@ -532,6 +530,9 @@ SkitariusOmnissiah.action_to_step = function(self, action_name)
         elseif action_name == "action_attack_special_2" and string.find(weapon_name, "combatsword_p2") then
             return "light_attack"
         elseif string.find(action_name, "pushfollow") then
+            if string.find(action_name, "light") then -- jank to fix the abomination that is "action_light_pushfollow_special_combo"
+                return "light_attack"
+            end
             return "push_follow_up"
         elseif string.find(action_name, "light") and not string.find(action_name, "flashlight") and not string.find(weapon_name, "powermaul_p2") then
             return "light_attack"
@@ -540,13 +541,13 @@ SkitariusOmnissiah.action_to_step = function(self, action_name)
         else
             return "special_action"
         end
+    elseif string.find(action_name, "light") then
+        return "light_attack"
     elseif string.find(action_name, "pushfollow") or string.find(action_name, "fling") then
         return "push_follow_up"
     elseif string.find(action_name, "push") or string.find(action_name, "find") then
         weapon_manager:set_pushing(true)
         return "push"
-    elseif string.find(action_name, "light") then
-        return "light_attack"
     elseif string.find(action_name, "swing") and string.find(weapon_name, "gauntlet") then
             return "light_attack"
     elseif string.find(action_name, "heavy") or string.find(action_name, "special_2") then
