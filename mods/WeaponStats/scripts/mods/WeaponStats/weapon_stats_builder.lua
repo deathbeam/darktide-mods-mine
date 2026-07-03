@@ -3,6 +3,7 @@ local mod = get_mod('WeaponStats')
 local WeaponTemplate = mod:original_require('scripts/utilities/weapon/weapon_template')
 local Weapon = mod:original_require('scripts/extension_systems/weapon/weapon')
 local Action = mod:original_require('scripts/utilities/action/action')
+local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/weapon/utilities/weapon_tweak_templates')
 local ArmorSettings = mod:original_require('scripts/settings/damage/armor_settings')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 
@@ -65,6 +66,22 @@ local function fmt_mult(n)
     return string.format('%.2fx', n)
 end
 
+-- Resolve the per-action weapon-handling template. The built weapon_handling table is keyed by
+-- a per-action identifier from get_template_identifiers, NOT the raw weapon_handling_template name
+-- -- so we must use that helper (matching the game's weapon_stats.lua).
+local function handling_template_for_action(weapon_template, weapon_tweak_templates, action_name)
+    local handling = weapon_tweak_templates and weapon_tweak_templates.weapon_handling
+    if not handling or not weapon_template or not action_name then
+        return nil
+    end
+    local ok, _, identifier =
+        pcall(WeaponTweakTemplates.get_template_identifiers, weapon_template, 'weapon_handling', action_name)
+    if not ok or not identifier then
+        return nil
+    end
+    return handling[identifier]
+end
+
 -- Profile extraction ------------------------------------------------------
 
 -- Resolve a template reference (table or name) against a registry of templates.
@@ -81,7 +98,7 @@ end
 -- Extract every (damage_profile, info) pair an action can deal, using the game's own
 -- Action.damage_template helper so we cover melee sweeps, hitscan, shotshell, projectile,
 -- flamer gas, and explosion profiles uniformly.
-local function extract_profiles(action, action_name)
+local function extract_profiles(action)
     local profiles = {}
 
     local num_templates = 1
@@ -90,8 +107,15 @@ local function extract_profiles(action, action_name)
         num_templates = n
     end
 
+    -- A secondary profile is either a special-active mode (melee with damage_profile_special_active)
+    -- or an on-hit explosion (ranged hitscan/projectile). We only surface the special-active;
+    -- explosions are skipped (the main profile already carries crit/weakspot data).
+    local has_direct_profile = action.damage_profile ~= nil
+        or action.inner_damage_profile ~= nil
+        or action.sweeps ~= nil
+
     for i = 1, num_templates do
-        local ok, dmg_profile, special_profile, on_abort, special_on_abort = pcall(Action.damage_template, action, i)
+        local ok, dmg_profile, special_profile = pcall(Action.damage_template, action, i)
         if ok and dmg_profile then
             -- Ranged: pull pellets/range/power_level out of the source fire config template.
             local ranged_extra
@@ -111,7 +135,6 @@ local function extract_profiles(action, action_name)
                             ranged_extra = ranged_extra or {}
                             ranged_extra.num_pellets = tmpl.num_pellets
                             ranged_extra.range = tmpl.range
-                            ranged_extra.power_level = tmpl.power_level or tmpl.stat_power_level
                             ranged_extra.spread_pitch = tmpl.spread_pitch
                             ranged_extra.spread_yaw = tmpl.spread_yaw
                         end
@@ -119,9 +142,18 @@ local function extract_profiles(action, action_name)
                 end
             end
 
+            -- The secondary profile is either a special-active mode (melee with
+            -- damage_profile_special_active) or an on-hit explosion (ranged hitscan/projectile).
+            -- We only surface the special-active; explosions are skipped (their impact damage
+            -- isn't shown separately, and the main profile already carries crit/weakspot data).
+            local special_active_profile
+            if special_profile and special_profile ~= dmg_profile and has_direct_profile then
+                special_active_profile = special_profile
+            end
+
             profiles[#profiles + 1] = {
                 profile = dmg_profile,
-                special_active_profile = special_profile and special_profile ~= dmg_profile and special_profile or nil,
+                special_active_profile = special_active_profile,
                 ranged_extra = ranged_extra,
                 template_index = i,
             }
@@ -131,9 +163,11 @@ local function extract_profiles(action, action_name)
     return profiles
 end
 
--- Category (light/heavy/ranged/special) for an action.
-local function categorize(action_name, profile)
-    if string.match(action_name, 'special') then
+-- Category (light/heavy/ranged/special). The game marks the special action via
+-- weapon_template.special_action_name (action_bash/action_stab/action_pistol_whip/etc. --
+-- names that don't all contain "special"), so compare against that field, not substring-match.
+local function categorize(action_name, profile, weapon_template)
+    if weapon_template and weapon_template.special_action_name == action_name then
         return 'special'
     end
     if string.match(action_name, 'shoot') or string.match(action_name, 'zoom') then
@@ -144,9 +178,6 @@ local function categorize(action_name, profile)
     end
     if profile.melee_attack_strength == 'light' or string.match(action_name, 'light') then
         return 'light'
-    end
-    if string.match(action_name, 'push') then
-        return 'special'
     end
     return nil
 end
@@ -162,10 +193,13 @@ local function profiles_equivalent(a, b)
     if ap.name ~= bp.name then
         return false
     end
-    local asp, bsp = a.special_active_profile, b.special_active_profile
-    local an = asp and asp.name
-    local bn = bsp and bsp.name
-    if an ~= bn then
+    local function secondary_name(p)
+        return p and p.name
+    end
+    -- Identity covers the special-active secondary profile so two attacks only collapse together
+    local a_second = secondary_name(a.special_active_profile)
+    local b_second = secondary_name(b.special_active_profile)
+    if a_second ~= b_second then
         return false
     end
     local ra, rb = a.ranged_extra, b.ranged_extra
@@ -175,21 +209,18 @@ end
 
 -- Render a single (profile) block ----------------------------------------
 
-local function render_timing(out, action, weapon_tweak_templates, action_name)
+local function render_timing(out, action, weapon_template, weapon_tweak_templates, action_name)
     local time_scale = 1
     local total_time = action.total_time or 0
     local fire_rate_shown = false
 
-    local handling = weapon_tweak_templates and weapon_tweak_templates.weapon_handling
-    if handling and action.weapon_handling_template then
-        local tmpl = handling[action.weapon_handling_template]
-        if tmpl then
-            time_scale = tmpl.time_scale or 1
-            local auto_fire_time = tmpl.fire_rate and tmpl.fire_rate.auto_fire_time
-            if type(auto_fire_time) == 'number' and auto_fire_time > 0 then
-                out = line(out, 'Fire Rate:', string.format('%.2f/s', 1 / auto_fire_time), COLORS.TIMING)
-                fire_rate_shown = true
-            end
+    local tmpl = handling_template_for_action(weapon_template, weapon_tweak_templates, action_name)
+    if tmpl then
+        time_scale = tmpl.time_scale or 1
+        local auto_fire_time = tmpl.fire_rate and tmpl.fire_rate.auto_fire_time
+        if type(auto_fire_time) == 'number' and auto_fire_time > 0 then
+            out = line(out, 'Fire Rate:', string.format('%.2f/s', 1 / auto_fire_time), COLORS.TIMING)
+            fire_rate_shown = true
         end
     end
 
@@ -224,8 +255,6 @@ end
 local render_armor
 local function render_profile(out, ctx)
     local profile = ctx.profile
-    local action = ctx.action
-    local action_name = ctx.action_name
     local action_lerp = ctx.action_lerp
     local is_ranged = ctx.is_ranged
     local is_active = ctx.is_active
@@ -239,12 +268,12 @@ local function render_profile(out, ctx)
     local dropoff = is_ranged and 0 or nil
 
     if is_active then
-        out = out .. '    ' .. value(COLORS.SPECIAL, '⚡ Special Active') .. '\n'
+        out = out .. '    ' .. value(COLORS.SPECIAL, '> Special Active') .. '\n'
     end
 
     -- Base resolved damage (matches the in-game card) and impact.
     local base_attack, base_impact = Utils.base_powers(profile, target_settings, power_level, action_lerp, dropoff)
-    if base_attack then
+    if base_attack and math.abs(base_attack) > 0.01 then
         out = line(out, 'Damage:', fmt_num(base_attack), COLORS.DAMAGE)
     end
     if base_impact and math.abs(base_impact) > 0.01 then
@@ -278,7 +307,7 @@ local function render_profile(out, ctx)
     local ranged_extra = ctx.ranged_extra
     if ranged_extra then
         if ranged_extra.num_pellets then
-            out = line(out, 'Pellets:', string.format('×%d', ranged_extra.num_pellets), COLORS.PELLET)
+            out = line(out, 'Pellets:', string.format('x%d', ranged_extra.num_pellets), COLORS.PELLET)
         end
         if ranged_extra.range then
             out = line(out, 'Max Range:', tostring(ranged_extra.range), COLORS.PELLET)
@@ -306,23 +335,20 @@ local function render_profile(out, ctx)
     end
 
     -- Crit modifier (weapon handling) and crit strings.
-    local handling = ctx.weapon_tweak_templates and ctx.weapon_tweak_templates.weapon_handling
-    if handling and action.weapon_handling_template then
-        local tmpl = handling[action.weapon_handling_template]
-        local crit_strike = tmpl and tmpl.critical_strike
-        if crit_strike then
-            if crit_strike.chance_modifier and crit_strike.chance_modifier ~= 0 then
-                local sign = crit_strike.chance_modifier >= 0 and '+' or ''
-                out = line(
-                    out,
-                    'Crit Modifier:',
-                    string.format('%s%.1f%%', sign, crit_strike.chance_modifier * 100),
-                    COLORS.CRIT
-                )
-            end
-            if crit_strike.max_critical_shots and crit_strike.max_critical_shots ~= 0 then
-                out = line(out, 'Crit Strings:', tostring(crit_strike.max_critical_shots), COLORS.CRIT)
-            end
+    local tmpl = handling_template_for_action(ctx.weapon_template, ctx.weapon_tweak_templates, ctx.action_name)
+    local crit_strike = tmpl and tmpl.critical_strike
+    if crit_strike then
+        if crit_strike.chance_modifier and crit_strike.chance_modifier ~= 0 then
+            local sign = crit_strike.chance_modifier >= 0 and '+' or ''
+            out = line(
+                out,
+                'Crit Modifier:',
+                string.format('%s%.1f%%', sign, crit_strike.chance_modifier * 100),
+                COLORS.CRIT
+            )
+        end
+        if crit_strike.max_critical_shots and crit_strike.max_critical_shots ~= 0 then
+            out = line(out, 'Crit Strings:', tostring(crit_strike.max_critical_shots), COLORS.CRIT)
         end
     end
 
@@ -388,6 +414,7 @@ local function render_profile(out, ctx)
     return out
 end
 
+-- Per-armor damage modifiers as percentages.
 render_armor = function(out, profile, target_settings, action_lerp, dropoff)
     local armor_order = Utils.armor_order()
     local has_any = false
@@ -427,7 +454,7 @@ render_armor = function(out, profile, target_settings, action_lerp, dropoff)
 end
 
 -- Render one attack (which may carry an inactive + a special-active profile).
-local function render_attack(out, attack_data, weapon_tweak_templates, damage_profile_lerp_values)
+local function render_attack(out, attack_data, weapon_template, weapon_tweak_templates, damage_profile_lerp_values)
     local action = attack_data.action
     local action_name = attack_data.names[1]
     local is_ranged = attack_data.is_ranged
@@ -442,7 +469,7 @@ local function render_attack(out, attack_data, weapon_tweak_templates, damage_pr
         out = line(out, 'Type:', tostring(Utils.damage_type_name(attack_data.profile.damage_type)), COLORS.LABEL)
     end
 
-    out = render_timing(out, action, weapon_tweak_templates, action_name)
+    out = render_timing(out, action, weapon_template, weapon_tweak_templates, action_name)
 
     for _, prof_info in ipairs(attack_data.profiles) do
         local action_lerp = Utils.lerp_for_action(damage_profile_lerp_values, action_name, prof_info.profile)
@@ -458,6 +485,7 @@ local function render_attack(out, attack_data, weapon_tweak_templates, damage_pr
             power_level = power_level,
             ranged_extra = prof_info.ranged_extra,
             weapon_tweak_templates = weapon_tweak_templates,
+            weapon_template = weapon_template,
         }
         out = render_profile(out, ctx)
 
@@ -474,6 +502,7 @@ local function render_attack(out, attack_data, weapon_tweak_templates, damage_pr
                 power_level = power_level,
                 ranged_extra = prof_info.ranged_extra,
                 weapon_tweak_templates = weapon_tweak_templates,
+                weapon_template = weapon_template,
             }
             out = render_profile(out, active_ctx)
         end
@@ -514,11 +543,11 @@ local function build_stats_text(item)
     }
 
     for action_name, action in pairs(weapon_template.actions) do
-        local profiles = extract_profiles(action, action_name)
+        local profiles = extract_profiles(action)
         if #profiles > 0 then
             -- Use the first profile for categorization.
             local first_profile = profiles[1].profile
-            local category = categorize(action_name, first_profile)
+            local category = categorize(action_name, first_profile, weapon_template)
             if category then
                 -- Dedup against existing attacks in this category. Special-active-aware so
                 -- power sword combos (which differ only in the active profile) are preserved.
@@ -562,7 +591,13 @@ local function build_stats_text(item)
             end
             text = text .. colored(COLORS.HEADER, header .. ' ATTACKS') .. '\n\n'
             for _, attack_data in ipairs(category_attacks) do
-                text = render_attack(text, attack_data, weapon_tweak_templates, damage_profile_lerp_values)
+                text = render_attack(
+                    text,
+                    attack_data,
+                    weapon_template,
+                    weapon_tweak_templates,
+                    damage_profile_lerp_values
+                )
             end
         end
     end
