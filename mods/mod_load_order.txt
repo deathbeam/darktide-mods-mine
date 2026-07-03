@@ -38,5 +38,6 @@ DynamicCrosshair
 machine_gods_beacon
 danger_zone
 DisableScreenEffects
+vfx_swapper
 SpawnFeed
 Killfeed Details
