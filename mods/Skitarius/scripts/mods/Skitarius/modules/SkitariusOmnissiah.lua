@@ -377,7 +377,7 @@ SkitariusOmnissiah.omnissiah = function(self, queried_input, user_value)
         return DO_NOT_PAUSE[queried_input] and user_value or false
     end
 
-    --if desired_action then self.mod:echo("CURRENT: %s | DESIRED: %s", current_action, desired_action) end
+    --if desired_action then self.mod:echo("CURRENT: %s | DESIRED: %s", current_action, desired_action) end -- DEBUG
     if (current_action == desired_action or (desired_action and current_action == desired_action .. "_alt")) or self:should_skip(current_action, desired_action) then
         -- Don't iterate if we're in a quick_wield and override_primary is active (prevents early iteration during swap)
         if desired_action ~= "quick_wield" then
@@ -499,6 +499,7 @@ SkitariusOmnissiah.get_action = function(self)
                 local action_name = action_settings.name
                 self.current_action_raw = action_name
                 self.current_action_time = Managers.time:time("gameplay") - start_time
+                --self.mod:echo(action_name) -- DEBUG
                 self:maybe_update_aim(action_name)
                 self:maybe_update_shooting(start_time, action_name, action_settings)
                 local temp_step_name = self:action_to_step(action_name)
@@ -541,10 +542,13 @@ SkitariusOmnissiah.action_to_step = function(self, action_name)
         else
             return "special_action"
         end
+    elseif string.find(action_name, "pushfollow") or string.find(action_name, "fling") then
+        if string.find(action_name, "light") and string.find(action_name, "combo") then
+            return "light_attack"
+        end
+        return "push_follow_up"
     elseif string.find(action_name, "light") then
         return "light_attack"
-    elseif string.find(action_name, "pushfollow") or string.find(action_name, "fling") then
-        return "push_follow_up"
     elseif string.find(action_name, "push") or string.find(action_name, "find") then
         weapon_manager:set_pushing(true)
         return "push"
