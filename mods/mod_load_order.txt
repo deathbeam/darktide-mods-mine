@@ -12,6 +12,7 @@ SimpleMovement
 guarantee_weapon_swap
 guarantee_special_action
 guarantee_ability_activation
+NoBrainer
 
 -- Debugging
 creature_spawner
