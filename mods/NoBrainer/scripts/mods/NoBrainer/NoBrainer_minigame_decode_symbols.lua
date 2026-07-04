@@ -264,7 +264,9 @@ function mod._ds_input(action, result)
 	return true
 end
 
-mod:hook_safe("MinigameDecodeSymbols", "start", function(self)
+mod:hook_safe("MinigameDecodeSymbols", "start", function(self, player)
+	if not mod._is_local_minigame_player(player) then return end
+
 	if S("enable_decode_auto") then
 		decode_active = true
 		decode_completed = false
@@ -312,6 +314,11 @@ local function hook_decode_state_input(PlayerCharacterStateMinigame)
 		end
 
 		local minigame = self and self._minigame
+		local player = self and self._player
+
+		if not mod._is_local_minigame_player(player) then
+			return func(self, t, fixed_frame, input_extension)
+		end
 
 		if not looks_like_decode_symbols(minigame) then
 			return func(self, t, fixed_frame, input_extension)

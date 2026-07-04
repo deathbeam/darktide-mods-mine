@@ -448,8 +448,13 @@ local function _exp_cleanup(reason)
 	_reset_submit_settle("cleanup")
 end
 
-mod:hook_safe("MinigameDecodeSearch", "start", function(self)
+local function _is_active_search_mg(mg)
+	return mg and (mg == mod._exp_mg or mg == mod._exp_move_mg)
+end
+
+mod:hook_safe("MinigameDecodeSearch", "start", function(self, player)
 	_clear_match_cache(self)
+	if not mod._is_local_minigame_player(player) then return end
 
 	if S("enable_expedition_auto_solve") then
 		search_active = true
@@ -461,24 +466,25 @@ mod:hook_safe("MinigameDecodeSearch", "start", function(self)
 end)
 mod:hook("MinigameDecodeSearch", "stop", function(func, self, ...)
 	local unit = self and self._minigame_unit
-	local cleanup_reason = search_active and not search_completed and "stop" or nil
+	local active = _is_active_search_mg(self)
+	local cleanup_reason = active and search_active and not search_completed and "stop" or nil
 
 	if unit and Unit.alive(unit) then
 		local result = func(self, ...)
-		_exp_cleanup(cleanup_reason)
+		if active then _exp_cleanup(cleanup_reason) end
 		return result
 	end
 
 	mod._debug_event("search", "stop_invalid_unit", { stage = self and _stage(self) })
-	_exp_cleanup(search_active and not search_completed and "stop_invalid_unit" or nil)
+	if active then _exp_cleanup(search_active and not search_completed and "stop_invalid_unit" or nil) end
 
 	local super = self and self.super
 	if super and super.stop then
 		return super.stop(self, ...)
 	end
 end)
-mod:hook_safe("MinigameDecodeSearch", "complete", function()
-	_exp_cleanup("complete")
+mod:hook_safe("MinigameDecodeSearch", "complete", function(self)
+	if _is_active_search_mg(self) then _exp_cleanup("complete") end
 end)
 mod:hook_safe("MinigameDecodeSearch", "generate_board", _clear_match_cache)
 mod:hook_safe("MinigameDecodeSearch", "set_symbols", _clear_match_cache)

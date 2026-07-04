@@ -1,4 +1,8 @@
 
+## [2.0.4] - 2026-07-03
+### Fixed
+- **Remote minigame interference**: Decode Search (Matching) and Decode Symbols now ignore remote/stale minigame instances that do not belong to the local player. Matching `stop` / `complete` cleanup is also limited to the active solver instance, preventing other players' expedition minigames from clearing NoBrainer state mid-solve.
+
 ## [2.0.3] - 2026-07-02
 ### Fixed
 - **Decode Search stop hook warning**: Merged the `MinigameDecodeSearch.stop` cleanup into the existing hook so NoBrainer no longer registers both `hook` and `hook_safe` on the same method, preventing DMF's `Attempting to rehook active hook [stop] with different obj or hook_type` startup warning.

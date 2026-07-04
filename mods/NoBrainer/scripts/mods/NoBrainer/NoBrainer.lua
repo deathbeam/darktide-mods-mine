@@ -191,6 +191,12 @@ local function _fire(list, ...)
 	end
 end
 mod._reg = function(ev, cb) mod["_on_" .. ev] = mod["_on_" .. ev] or {}; mod["_on_" .. ev][#mod["_on_" .. ev] + 1] = cb end
+mod._is_local_minigame_player = function(player)
+	local player_manager = Managers.player
+	local local_player = player_manager and player_manager:local_player_safe(1)
+
+	return player ~= nil and local_player ~= nil and player == local_player
+end
 
 local function _reset_runtime(reason)
 	_fire(mod._on_runtime_reset, reason)
