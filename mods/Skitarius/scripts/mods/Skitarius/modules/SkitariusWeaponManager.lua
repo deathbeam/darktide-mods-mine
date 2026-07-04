@@ -8,13 +8,18 @@ local TRAIT_MAP = {
     thrust = "windup_increases_power_child",
     slow_and_steady = "toughness_on_hit_based_on_charge_time_visual_stack_count",
     crunch = "ogryn_windup_increases_power_parent",
-    mechsword = "mechsword"
+    mechsword = "windup_increases_special_power_default_child"
 }
 local MAX_MAP = {
     thrust = 3,
     slow_and_steady = 3,
     crunch = 4,
-    mechsword = 6
+    mechsword = 4
+}
+
+-- Weapons which should use normal heavy modifiers during special and NOT special modifiers
+local inverse_special = {
+    powersword_p3_m1 = true
 }
 
 local DEFAULT_WALK_SPEED = 4.0
@@ -314,9 +319,13 @@ SkitariusWeaponManager.is_charged_melee = function(self, running_action, compone
         local required_buff_special = engram:heavy_buff_special()
         local required_buff_special_stacks = engram:heavy_buff_special_stacks()
         local is_special = component.special_active_at_start
-        if is_special then
+        if is_special and not inverse_special[weapon_name] then
             -- If the action is special and special stacks are set, use them instead of the heavy stacks
             required_buff_stacks = required_buff_special_stacks
+        end
+        -- Skip buff check for mechsword if not special
+        if inverse_special[weapon_name] and not is_special then
+            required_buff = "none"
         end
         
         -- Heavy attack buff handling
@@ -337,7 +346,7 @@ SkitariusWeaponManager.is_charged_melee = function(self, running_action, compone
                     -- Compare current stacks to the required stacks
                     local current_stacks = self:fetch_stacks(search_string)
                     -- Handle thrust being offset by 1 internally
-                    if required_buff == "thrust" then
+                    if required_buff == "thrust" or required_buff == "mechsword" then
                         current_stacks = current_stacks - 1
                         if current_stacks < 0 then
                             current_stacks = 0
@@ -467,11 +476,13 @@ SkitariusWeaponManager.in_cooldown = function(self)
                 powermaul_p3_m1 = true
             }
             if weapon_template_name and special_charge_weapons[weapon_template_name] and special_charges then
+                
                 local reserve = 0
                 local engram = self.engram
                 if engram then
                     reserve = engram:get_setting("SPECIAL_BUFF_STACKS") or 0
                 end
+                --mod:echo("Reserve: %s, Special Charges: %s", reserve, special_charges)
                 -- Arc Maul has 40 max charges, uses 5 per attack, so 8 reserve "charges"
                 if weapon_template_name == "powermaul_p3_m1" then
                     reserve = reserve * 5
@@ -480,16 +491,21 @@ SkitariusWeaponManager.in_cooldown = function(self)
                 if weapon_template_name == "powersword_p3_m1" and special_active then
                     local current_action_time = self.omnissiah.current_action_time or 0
                     local current_command = engram:current_command()
-
                     if current_command == "special_heavy_execute" then
+                        if self.omnissiah.current_action == "heavy_attack" then
+                            return special_charges < reserve
+                        end
                         return false
                     end
                     if current_command == "special_start_attack" then
+                        if self.omnissiah.sweep == "after_damage_window" and current_action_time <= 0.5 then
+                            return special_charges < reserve
+                        end
                         -- jank detection of post-final-charge state
                         if current_action_time > 0.5 then
                             return true
                         end
-                        return false
+                        return special_charges < reserve
                     end
                 end
 

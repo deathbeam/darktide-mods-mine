@@ -29,7 +29,7 @@ local PRAY = {
         special_start_attack  = { weapon_extra_hold = true, action_one_pressed = false, action_one_hold = false, action_two_hold = false },
         special_light_attack  = { weapon_extra_hold = true },
         special_heavy_attack  = { weapon_extra_hold = true },
-        special_heavy_execute = { weapon_extra_hold = true },
+        special_heavy_execute = { weapon_extra_hold = true, action_one_hold = false, action_one_pressed = false },
         special_action        = { weapon_extra_pressed = true, weapon_extra_hold = true, action_one_pressed = false, action_one_hold = false },
     },
     sprint = {
@@ -84,7 +84,7 @@ local PRAY = {
         special_start_attack  = { weapon_extra_hold = true },
         special_light_attack  = { weapon_extra_hold = true },
         special_heavy_attack  = { weapon_extra_hold = true },
-        special_heavy_execute = { weapon_extra_hold = true },
+        special_heavy_execute = { weapon_extra_hold = true, action_one_hold = false, action_one_pressed = false },
         special_action        = { weapon_extra_pressed = true, weapon_extra_hold = true },
     },
     weapon_reload = {
@@ -104,7 +104,7 @@ local PRAY = {
         special_start_attack  = { weapon_extra_hold = true },
         special_light_attack  = { weapon_extra_hold = true },
         special_heavy_attack  = { weapon_extra_hold = true },
-        special_heavy_execute = { weapon_extra_hold = true },
+        special_heavy_execute = { weapon_extra_hold = true, action_one_hold = false, action_one_pressed = false },
         special_action        = { weapon_extra_pressed = true },
     },
     quick_wield = {
@@ -124,7 +124,7 @@ local PRAY = {
         special_start_attack  = { weapon_extra_hold = true },
         special_light_attack  = { weapon_extra_hold = true },
         special_heavy_attack  = { weapon_extra_hold = true },
-        special_heavy_execute = { weapon_extra_hold = true },
+        special_heavy_execute = { weapon_extra_hold = true, action_one_hold = false, action_one_pressed = false },
         special_action        = { weapon_extra_pressed = true },
     },
     -- MELEE
@@ -140,7 +140,8 @@ local PRAY = {
         special_action       = { weapon_extra_pressed = true, action_one_hold = false },
         quick_wield          = { quick_wield = true },
         weapon_reload        = { weapon_reload_hold = true },
-        shoot                = { action_one_hold = false }
+        shoot                = { action_one_hold = false },
+        special_heavy_execute = { weapon_extra_hold = true, action_one_hold = false, action_one_pressed = false },
     },
     light_attack = {
         idle           = { action_one_hold = false },
@@ -153,6 +154,7 @@ local PRAY = {
         special_action = { weapon_extra_pressed = true, action_one_hold = false },
         quick_wield    = { quick_wield = true },
         weapon_reload  = { weapon_reload_hold = true },
+        special_heavy_execute = { weapon_extra_hold = true, action_one_hold = false, action_one_pressed = false },
     },
     heavy_attack = {
         idle           = { action_one_hold = false },
@@ -165,6 +167,7 @@ local PRAY = {
         special_action = { weapon_extra_pressed = true, action_one_hold = false },
         quick_wield    = { quick_wield = true },
         weapon_reload  = { weapon_reload_hold = true },
+        special_heavy_execute = { weapon_extra_hold = true, action_one_hold = false, action_one_pressed = false },
     },
     push = {
         idle           = { action_one_hold = false },
@@ -177,6 +180,7 @@ local PRAY = {
         special_action = { weapon_extra_pressed = true },
         quick_wield    = { quick_wield = true },
         weapon_reload  = { weapon_reload_hold = true },
+        special_heavy_execute = { weapon_extra_hold = true, action_one_hold = false, action_one_pressed = false },
     },
     push_follow_up = {
         idle           = { action_one_hold = false },
@@ -189,6 +193,7 @@ local PRAY = {
         special_action = { weapon_extra_pressed = true, action_one_hold = false },
         quick_wield    = { quick_wield = true },
         weapon_reload  = { weapon_reload_hold = true },
+        special_heavy_execute = { weapon_extra_hold = true, action_one_hold = false, action_one_pressed = false },
     },
     block = {
         idle           = { action_two_hold = false, action_one_hold = false },
@@ -201,6 +206,7 @@ local PRAY = {
         special_action = { weapon_extra_pressed = true, action_one_hold = false },
         quick_wield    = { quick_wield = true },
         weapon_reload  = { weapon_reload_hold = true },
+        special_heavy_execute = { weapon_extra_hold = true, action_one_hold = false, action_one_pressed = false },
     },
     -- RANGED
     shoot = {
@@ -615,7 +621,7 @@ SkitariusOmnissiah.maybe_convert_action = function(self, player_unit, running_ac
         if (weapon_manager:weapon_type() == "RANGED" or HEAVY_SPECIAL[weapon_name]) and
            ( mechanicus_strings[original_name] or (string.find(original_name, "stab") or string.find(original_name, "bash"))) then
             if weapon_manager:is_charged_melee(running_action, handler_data.component, action_settings) then
-                if engram:current_command() == "special_heavy_execute" then
+                if engram:current_command() == "special_heavy_execute" or engram:current_command() == "special_start_attack" then
                     if weapon_manager:in_cooldown() then
                         return "heavy_attack"
                     end
