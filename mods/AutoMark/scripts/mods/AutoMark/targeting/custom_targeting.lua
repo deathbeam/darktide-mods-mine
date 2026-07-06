@@ -121,13 +121,14 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_positio
     if tag_name == TAG_NAMES.COMPANION_TAG then
         -- arbite shouldn't mark any arbite's prey or veteran's prey
         local target_tag_name = target_tag and target_tag._template.name
-        local is_boss = target_breed_data and target_breed_data.is_boss
-        if is_boss then
-            if target_tag_name == TAG_NAMES.VETERAN_TAG then
+        local pounce_setting = target_breed_data and target_breed_data.companion_pounce_setting
+        local pounce_action = pounce_setting and pounce_setting.companion_pounce_action
+        if pounce_action == "human" then
+            if target_tag_name == TAG_NAMES.COMPANION_TAG or target_tag_name == TAG_NAMES.VETERAN_TAG then
                 return false
             end
         else
-            if target_tag_name == TAG_NAMES.COMPANION_TAG or target_tag_name == TAG_NAMES.VETERAN_TAG or target_tag_name == TAG_NAMES.SERVO_SKULL_TAG then
+            if target_tag_name == TAG_NAMES.VETERAN_TAG then
                 return false
             end
         end
@@ -196,15 +197,8 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_positio
         end
     elseif tag_name == TAG_NAMES.SERVO_SKULL_TAG then
         local target_tag_name = target_tag and target_tag._template.name
-        local is_boss = target_breed_data and target_breed_data.is_boss
-        if is_boss then
-            if target_tag_name == TAG_NAMES.VETERAN_TAG then
-                return false
-            end
-        else
-            if target_tag_name == TAG_NAMES.COMPANION_TAG or target_tag_name == TAG_NAMES.VETERAN_TAG or target_tag_name == TAG_NAMES.SERVO_SKULL_TAG then
-                return false
-            end
+        if target_tag_name == TAG_NAMES.VETERAN_TAG then
+            return false
         end
 
         if mod_settings.servo_skull_mark_ignore_unaggroed and not is_target_aggroed(target_unit) then

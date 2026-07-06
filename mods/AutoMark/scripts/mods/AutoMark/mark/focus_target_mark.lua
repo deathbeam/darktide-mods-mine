@@ -60,9 +60,14 @@ local RANGED_ACTION_KINDS = {
 }
 mod:hook_safe(CLASS.ActionHandler, "start_action",
     function(self, id, action_objects, action_name, action_params, action_settings, used_input, t, transition_type, condition_func_params, automatic_input, reset_combo_override)
-        if not mod_settings.focus_target_switch
-            or self._unit_data_extension._player.viewport_name ~= 'player1'
+        if self._unit_data_extension._player.viewport_name ~= 'player1' then
+            return
+        end
+
+        if not mod_settings.toggle_mod
+            or not mod_settings.focus_target_switch
             or id ~= "weapon_action"
+            or mark_context.auto_mark_interval > 0
             or mark_context[TAG_NAMES.VETERAN_TAG].delay > 0
         then
             return

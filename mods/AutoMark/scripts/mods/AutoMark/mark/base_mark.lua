@@ -152,10 +152,10 @@ mod:hook_safe(CLASS.SmartTag, "init",
         -- check if the tag is manual
         if tag_context.manual_unit == target_unit then
             tag_context.is_manual = true
-            tag_context.manual_unit = nil
         else
             tag_context.is_manual = false
         end
+        tag_context.manual_unit = nil
 
         if tag_name == TAG_NAMES.COMPANION_TAG then
             tag_context.pounce_start_time = nil

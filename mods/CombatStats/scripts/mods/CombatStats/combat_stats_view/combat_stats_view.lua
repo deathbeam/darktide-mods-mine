@@ -123,6 +123,7 @@ function CombatStatsView:_setup_entries()
             self:_unregister_widget_name(widget.name)
         end
         self._entry_widgets = {}
+        self._selected_widget = nil
     end
 
     local entries = {}
@@ -344,6 +345,7 @@ end
 
 function CombatStatsView:_select_entry(widget, entry)
     self._selected_entry = entry
+    self._selected_widget = widget
     self:_rebuild_detail_widgets(entry)
 end
 
@@ -367,32 +369,37 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     local duration = entry.duration
     local buffs = entry.buffs or {}
 
-    local detail_scenegraph = self._ui_scenegraph.combat_stats_detail_content
+    local detail_scenegraph = self._ui_scenegraph and self._ui_scenegraph.combat_stats_detail_content
+    if not detail_scenegraph or not detail_scenegraph.size then
+        -- View is tearing down (on_exit ran) or scenegraph isn't ready yet
+        return
+    end
     local detail_content_width = detail_scenegraph.size[1]
     local text_width = detail_content_width
 
     -- Helper to create text widget
-    local function create_text(text, color, font_size)
+    local function create_text(text, color, font_size, is_header)
         font_size = font_size or DETAIL_TEXT_FONT_SIZE
         -- Calculate height based on font size with some padding
         local height = font_size + DETAIL_TEXT_PADDING
 
-        local widget_def = UIWidget.create_definition({
-            {
-                pass_type = 'text',
-                value_id = 'text',
-                value = text,
-                style = {
-                    font_type = 'proxima_nova_bold',
-                    font_size = font_size,
-                    text_horizontal_alignment = 'left',
-                    text_vertical_alignment = 'top',
-                    text_color = color or Color.terminal_text_body(255, true),
-                    offset = { 0, 0, 2 },
-                    size = { text_width, height },
-                },
+        local passes = {}
+        passes[#passes + 1] = {
+            pass_type = 'text',
+            value_id = 'text',
+            value = text,
+            style = {
+                font_type = 'proxima_nova_bold',
+                font_size = font_size,
+                text_horizontal_alignment = 'left',
+                text_vertical_alignment = 'top',
+                text_color = color or Color.terminal_text_body(255, true),
+                offset = { 0, 0, 2 },
+                size = { text_width, height },
             },
-        }, 'combat_stats_detail_pivot', nil, { text_width, height })
+        }
+
+        local widget_def = UIWidget.create_definition(passes, 'combat_stats_detail_pivot', nil, { text_width, height })
 
         local widget = self:_create_widget('detail_text_' .. #self._detail_widgets, widget_def)
         self._detail_widgets[#self._detail_widgets + 1] = widget
@@ -413,7 +420,6 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
 
         local passes = {}
 
-        -- Icon pass (if icon exists)
         if icon then
             passes[#passes + 1] = {
                 pass_type = 'texture',
@@ -516,20 +522,20 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
         for _, substat in ipairs(substats) do
             if substat.value and substat.value > 0 then
                 local pct = (substat.value / total * 100)
-                create_text(string.format('  %s: %d (%.1f%%)', mod:localize(substat.key), substat.value, pct))
+                create_text(string.format('  %s: %d (%.1f%%)', mod:localize(substat.key), substat.value, pct), nil, nil)
             end
         end
     end
 
-    -- Title
+    -- Title (skips striping, resets the counter for the data rows below)
     create_spacer(10)
-    create_text(entry.name, Color.terminal_text_header(255, true), 26)
-    create_text(entry.subtext, entry.subtext_color, 18)
+    create_text(entry.name, Color.terminal_text_header(255, true), 26, true)
+    create_text(entry.subtext, entry.subtext_color, 18, true)
 
     -- Enemy Stats (only for session stats)
     if entry.is_session and stats.damage_by_type and next(stats.damage_by_type) then
         create_spacer(10)
-        create_text(mod:localize('enemy_stats'), Color.terminal_text_header(255, true), 20)
+        create_text(mod:localize('enemy_stats'), Color.terminal_text_header(255, true), 20, true)
 
         -- Sort by damage (highest first)
         local sorted_types = {}
@@ -575,7 +581,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     -- Damage Stats Header
     if stats.total_damage > 0 then
         create_spacer(10)
-        create_text(mod:localize('damage_stats'), Color.terminal_text_header(255, true), 20)
+        create_text(mod:localize('damage_stats'), Color.terminal_text_header(255, true), 20, true)
 
         if stats.total_damage > 0 then
             create_text(string.format('%s: %d', mod:localize('total'), stats.total_damage))
@@ -662,7 +668,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
     -- Hit Stats Header
     if stats.total_hits > 0 then
         create_spacer(10)
-        create_text(mod:localize('hit_stats'), Color.terminal_text_header(255, true), 20)
+        create_text(mod:localize('hit_stats'), Color.terminal_text_header(255, true), 20, true)
         create_text(string.format('%s: %d', mod:localize('total'), stats.total_hits))
 
         -- Melee hits
@@ -720,7 +726,7 @@ function CombatStatsView:_rebuild_detail_widgets(entry)
 
         if #buff_array > 0 then
             create_spacer(10)
-            create_text(mod:localize('buff_uptime'), Color.terminal_text_header(255, true), 20)
+            create_text(mod:localize('buff_uptime'), Color.terminal_text_header(255, true), 20, true)
 
             for i = 1, #buff_array do
                 local buff = buff_array[i]
@@ -788,6 +794,10 @@ function CombatStatsView:cb_on_history_pressed()
         self:_setup_entries()
 
         mod.history:load_index(function()
+            -- View may have been closed (ESC / mission transition) while the load was in flight
+            if self._destroyed then
+                return
+            end
             self._history_loading = false
             if self._viewing_history and not self._viewing_history_entry then
                 self:_setup_entries()
@@ -860,6 +870,10 @@ function CombatStatsView:_load_history_entry(entry)
     self:_setup_entries()
 
     mod.history:load_history_entry(file_name, function(full_data)
+        -- Bail out if the view was closed while the load was in flight
+        if self._destroyed then
+            return
+        end
         self._history_entry_loading = false
 
         -- Bail out if the user navigated away or selected a different entry.
@@ -923,6 +937,7 @@ function CombatStatsView:_draw_grid(grid, widgets, interaction_widget, ui_render
             local hotspot = widget.content.hotspot
             if hotspot then
                 hotspot.force_disabled = not is_grid_hovered
+                hotspot.is_selected = widget == self._selected_widget or nil
             end
             UIWidget.draw(widget, ui_renderer)
         end
