@@ -249,7 +249,7 @@ function WeaponStatsUtils.action_power_level(action, template_index)
 end
 
 -- Damage profile target index: targets[1] for melee, targets.default_target for ranged.
-function WeaponStatsUtils.target_settings(damage_profile, is_ranged)
+function WeaponStatsUtils.target_settings(damage_profile)
     if not damage_profile or not damage_profile.targets then
         return damage_profile, nil
     end
@@ -412,11 +412,6 @@ function WeaponStatsUtils.dropoff_scalar(hit_distance, damage_profile, action_le
     end
     return scalar
 end
-
-function WeaponStatsUtils.fallback_lerp()
-    return FALLBACK_LERP
-end
-
 -- Cleave target count from the power-curve pipeline (PowerLevel.scale_power_level_to_power_type_curve
 -- then cleave_distribution), mapped onto PowerLevelSettings.cleave_output min/max.
 local function _cleave_value(cleave_min, cleave_range, scaled_cleave_power_level, distribution, power_type, action_lerp)
@@ -440,7 +435,7 @@ local function _cleave_value(cleave_min, cleave_range, scaled_cleave_power_level
     return cleave_min + cleave_range * percentage
 end
 
-function WeaponStatsUtils.cleave_values(profile, target_settings, power_level, action_lerp)
+function WeaponStatsUtils.cleave_values(profile, power_level, action_lerp)
     if not profile then
         return nil, nil
     end
@@ -464,8 +459,7 @@ function WeaponStatsUtils.cleave_values(profile, target_settings, power_level, a
     return attack, impact
 end
 
--- Chainswords/force swords repeat the profile `instances` times via hit_stickyness_settings;
--- returns weighted entries (instances-1 normal + 1 last) for the full hit total.
+-- Sticky damage entries for hit_stickyness_settings.always_sticky (or special-active) actions.
 function WeaponStatsUtils.sticky_damage_entries(action, use_special_active)
     if type(action) ~= 'table' then
         return nil
@@ -476,7 +470,6 @@ function WeaponStatsUtils.sticky_damage_entries(action, use_special_active)
         settings = action.hit_stickyness_settings_special_active or settings
     end
 
-    -- Only always_sticky damage (or special-active) applies as damage ticks.
     if not settings or not (use_special_active or settings.always_sticky) then
         return nil
     end
@@ -513,8 +506,7 @@ function WeaponStatsUtils.sticky_damage_entries(action, use_special_active)
     return #entries > 0 and entries or nil
 end
 
--- Inner explosion close_damage_profile (bolter/plasma), separate from the impact profile;
--- returned only when distinct so the builder can fold it in.
+-- Inner explosion close_damage_profile (bolter/plasma), separate from the impact profile
 function WeaponStatsUtils.explosion_profile(action, template_index)
     if type(action) ~= 'table' then
         return nil
@@ -534,8 +526,7 @@ function WeaponStatsUtils.explosion_profile(action, template_index)
     return inner, power_level
 end
 
--- critical_strike.chance_modifier from weapon_handling (per-action) then the legacy
--- weapon_handling_template; nil when absent or non-numeric.
+-- critical_strike.chance_modifier from weapon_handling
 function WeaponStatsUtils.crit_chance_modifier(action, weapon_template, weapon_tweak_templates, action_name)
     if type(action) ~= 'table' then
         return nil
@@ -548,8 +539,6 @@ function WeaponStatsUtils.crit_chance_modifier(action, weapon_template, weapon_t
         if handling then
             local ok, _, identifier =
                 pcall(WeaponTweakTemplates.get_template_identifiers, weapon_template, 'weapon_handling', action_name)
-            -- `get_template_identifiers` returns (base_identifier, new_identifier);
-            -- the per-action override lives under the new identifier when present.
             if ok and identifier then
                 local action_stats = handling[identifier]
                 local critical_strike = action_stats and action_stats.critical_strike
