@@ -91,16 +91,6 @@ function mod.update(dt)
 end
 
 function mod.on_all_mods_loaded()
-    -- Preload icon packages
-    local function load_package(package_name)
-        if not Managers.package:has_loaded(package_name) then
-            Managers.package:load(package_name, 'CombatStats')
-        end
-    end
-
-    load_package('packages/ui/views/inventory_view/inventory_view')
-    load_package('packages/ui/views/inventory_weapons_view/inventory_weapons_view')
-    load_package('packages/ui/hud/player_weapon/player_weapon')
     -- Warm the history index so the stats view opens instantly
     if mod.history then
         mod.history:load_index()
@@ -176,7 +166,7 @@ mod:hook(
             local player = Managers.player:local_player_safe(1)
             if player then
                 local player_unit = player.player_unit
-                if player_unit and attacking_unit == player_unit then
+                if player_unit and attacking_unit == player_unit and ALIVE[attacked_unit] then
                     local unit_data_extension = ScriptUnit.has_extension(attacked_unit, 'unit_data_system')
                     local breed = unit_data_extension and unit_data_extension:breed()
                     if breed then
@@ -196,7 +186,12 @@ mod:hook(
                             mod.tracker:_finish_enemy_engagement(attacked_unit, true)
                         end
                     end
-                elseif player_unit and attacked_unit == player_unit and mod:get('track_incoming_attacks') then
+                elseif
+                    player_unit
+                    and attacked_unit == player_unit
+                    and ALIVE[attacking_unit]
+                    and mod:get('track_incoming_attacks')
+                then
                     local unit_data_extension = ScriptUnit.has_extension(attacking_unit, 'unit_data_system')
                     local breed = unit_data_extension and unit_data_extension:breed()
                     if breed then
