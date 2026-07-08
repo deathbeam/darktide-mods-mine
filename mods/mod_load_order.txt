@@ -12,10 +12,8 @@ SimpleMovement
 guarantee_weapon_swap
 guarantee_special_action
 guarantee_ability_activation
-MechanicusPowerSwordEnhanced
 
 -- Debugging
-creature_spawner
 controlled_chaos
 show_crit_chance
 CombatStats

@@ -39,6 +39,13 @@ local ARMOR_ORDER = {
     'void_shield',
 }
 
+local CHAIN_SLOT_ORDER = {
+    'primary',
+    'secondary',
+    'special',
+    'extra',
+}
+
 -- Records ----------------------------------------------------------------
 
 local function add(records, rec)
@@ -71,6 +78,27 @@ local function add_stat(records, label, value, label_color, indent)
     })
 end
 
+local function add_direction_stat(records, actions)
+    local dir_parts = {}
+    for _, action in ipairs(actions or {}) do
+        local action_dirs = {}
+        for dir in pairs(Utils.action_directions(action)) do
+            action_dirs[#action_dirs + 1] = dir
+        end
+        table.sort(action_dirs)
+        if #action_dirs > 0 then
+            local parts = {}
+            for i = 1, #action_dirs do
+                parts[i] = mod:localize('direction_' .. action_dirs[i])
+            end
+            dir_parts[#dir_parts + 1] = table.concat(parts, ' / ')
+        end
+    end
+    if #dir_parts > 0 then
+        add_stat(records, mod:localize('stat_direction'), table.concat(dir_parts, ', '), COLORS.META)
+    end
+end
+
 local function add_armor(records, rows, is_ranged, header)
     add(records, {
         type = 'armor',
@@ -83,6 +111,10 @@ end
 
 local function add_spacer(records, height)
     add(records, { type = 'spacer', height = height or 8 })
+end
+
+local function add_chain(records, title, chain)
+    add(records, { type = 'chain', title = title, chain = chain })
 end
 
 local function fmt_num(n)
@@ -144,11 +176,6 @@ local function extract_profiles(action)
         num_templates = n
     end
 
-    -- Gather main, inner-explosion, and sticky profiles for render_profile to fold together.
-    local has_direct_profile = action.damage_profile ~= nil
-        or action.inner_damage_profile ~= nil
-        or action.sweeps ~= nil
-
     for i = 1, num_templates do
         local ok, dmg_profile, special_profile = pcall(Action.damage_template, action, i)
         if ok and dmg_profile then
@@ -183,7 +210,7 @@ local function extract_profiles(action)
 
             profiles[#profiles + 1] = {
                 profile = dmg_profile,
-                special_active_profile = special_active_profile,
+                special_active_profile = special_profile ~= dmg_profile and special_profile or nil,
                 extra_entries = extra_entries,
                 extra_entries_special = extra_entries_special,
                 ranged_extra = ranged_extra,
@@ -612,7 +639,8 @@ local function render_attack(
     category,
     weapon_template,
     weapon_tweak_templates,
-    damage_profile_lerp_values
+    damage_profile_lerp_values,
+    deferred_special
 )
     local action = attack_data.action
     local action_name = attack_data.names[1]
@@ -624,6 +652,7 @@ local function render_attack(
     end
     add_attack(records, table.concat(labels, ', '))
 
+    add_direction_stat(records, attack_data.merged_actions)
     local slot_key = category == 'heavy' and 'secondary' or (category == 'special' and 'special') or 'primary'
     local attack_type =
         Utils.attack_type_name(weapon_template, slot_key, attack_data.profile and attack_data.profile.name)
@@ -631,7 +660,7 @@ local function render_attack(
         add_stat(records, mod:localize('stat_attack_type'), attack_type, COLORS.META)
     end
 
-    if attack_data.profile.damage_type then
+    if attack_data.profile and attack_data.profile.damage_type then
         add_stat(
             records,
             mod:localize('stat_type'),
@@ -661,23 +690,86 @@ local function render_attack(
         }
         render_profile(records, ctx)
 
-        if prof_info.special_active_profile then
+        if prof_info.special_active_profile and deferred_special then
             local active_lerp =
                 Utils.lerp_for_action(damage_profile_lerp_values, action_name, prof_info.special_active_profile)
-            local active_ctx = {
+            deferred_special[#deferred_special + 1] = {
                 profile = prof_info.special_active_profile,
                 action = action,
                 action_name = action_name,
                 action_lerp = active_lerp,
                 is_ranged = is_ranged,
-                is_active = true,
                 power_level = power_level,
                 ranged_extra = prof_info.ranged_extra,
                 extra_entries = prof_info.extra_entries_special or prof_info.extra_entries,
                 weapon_tweak_templates = weapon_tweak_templates,
                 weapon_template = weapon_template,
             }
-            render_profile(records, active_ctx)
+        end
+    end
+
+    add_spacer(records, 10)
+end
+
+-- Special-active attack profiles (chainsword revved, power sword charged, ...) are
+-- collected during render_attack and shown together here so they don't clutter the
+-- per-attack sections.
+local function render_deferred_special(records, deferred)
+    if not deferred or #deferred == 0 then
+        return
+    end
+
+    add_section(records, mod:localize('header_special_active'))
+    add_spacer(records, 4)
+
+    for i = 1, #deferred do
+        local entry = deferred[i]
+        add_attack(records, Utils.friendly_action_label(entry.action_name))
+
+        add_direction_stat(records, { entry.action })
+        render_profile(records, {
+            profile = entry.profile,
+            action = entry.action,
+            action_name = entry.action_name,
+            action_lerp = entry.action_lerp,
+            is_ranged = entry.is_ranged,
+            is_active = false,
+            power_level = entry.power_level,
+            ranged_extra = entry.ranged_extra,
+            extra_entries = entry.extra_entries,
+            weapon_tweak_templates = entry.weapon_tweak_templates,
+            weapon_template = entry.weapon_template,
+        })
+        add_spacer(records, 10)
+    end
+end
+
+local function build_chain_overview(records, weapon_template)
+    local displayed = weapon_template.displayed_attacks
+    if not displayed then
+        return
+    end
+
+    local has_any = false
+    for _, slot in ipairs(CHAIN_SLOT_ORDER) do
+        if displayed[slot] then
+            has_any = true
+            break
+        end
+    end
+    if not has_any then
+        return
+    end
+
+    add_section(records, mod:localize('header_attack_pattern'))
+    add_spacer(records, 4)
+
+    for _, slot in ipairs(CHAIN_SLOT_ORDER) do
+        local data = displayed[slot]
+        if data then
+            local title = mod:localize('label_' .. slot)
+            local chain = data.attack_chain or { data.type }
+            add_chain(records, title, chain)
         end
     end
 
@@ -724,6 +816,7 @@ local function build_stats(item)
                 for _, existing_attack in ipairs(existing) do
                     if profiles_equivalent(existing_attack.profiles[1], profiles[1]) then
                         table.insert(existing_attack.names, action_name)
+                        table.insert(existing_attack.merged_actions, action)
                         merged = true
                         break
                     end
@@ -731,6 +824,7 @@ local function build_stats(item)
                 if not merged then
                     table.insert(existing, {
                         names = { action_name },
+                        merged_actions = { action },
                         action = action,
                         profile = first_profile,
                         profiles = profiles,
@@ -748,6 +842,8 @@ local function build_stats(item)
     end
 
     local records = {}
+    local deferred_special = {}
+    build_chain_overview(records, weapon_template)
     for _, category in ipairs({ 'ranged', 'light', 'heavy', 'special' }) do
         local category_attacks = attacks[category]
         if #category_attacks > 0 then
@@ -759,7 +855,7 @@ local function build_stats(item)
             elseif category == 'heavy' then
                 header = mod:localize('header_heavy_attacks')
             else
-                header = mod:localize('header_weapon_special_attacks')
+                header = mod:localize('header_special_attacks')
             end
             add_section(records, header)
             add_spacer(records, 4)
@@ -770,11 +866,14 @@ local function build_stats(item)
                     category,
                     weapon_template,
                     weapon_tweak_templates,
-                    damage_profile_lerp_values
+                    damage_profile_lerp_values,
+                    deferred_special
                 )
             end
         end
     end
+
+    render_deferred_special(records, deferred_special)
 
     return records
 end

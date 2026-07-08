@@ -11,9 +11,28 @@ local UISettings = mod:original_require('scripts/settings/ui/ui_settings')
 local WeaponHandlingTemplates =
     mod:original_require('scripts/settings/equipment/weapon_handling_templates/weapon_handling_templates')
 local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/weapon/utilities/weapon_tweak_templates')
+
 local FALLBACK_LERP = 0.5
 local DEFAULT_POWER_LEVEL = 500
-local GESTALT_TOKENS = { 'smiter', 'linesman', 'tank', 'ninja_fencer' }
+
+local GESTALT_TOKENS = {
+    'smiter',
+    'linesman',
+    'tank',
+    'ninja_fencer',
+}
+
+local DIRECTION_TOKENS = {
+    left = 'left',
+    right = 'right',
+    cross = 'cross',
+    up = 'up',
+    down = 'down',
+    stab = 'thrust',
+    thrust = 'thrust',
+    push = 'thrust',
+    pull = 'thrust',
+}
 
 local function _localize_or_prettify(loc_id, key)
     local localized = mod:localize(loc_id)
@@ -72,6 +91,54 @@ function WeaponStatsUtils.friendly_action_label(action_name)
         return first:upper() .. rest
     end)
     return prettified
+end
+
+function WeaponStatsUtils.action_directions(action)
+    if type(action) ~= 'table' then
+        return {}
+    end
+
+    local override = action.attack_direction_override
+    if type(override) == 'string' then
+        local dir = DIRECTION_TOKENS[override:lower()]
+        if dir then
+            return { [dir] = true }
+        end
+    end
+
+    local collected = {}
+    for _, field in ipairs({ 'anim_event', 'anim_event_3p' }) do
+        local value = action[field]
+        if type(value) == 'string' then
+            for token in value:lower():gmatch('[^_]+') do
+                local dir = DIRECTION_TOKENS[token]
+                if dir then
+                    collected[dir] = true
+                end
+            end
+        end
+    end
+
+    local dirs = {}
+    if collected.thrust then
+        dirs.thrust = true
+    end
+    local has_side = false
+    for dir in pairs(collected) do
+        if dir == 'left' or dir == 'right' or dir == 'cross' then
+            dirs[dir] = true
+            has_side = true
+        end
+    end
+    if not has_side then
+        if collected.up then
+            dirs.up = true
+        end
+        if collected.down then
+            dirs.down = true
+        end
+    end
+    return dirs
 end
 
 -- Weapon display names ----------------------------------------------------
@@ -276,7 +343,6 @@ end
 -- action_lerp for the call then restore; mirrors damage_profile.lua lerp_values().
 -- Shared empty table so current_target_settings_lerp_values is never nil (lerp_value_from_path indexes it).
 local _TARGET_SETTINGS_NO_LERP_VALUES = {}
-
 local function _with_target_lerps(action_lerp, target_index)
     local cur = action_lerp or {}
     local targets = cur.targets

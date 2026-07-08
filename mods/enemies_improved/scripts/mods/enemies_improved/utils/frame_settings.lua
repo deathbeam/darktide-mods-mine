@@ -28,7 +28,7 @@ mod.build_frame_settings = function(dt)
 	fs.breed_healthbar_force = {}
 	fs.breed_type_outline_enabled = {}
 	fs.breed_type_healthbar_enabled = {}
-	
+
 	for _, options in next, mod.breed_names do
 		local enemy = options.value
 		if enemy then
@@ -138,8 +138,19 @@ mod.build_frame_settings = function(dt)
 		b,
 	}
 
+	fs.marker_display_option = mod:get("marker_display_option")
+	fs.markers_show_only_aimed = mod:get("markers_show_only_aimed")
+
 	-- HEALTHBARS
 	fs.healthbar_enable = mod:get("healthbar_enable")
+	fs.hb_enable_bar = mod:get("hb_enable_bar")
+	if fs.hb_enable_bar == nil then
+		fs.hb_enable_bar = true
+	end
+	fs.hb_enable_text = mod:get("hb_enable_text")
+	if fs.hb_enable_text == nil then
+		fs.hb_enable_text = true
+	end
 	fs.healthbar_type_icon_enable = mod:get("healthbar_type_icon_enable")
 	fs.show_damage_numbers = mod:get("hb_show_damage_numbers")
 	fs.show_armor_types = mod:get("hb_show_armour_types")
@@ -299,7 +310,10 @@ mod.build_frame_settings = function(dt)
 	fs.debuff_stacks_show_x_space = mod:get("debuff_stacks_show_x_space")
 	fs.debuff_icon_scale = mod:get("debuff_icon_scale")
 	fs.debuff_stack_on_icon = mod:get("debuff_stack_on_icon")
+	fs.debuff_boss_healthbar_enable = mod:get("debuff_boss_healthbar_enable")
 	fs.debuff_horizontal = mod:get("debuff_horizontal")
+	fs.debuff_stacks_font_size = mod:get("debuff_stacks_font_size") or 16
+	fs.debuff_names_font_size = mod:get("debuff_names_font_size") or 16
 
 	local r = mod:get("debuff_max_stacks_colour_R")
 	local g = mod:get("debuff_max_stacks_colour_G")

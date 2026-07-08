@@ -1,10 +1,12 @@
 local mod = get_mod("enemies_improved")
+
 mod:io_dofile("enemies_improved/scripts/mods/enemies_improved/enemies_improved_localization")
 
 local Managers_player = Managers.player
 local Managers_state = Managers.state
 local Managers_ui = Managers.ui
 local Managers_time = Managers.time
+local Managers_world = Managers.world
 local ScriptUnit_extension = ScriptUnit.extension
 local ScriptUnit_has_extension = ScriptUnit.has_extension
 local table_clear = table.clear
@@ -16,6 +18,9 @@ local math_max = math.max
 local next = next
 local math_floor = math.floor
 local Unit_alive = Unit.alive
+local Actor_unit = Actor.unit
+local World_physics_world = World.physics_world
+local Quaternion_forward = Quaternion.forward
 
 -- debug mode toggle!!!
 mod.DEBUG = false
@@ -24,7 +29,44 @@ if mod.DEBUG then
 end
 
 mod.detect_alive = function(unit)
-	return unit and HEALTH_ALIVE[unit] and Unit_alive(unit)
+	if unit and HEALTH_ALIVE[unit] and Unit_alive(unit) then
+		return true
+	end
+	return false
+end
+
+mod._on_ei_marker_created = function(marker_id, entry, unit)
+	-- Safety: stale callback (force_remove_unit_markers or remove_dead already cleared pending)
+	if not entry or not entry._ei_marker_pending then
+		if marker_id then
+			Managers.event:trigger("remove_world_marker", marker_id)
+		end
+		return
+	end
+
+	-- Safety: unit already has a tracked marker (duplicate prevention)
+	if mod.enemy_markers[unit] then
+		entry._ei_marker_pending = nil
+		Managers.event:trigger("remove_world_marker", marker_id)
+		return
+	end
+
+	entry.marker = mod.get_marker_by_id(marker_id)
+	entry.healthbar = mod.get_marker_by_id(marker_id)
+	entry.dot_debuffs = mod.get_marker_by_id(marker_id)
+	mod.enemy_markers[unit] = marker_id
+	mod.enemy_healthbars[unit] = marker_id
+	mod.enemy_debuffs[unit] = marker_id
+	entry._ei_marker_created = true
+	entry._ei_marker_pending = nil
+
+	if mod.frame_settings.horde_clusters_enable and entry.is_horde then
+		local cluster = mod.get_horde_cluster_for_unit(unit)
+		if cluster then
+			cluster._healthbar_created = true
+			cluster._healthbar_marker_id = marker_id
+		end
+	end
 end
 
 -- ENEMIES IMPROVED FUNCTIONS
@@ -36,6 +78,8 @@ local Outlines = mod:io_dofile("enemies_improved/scripts/mods/enemies_improved/m
 local Healthbars = mod:io_dofile("enemies_improved/scripts/mods/enemies_improved/modules/healthbars")
 local Markers = mod:io_dofile("enemies_improved/scripts/mods/enemies_improved/modules/markers")
 local Debuffs = mod:io_dofile("enemies_improved/scripts/mods/enemies_improved/modules/debuffs")
+local BossDebuffs = mod:io_dofile("enemies_improved/scripts/mods/enemies_improved/modules/bossdebuffs")
+
 local SpecialAttacks = mod:io_dofile("enemies_improved/scripts/mods/enemies_improved/modules/specialattacks")
 local AnimationHandler =
 	mod:io_dofile("enemies_improved/scripts/mods/enemies_improved/modules/animations/animationhandler")
@@ -211,39 +255,19 @@ mod.custom_localize = function(loc_string)
 	end
 end
 
-local EnemyMarkersTemplate = mod:io_dofile("enemies_improved/scripts/mods/enemies_improved/templates/markers_template")
-local EnemyHealthbarTemplate =
-	mod:io_dofile("enemies_improved/scripts/mods/enemies_improved/templates/healthbars/healthbar_template")
-local EnemyDebuffTemplate = mod:io_dofile("enemies_improved/scripts/mods/enemies_improved/templates/debuff_template")
+local EnemyImprovedTemplate =
+	mod:io_dofile("enemies_improved/scripts/mods/enemies_improved/templates/enemies_improved_template")
 
 local function add_custom_templates(self)
-	-- add new marker templates to templates table
-	if EnemyMarkersTemplate then
-		if not self._marker_templates[EnemyMarkersTemplate.name] then
-			self._marker_templates[EnemyMarkersTemplate.name] = EnemyMarkersTemplate
-		end
-	end
-	if EnemyHealthbarTemplate then
-		if not self._marker_templates[EnemyHealthbarTemplate.name] then
-			self._marker_templates[EnemyHealthbarTemplate.name] = EnemyHealthbarTemplate
-		end
-	end
-	if EnemyDebuffTemplate then
-		if not self._marker_templates[EnemyDebuffTemplate.name] then
-			self._marker_templates[EnemyDebuffTemplate.name] = EnemyDebuffTemplate
+	if EnemyImprovedTemplate then
+		if not self._marker_templates[EnemyImprovedTemplate.name] then
+			self._marker_templates[EnemyImprovedTemplate.name] = EnemyImprovedTemplate
 		end
 	end
 end
 
 mod:hook_safe(CLASS.HudElementWorldMarkers, "init", function(self)
 	add_custom_templates(self)
-end)
-
--- toggle boss healthbar
-mod:hook_safe("HudElementBossHealth", "update", function(self)
-	if not fs.hb_toggle_base_boss_healthbar then
-		self:_set_active(false)
-	end
 end)
 
 -----------------------------------------------------------------------
@@ -266,6 +290,10 @@ mod:hook_safe(CLASS.HudElementWorldMarkers, "update", function(self, dt, t)
 	end
 
 	if mod.enabled then
+		-- Aim detection: run every frame, independent of throttle
+		mod.aimed_unit = {}
+		mod.do_aim_raycast()
+
 		-- throttle updates according to enemy amounts to help keep performance in check...
 		local enemy_count = 0
 		for _ in next, mod.enemy_cache do
@@ -282,12 +310,6 @@ mod:hook_safe(CLASS.HudElementWorldMarkers, "update", function(self, dt, t)
 		if self._update_time > update_interval then
 			self._update_time = 0
 			mod.update_enemies(dt, t)
-		end
-
-		-- force refresh cache every 2 minutes (ish) to help mid-mission memory build up...
-		if self._total_update_time > 120 then
-			self._total_update_time = 0
-			mod.clear_caches()
 		end
 
 		-- pulse special attacks + stagger outlines (combined into single cache iteration)
@@ -340,6 +362,13 @@ mod:hook_safe(CLASS.HudElementWorldMarkers, "update", function(self, dt, t)
 			mod.outline_safety_cleanup()
 		end
 
+		-- MARKER CLEANUP - runs every ~1 second to remove orphaned markers for dead/invalid units
+		self._marker_cleanup_timer = (self._marker_cleanup_timer or 0) + dt
+		if self._marker_cleanup_timer >= 1 then
+			self._marker_cleanup_timer = 0
+			mod.cleanup_orphaned_markers()
+		end
+
 		-- Hide default health bars if custom healthbars are enabled!
 		if fs.healthbar_enable then
 			local markers = self._markers
@@ -353,7 +382,7 @@ mod:hook_safe(CLASS.HudElementWorldMarkers, "update", function(self, dt, t)
 
 				if template then
 					local name = template.name
-					if name and name ~= "enemy_healthbar" and string.find(name, "damage_indicator", 1, true) then
+					if name and name ~= "enemies_improved" and string.find(name, "damage_indicator", 1, true) then
 						marker.draw = false
 						marker.alpha_multiplier = 0
 					end
@@ -409,13 +438,80 @@ mod.force_remove_unit_markers = function(unit)
 
 	local entry = mod.enemy_cache[unit]
 	if entry then
-		entry._healthbar_created = false
-		entry._healthbar_pending = nil
-		entry._marker_created = false
-
+		entry._ei_marker_created = false
+		entry._ei_marker_pending = nil
 		mod.disable_enemy_outlines(unit, entry)
 		mod.remove_alert_outline(entry)
 		mod.remove_stagger_outline(entry)
+	end
+end
+
+-- Remove ALL enemies_improved markers from the world markers system (used during mod reload/unload)
+mod.remove_all_ei_markers = function()
+	local ui_manager = Managers.ui
+	local hud = ui_manager and ui_manager:get_hud()
+	local world_markers = hud and hud:element("HudElementWorldMarkers")
+	if not world_markers then
+		return
+	end
+
+	local event = Managers.event
+
+	-- Collect marker IDs to remove by iterating _markers_by_type directly
+	local by_type = world_markers._markers_by_type
+	local ei_list = by_type and by_type["enemies_improved"]
+	if ei_list then
+		-- Copy IDs first so removal during iteration doesn't cause issues
+		local ids = {}
+		local n = 0
+		for i = 1, #ei_list do
+			local m = ei_list[i]
+			local id = m and (m.id or m)
+			if id then
+				n = n + 1
+				ids[n] = id
+			end
+		end
+		for i = 1, n do
+			event:trigger("remove_world_marker", ids[i])
+		end
+	end
+
+	-- Also clear our tracking tables so we don't hold stale references
+	table_clear(mod.enemy_markers)
+	table_clear(mod.enemy_healthbars)
+	table_clear(mod.enemy_debuffs)
+end
+
+-- Clean up markers whose unit has no cache entry at all (mod reload, stale callbacks, etc.)
+-- Units with cache entries (dead or alive) are handled by remove_dead to avoid racing with DPS windows.
+mod.cleanup_orphaned_markers = function()
+	local to_remove = {}
+	local count = 0
+
+	for unit, marker_id in pairs(mod.enemy_markers) do
+		if not mod.enemy_cache[unit] then
+			count = count + 1
+			to_remove[count] = unit
+		end
+	end
+
+	for unit, marker_id in pairs(mod.enemy_healthbars) do
+		if not mod.enemy_markers[unit] and not mod.enemy_cache[unit] then
+			count = count + 1
+			to_remove[count] = unit
+		end
+	end
+
+	for unit, marker_id in pairs(mod.enemy_debuffs) do
+		if not mod.enemy_markers[unit] and not mod.enemy_cache[unit] then
+			count = count + 1
+			to_remove[count] = unit
+		end
+	end
+
+	for i = 1, count do
+		mod.force_remove_unit_markers(to_remove[i])
 	end
 end
 
@@ -488,9 +584,11 @@ mod.scan_enemies = function()
 
 	local cache = mod.enemy_cache
 
-	-- mark unseen
+	-- mark unseen (preserve DPS-window dead units so they continue rendering)
 	for _, data in next, cache do
-		data.seen = false
+		if not data._dead_at then
+			data.seen = false
+		end
 	end
 
 	-- Return cull cell entries to pool before clearing
@@ -519,7 +617,6 @@ mod.scan_enemies = function()
 
 				cache[unit] = nil
 				mod.marked_dead[unit] = nil
-
 				goto skip_breed
 			end
 
@@ -530,7 +627,6 @@ mod.scan_enemies = function()
 
 					cache[unit] = nil
 					mod.marked_dead[unit] = nil
-
 					goto skip_breed
 				end
 			end
@@ -644,16 +740,14 @@ mod.scan_enemies = function()
 
 						alert_healthbar = false,
 
-						_marker_created = false,
-						_healthbar_created = false,
-						_last_marker_update = 0,
-						_last_healthbar_update = 0,
+						_ei_marker_created = false,
 					}
 
 					mod.marked_dead[unit] = nil
 				else
 					entry.seen = true
 					mod.marked_dead[unit] = nil
+					entry._dead_at = nil
 				end
 			end
 			::skip_breed::
@@ -707,11 +801,13 @@ mod.scan_enemies = function()
 
 							_priority_score = data.score,
 							pos = Vector3(data.pos.x, data.pos.y, data.pos.z),
+							_ei_marker_created = false,
 						}
 					else
 						entry.seen = true
 						entry._priority_score = data.score
 						entry.pos = Vector3(data.pos.x, data.pos.y, data.pos.z)
+						entry._dead_at = nil
 					end
 
 					mod.marked_dead[unit] = nil
@@ -1012,8 +1108,18 @@ local function _build_horde_clusters(units, num_units)
 					if e and mod.detect_alive(u) then
 						local he = e.health_ext
 						if he then
-							total_current = total_current + (he:current_health() or 0)
-							total_max = total_max + (he:max_health() or 0)
+							local ok, v = pcall(function()
+								return he:current_health()
+							end)
+							if ok then
+								total_current = total_current + (v or 0)
+							end
+							ok, v = pcall(function()
+								return he:max_health()
+							end)
+							if ok then
+								total_max = total_max + (v or 0)
+							end
 						end
 					end
 				end
@@ -1071,6 +1177,8 @@ mod.remove_dead = function()
 
 	local player_pos = Unit.world_position(player_unit, 1)
 	local max_dist_sq = (mod.frame_settings.draw_distance or 50) ^ 2
+	local fs = mod.frame_settings
+	local t = mod.get_time()
 	local mark_dead = false
 	local remove_table = _units_to_remove
 
@@ -1080,18 +1188,46 @@ mod.remove_dead = function()
 
 		-- Dead check
 		if not mod.detect_alive(unit) then
-			remove = true
-			mark_dead = true
+			if fs.hb_show_dps then
+				if not entry._dead_at then
+					entry._dead_at = t
+				end
+			else
+				remove = true
+				mark_dead = true
+			end
 		else
 			local health_extension = entry and entry.health_ext
-			if health_extension and health_extension:current_health_percent() <= 0 then
+			if health_extension then
+				local ok, pct = pcall(function()
+					return health_extension:current_health_percent()
+				end)
+				if ok and pct <= 0 then
+					if fs.hb_show_dps then
+						if not entry._dead_at then
+							entry._dead_at = t
+						end
+					else
+						remove = true
+						mark_dead = true
+					end
+				end
+			else
+				remove = true
+				mark_dead = true
+			end
+		end
+
+		-- Deferred DPS removal: clean up after damage_number_duration
+		if not remove and entry._dead_at then
+			if t - entry._dead_at > fs.damage_number_duration then
 				remove = true
 				mark_dead = true
 			end
 		end
 
 		-- Distance check
-		if not remove and player_pos then
+		if not remove and player_pos and mod.detect_alive(unit) then
 			local wp = Unit.world_position(unit, 1)
 			if wp then
 				entry.pos = Vector3(wp.x, wp.y, wp.z)
@@ -1141,7 +1277,7 @@ mod.remove_dead = function()
 				Managers.event:trigger("remove_world_marker", id)
 			end
 			id = mod.enemy_healthbars[unit]
-			if id and not fs.hb_show_dps then
+			if id then
 				Managers.event:trigger("remove_world_marker", id)
 			end
 			id = mod.enemy_debuffs[unit]
@@ -1161,17 +1297,15 @@ mod.remove_dead = function()
 			mod.marked_dead[unit] = nil
 		end
 
-		if not fs.hb_show_dps then
-			mod.enemy_healthbars[unit] = nil
-		end
+		mod.enemy_healthbars[unit] = nil
+		mod.enemy_debuffs[unit] = nil
+		mod.enemy_markers[unit] = nil
 
 		-- Clean up per-unit data that accumulates if healthbars module is loaded
 		if mod._cleanup_unit_health_data then
 			mod._cleanup_unit_health_data(unit)
 		end
 
-		mod.enemy_debuffs[unit] = nil
-		mod.enemy_markers[unit] = nil
 		mod.enemy_cache[unit] = nil
 	end
 end
@@ -1194,6 +1328,8 @@ end
 -----------------------------------------------------------------------
 
 mod.clear_caches = function()
+	mod.remove_all_ei_markers()
+
 	table_clear(mod._broadphase_results)
 	table_clear(mod.source_unit_cache)
 
@@ -1202,7 +1338,6 @@ mod.clear_caches = function()
 	table_clear(mod.enemy_debuffs)
 
 	table_clear(mod.enemy_cache)
-	--table_clear(mod.marked_dead)
 
 	table_clear(_enemy_units_temp)
 	table_clear(_horde_clusters)
@@ -1215,6 +1350,46 @@ mod.update_horde_clusters = function(temp, to_process)
 	else
 		table_clear(_horde_clusters)
 		table_clear(_horde_cluster_by_unit)
+	end
+end
+
+-- Crosshair cone check: find the closest enemy within ~12° of camera centre using the camera's own position/rotation and the engine's position lookup cache.
+mod.do_aim_raycast = function()
+	local ui_manager = Managers.ui
+	local hud = ui_manager and ui_manager:get_hud()
+	local world_markers = hud and hud:element("HudElementWorldMarkers")
+	if not world_markers then
+		return
+	end
+
+	local camera = world_markers:_get_camera()
+	if not camera then
+		return
+	end
+
+	local cam_pos = Camera.local_position(camera)
+	local px, py, pz = cam_pos.x, cam_pos.y, cam_pos.z
+	local forward = Quaternion.forward(Camera.local_rotation(camera))
+	local cone_cos = math.cos(math.rad(8))
+	local draw_dist_sq = fs.draw_distance * fs.draw_distance
+
+	for unit in pairs(mod.enemy_cache) do
+		if Unit_alive(unit) then
+			local enemy_pos = POSITION_LOOKUP[unit]
+			if enemy_pos then
+				local dx = enemy_pos.x - px
+				local dy = enemy_pos.y - py
+				local dz = (enemy_pos.z - pz) * 0.3
+				local dist_sq = dx * dx + dy * dy + dz * dz
+				if dist_sq < draw_dist_sq and dist_sq > 0 then
+					local dist = math.sqrt(dist_sq)
+					local dot = (dx * forward.x + dy * forward.y + dz * forward.z) / dist
+					if dot > cone_cos then
+						mod.aimed_unit[unit] = true
+					end
+				end
+			end
+		end
 	end
 end
 
@@ -1330,11 +1505,11 @@ mod.update_enemies = function(dt, t)
 			end
 
 			if fs.healthbar_enable or fs.show_damage_numbers then
-				mod.update_enemy_healthbars(entry)
+				mod.update_enemy_healthbars(entry, t)
 			end
 
 			if fs.debuff_enable then
-				mod.update_enemy_debuffs(entry)
+				mod.update_enemy_debuffs(entry, t)
 			end
 
 			mod.update_special_attack_detection(entry)
