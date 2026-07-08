@@ -34,7 +34,7 @@ local math_floor = math.floor
 template.name = "enemy_markers"
 template.unit_node = "root_point"
 template.min_distance = 0
-template.position_offset = { 0, 0, fs.hb_y_offset }
+template.position_offset = { 0, 0, fs.marker_y_offset }
 
 template.size = size
 template.icon_size = icon_size
@@ -100,8 +100,6 @@ template.fade_settings = {
 
 -- Fatshark typo: world markers expect `create_widget_defintion`
 template.create_widget_defintion = function(template, scenegraph_id)
-	local fs = mod.frame_settings
-	local mkr_y_offset = fs.marker_y_offset * 100 or 0
 	return UIWidget.create_definition({
 		{
 			pass_type = "texture",
@@ -114,8 +112,8 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				size = background_size,
 				default_size = background_size,
 
-				offset = { 0, mkr_y_offset, 1 },
-				default_offset = { 0, mkr_y_offset, 1 },
+				offset = { 0, 0, 1 },
+				default_offset = { 0, 0, 1 },
 
 				color = fs.marker_bg_colour,
 				default_alpha = fs.marker_bg_colour[1],
@@ -144,8 +142,8 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				size = { background_size[1] / 2, background_size[2] / 2 },
 				default_size = { background_size[1] / 2, background_size[2] / 2 },
 
-				offset = { 0, mkr_y_offset, 2 },
-				default_offset = { 0, mkr_y_offset, 2 },
+				offset = { 0, 0, 2 },
+				default_offset = { 0, 0, 2 },
 
 				color = { 200, 220, 0, 0 },
 				default_alpha = 200,
@@ -199,8 +197,8 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				size = size,
 				default_size = size,
 
-				offset = { 0, mkr_y_offset, 5 },
-				default_offset = { 0, mkr_y_offset, 5 },
+				offset = { 0, 0, 5 },
+				default_offset = { 0, 0, 5 },
 
 				color = { 0, 255, 255, 255 },
 				default_alpha = 0,
@@ -220,8 +218,8 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				size = ping_size,
 				default_size = ping_size,
 
-				offset = { 0, mkr_y_offset, 0 },
-				default_offset = { 0, mkr_y_offset, 0 },
+				offset = { 0, 0, 0 },
+				default_offset = { 0, 0, 0 },
 
 				color = { 255, 255, 255, 255 },
 				default_alpha = 255,
@@ -241,8 +239,8 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				size = icon_size,
 				default_size = icon_size,
 
-				offset = { 0, mkr_y_offset, 3 },
-				default_offset = { 0, mkr_y_offset, 3 },
+				offset = { 0, 0, 3 },
+				default_offset = { 0, 0, 3 },
 
 				color = { 0, 200, 175, 0 },
 				default_alpha = 0,
@@ -262,8 +260,8 @@ template.create_widget_defintion = function(template, scenegraph_id)
 				size = arrow_size,
 				default_size = arrow_size,
 
-				offset = { 0, mkr_y_offset, 2 },
-				default_offset = { 0, mkr_y_offset, 2 },
+				offset = { 0, 0, 2 },
+				default_offset = { 0, 0, 2 },
 
 				color = { 255, 255, 255, 255 },
 				default_alpha = 255,
@@ -285,21 +283,20 @@ end
 local Unit_alive = Unit.alive
 
 template.on_enter = function(widget, marker, template)
-	local content = widget.content
-	local fs = mod.frame_settings
-
 	if not marker.unit or not Unit_alive(marker.unit) then
-		content.draw_mkr = false
+		marker.draw = false
 		marker.alpha_multiplier = 0
 		widget.alpha_multiplier = 0
+		marker.remove = true
 		return
 	end
 
-	template.position_offset = { 0, 0, fs.hb_y_offset }
+	template.position_offset = { 0, 0, fs.marker_y_offset }
 	widget.alpha_multiplier = 0
+	local content = widget.content
 	content.m_built = false
 
-	content.draw_mkr = false -- force hidden until ready...
+	marker.draw = false -- force hidden until ready...
 
 	local unit = marker.unit
 	content.unit = unit
@@ -328,6 +325,7 @@ template.on_enter = function(widget, marker, template)
 
 	content.special_attack_imminent = false
 
+	local fs = mod.frame_settings
 	max_size_value = 32 * fs.marker_size
 	size[1], size[2] = max_size_value, max_size_value
 	ping_size[1], ping_size[2] = max_size_value, max_size_value
@@ -351,15 +349,10 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 		return
 	end
 
-	local content = widget.content
-	local distance = content.distance or 0
-	local unit = marker.unit
-	local style = widget.style
-	local marker_scale = marker.scale
-
 	-- if not on screen or draw == false, throttle heavily....
-	if not marker.is_inside_frustum or content.draw_mkr == false then
+	if not marker.is_inside_frustum or marker.draw == false then
 		widget._next_update = t + fs.off_screen_throttle_rate
+		return
 	-- distance based updates
 	elseif marker.distance < 50 then
 		widget._next_update = t + fs.general_throttle_rate
@@ -369,10 +362,17 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 		widget._next_update = t + fs.general_throttle_rate * 2
 	end
 
+	local content = widget.content
+	local distance = content.distance or 0
+	local unit = marker.unit
+	local style = widget.style
+	local marker_scale = marker.scale
+
 	if not unit or not Unit_alive(unit) then
-		content.draw_mkr = false
+		marker.draw = false
 		marker.alpha_multiplier = 0
 		widget.alpha_multiplier = 0
+		marker.remove = true
 		return
 	end
 
@@ -385,54 +385,21 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 	local style = widget.style
 
 	if content.m_allowed == false then
-		content.draw_mkr = false
+		marker.draw = false
 		marker.alpha_multiplier = 0
 		widget.alpha_multiplier = 0
+		marker.remove = true
 		return
 	end
-
-	content.draw_mkr = true
 
 	local is_alive = mod.detect_alive(unit)
 
 	if not is_alive then
-		content.draw_mkr = false
+		marker.draw = false
 		marker.alpha_multiplier = 0
 		widget.alpha_multiplier = 0
-		content.m_built = false
+		marker.remove = true
 		return
-	end
-
-	if is_alive then
-		local marker_display = fs.marker_display_option or "always_show"
-
-		if marker_display ~= "always_show" then
-			local time_since_last_damage = t - (content.last_damage_taken_time or 0)
-
-			local health_ext = content.health_extension
-			if not health_ext then
-				health_ext = ScriptUnit_has_extension(unit, "health_system")
-				content.health_extension = health_ext
-			end
-
-			-- Only show if they ARE damaged
-			if marker_display == "hide_unless_damaged" and time_since_last_damage > 5 then
-				content.draw_mkr = false
-				marker.alpha_multiplier = 0
-				widget.alpha_multiplier = 0
-				content.m_built = false
-				return
-			end
-
-			-- Hide if they are damaged
-			if marker_display == "hide_when_damaged" and time_since_last_damage < 5 then
-				content.draw_mkr = false
-				marker.alpha_multiplier = 0
-				widget.alpha_multiplier = 0
-				content.m_built = false
-				return
-			end
-		end
 	end
 
 	-- marker height
@@ -546,12 +513,12 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 	marker.alpha_multiplier = line_of_sight_progress or 1
 
 	if not marker.is_inside_frustum then
-		content.draw_mkr = false
+		marker.draw = false
 		marker.alpha_multiplier = 0
 		widget.alpha_multiplier = 0
 	end
 
-	if content.draw_mkr then
+	if marker.draw then
 		content.m_built = true
 	else
 		content.m_built = false

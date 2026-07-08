@@ -6,8 +6,10 @@ local Managers = Managers
 mod.enemy_debuffs = mod.enemy_debuffs or {}
 mod.marked_dead = mod.marked_dead or {}
 
-local function _on_ei_marker_created(marker_id, entry, unit)
-	mod._on_ei_marker_created(marker_id, entry, unit)
+local function _on_debuff_created(debuff_id, entry, unit)
+	entry.dot_debuffs = mod.get_marker_by_id(debuff_id)
+	mod.enemy_debuffs[unit] = debuff_id
+	entry._debuff_pending = nil
 end
 
 -----------------------------------------------------------------------
@@ -26,14 +28,7 @@ mod.update_enemy_debuffs = function(entry, t)
 		return
 	end
 
-	-- Safety: clear stuck pending state after short time
-	if entry._ei_marker_pending and entry._ei_marker_pending_t then
-		if t - entry._ei_marker_pending_t > 2 then
-			entry._ei_marker_pending = nil
-		end
-	end
-
-	if entry._ei_marker_pending or entry._ei_marker_created then
+	if entry._debuff_pending then
 		return
 	end
 
@@ -51,10 +46,9 @@ mod.update_enemy_debuffs = function(entry, t)
 		return
 	end
 
-	entry._ei_marker_pending = true
-	entry._ei_marker_pending_t = t
+	entry._debuff_pending = true
 
-	Managers_event:trigger("add_world_marker_unit", "enemies_improved", unit, function(marker_id)
-		_on_ei_marker_created(marker_id, entry, unit)
+	Managers_event:trigger("add_world_marker_unit", "enemy_debuff", unit, function(debuff_id)
+		_on_debuff_created(debuff_id, entry, unit)
 	end)
 end
