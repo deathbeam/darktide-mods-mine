@@ -2,9 +2,9 @@
 
 -- Base
 Alfs_DMF_Extensions
+MoreGraphicsOptions
 
 -- Gameplay
-Perspectives
 AutoAbilities
 AutoMark
 Skitarius
