@@ -2,6 +2,7 @@
 
 -- Base
 Alfs_DMF_Extensions
+ModPerformanceMonitor
 MoreGraphicsOptions
 
 -- Gameplay

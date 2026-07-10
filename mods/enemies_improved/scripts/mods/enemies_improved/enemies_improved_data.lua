@@ -529,6 +529,12 @@ table.insert(mod.settings_widgets, {
 			tooltip = "global_opacity_tooltip",
 		},
 		{
+			setting_id = "markers_show_only_aimed",
+			type = "checkbox",
+			default_value = false,
+			tooltip = "markers_show_only_aimed_tooltip",
+		},
+		{
 			setting_id = "enable_depth_fading",
 			type = "checkbox",
 			default_value = true,
@@ -897,6 +903,17 @@ table.insert(mod.settings_widgets, {
 			tooltip = "overhead_marker_uses_healthbar_colour_tooltip",
 		},
 		{
+			setting_id = "marker_display_option",
+			type = "dropdown",
+			options = {
+				{ text = "always_show", value = "always_show" },
+				{ text = "hide_unless_damaged", value = "hide_unless_damaged" },
+				{ text = "hide_when_damaged", value = "hide_when_damaged" },
+			},
+			default_value = "always_show",
+			tooltip = "marker_display_option_tooltip",
+		},
+		{
 			setting_id = "marker_bg_colour",
 			type = "group",
 			tab = "Markers",
@@ -943,6 +960,7 @@ table.insert(mod.settings_widgets, {
 				},
 			},
 		},
+		
 	},
 })
 
@@ -957,6 +975,18 @@ table.insert(mod.settings_widgets, {
 			type = "checkbox",
 			default_value = true,
 			tooltip = "healthbar_enable_tooltip",
+		},
+		{
+			setting_id = "hb_enable_bar",
+			type = "checkbox",
+			default_value = true,
+			tooltip = "hb_enable_bar_tooltip",
+		},
+		{
+			setting_id = "hb_enable_text",
+			type = "checkbox",
+			default_value = true,
+			tooltip = "hb_enable_text_tooltip",
 		},
 		{
 			setting_id = "healthbar_colour_preset",
@@ -1011,8 +1041,20 @@ table.insert(mod.settings_widgets, {
 		{
 			setting_id = "hb_horde_clusters_enable",
 			type = "checkbox",
-			default_value = true,
+			default_value = false,
 			tooltip = "hb_horde_clusters_enable_tooltip",
+		},
+		{
+			setting_id = "hb_horde_clusters_size",
+			type = "numeric",
+			default_value = 10,
+			range = {
+				3,
+				20,
+			},
+			decimals_number = 0,
+			step_size_value = 1,
+			tooltip = "hb_horde_clusters_size_tooltip",
 		},
 		{
 			setting_id = "hb_hide_after_no_damage",
@@ -1114,7 +1156,7 @@ table.insert(mod.settings_widgets, {
 		{
 			setting_id = "hb_y_offset",
 			type = "numeric",
-			default_value = 0.4,
+			default_value = 0,
 			range = {
 				-1,
 				2,
@@ -1281,7 +1323,7 @@ table.insert(mod.settings_widgets, {
 			setting_id = "hb_damage_number_types",
 			type = "dropdown",
 			options = damage_number_types,
-			default_value = "floating",
+			default_value = "readable",
 			tooltip = "hb_damage_number_types_tooltip",
 		},
 		{
@@ -1299,7 +1341,7 @@ table.insert(mod.settings_widgets, {
 		{
 			setting_id = "damage_number_y_offset",
 			type = "numeric",
-			default_value = 1,
+			default_value = 0,
 			decimals_number = 2,
 			step_size_value = 0.1,
 			range = {
@@ -1452,6 +1494,12 @@ table.insert(mod.settings_widgets, {
 			tooltip = "debuff_horde_enable_tooltip",
 		},
 		{
+			setting_id = "debuff_boss_healthbar_enable",
+			type = "checkbox",
+			default_value = true,
+			tooltip = "debuff_boss_healthbar_enable_tooltip",
+		},
+		{
 			setting_id = "debuff_horizontal",
 			type = "checkbox",
 			default_value = true,
@@ -1523,7 +1571,26 @@ table.insert(mod.settings_widgets, {
 			default_value = false,
 			tooltip = "debuff_show_on_body_tooltip",
 		},
-
+		{
+			setting_id = "debuff_stacks_font_size",
+			type = "numeric",
+			default_value = 16,
+			range = {
+				8,
+				48,
+			},
+			tooltip = "debuff_stacks_font_size_tooltip",
+		},
+		{
+			setting_id = "debuff_names_font_size",
+			type = "numeric",
+			default_value = 16,
+			range = {
+				8,
+				48,
+			},
+			tooltip = "debuff_names_font_size_tooltip",
+		},
 		{
 			setting_id = "debuff_icon_scale",
 			type = "numeric",
