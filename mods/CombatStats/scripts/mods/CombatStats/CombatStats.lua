@@ -172,10 +172,20 @@ mod:hook(
                     if breed then
                         mod.tracker:_start_enemy_engagement(attacked_unit, breed)
 
+                        -- The game resolves a companion's attacker to its owner player before this hook
+                        -- fires (AttackingUnitResolver), so attacking_unit is already the player. The only
+                        -- surviving trace of a companion origin is the damage profile name, which always
+                        -- contains "companion" for servo skull (lasgun/flamer) and adamant dog (pounce).
+                        local damage_profile_name = damage_profile and damage_profile.name
+                        local effective_attack_type = attack_type
+                        if damage_profile_name and damage_profile_name:find('companion') then
+                            effective_attack_type = 'companion'
+                        end
+
                         mod.tracker:_track_enemy_damage(
                             attacked_unit,
                             damage,
-                            attack_type,
+                            effective_attack_type,
                             is_critical_strike,
                             hit_weakspot,
                             damage_profile and damage_profile.name,

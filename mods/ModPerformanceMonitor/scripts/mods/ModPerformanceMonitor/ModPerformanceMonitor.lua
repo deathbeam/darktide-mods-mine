@@ -3,6 +3,7 @@ local mod = get_mod("ModPerformanceMonitor")
 local unpack = unpack or table.unpack
 local collectgarbage = collectgarbage
 local math_min, math_max, math_huge, math_floor, math_ceil = math.min, math.max, math.huge, math.floor, math.ceil
+local math_sqrt, math_abs = math.sqrt, math.abs
 local string_format = string.format
 local table_sort = table.sort
 
@@ -29,8 +30,8 @@ end
 
 local timer_now, timer_name, timer_res_ms
 
-local function try_ffi_timer()
-	local ok_ffi, ffi = pcall(function()
+local function get_ffi()
+	local ok, ffi = pcall(function()
 		local Mods_g = rawget(_G, "Mods")
 		return rawget(_G, "ffi")
 			or (package and package.loaded and package.loaded.ffi)
@@ -38,7 +39,13 @@ local function try_ffi_timer()
 			or (Mods_g and Mods_g.ffi)
 			or require("ffi")
 	end)
-	if not ok_ffi or type(ffi) ~= "table" then return nil end
+	if ok and type(ffi) == "table" then return ffi end
+	return nil
+end
+
+local function try_ffi_timer()
+	local ffi = get_ffi()
+	if not ffi then return nil end
 
 	pcall(ffi.cdef, [[
 		int QueryPerformanceCounter(int64_t *c);
@@ -64,67 +71,134 @@ local function try_ffi_timer()
 	return nil
 end
 
-local function measure_res(fn)
-	local best = math_huge
+local TIME_ALLOW = { "time", "clock", "tick", "counter", "nanos", "micros", "perf" }
+local TIME_DENY = { "set", "reset", "start", "stop", "clear", "pause", "enable", "disable",
+	"sleep", "wait", "date", "scale", "delta", "budget", "sync", "limit", "frame_times" }
+
+local function is_time_getter(n)
+	local l = n:lower()
+	for i = 1, #TIME_DENY do if l:find(TIME_DENY[i], 1, true) then return false end end
+	for i = 1, #TIME_ALLOW do if l:find(TIME_ALLOW[i], 1, true) then return true end end
+	return false
+end
+
+local function raw_resolution(fn)
 	local prev = fn()
-	for i = 1, 500000 do
+	if type(prev) ~= "number" then return nil end
+	local best = math_huge
+	for i = 1, 200000 do
 		local t = fn()
+		if type(t) ~= "number" then return nil end
 		local d = t - prev
+		if d < 0 then return nil end
 		if d > 0 then
 			if d < best then best = d end
-			if i >= 2000 then break end
+			if i >= 1500 then break end
 		end
 		prev = t
 	end
+	if best == math_huge then return nil end
 	return best
 end
 
+local function ms_per_unit(fn)
+	local osc = os.clock
+	local c0, r0 = osc(), fn()
+	while (osc() - c0) < 0.015 do end
+	local c1, r1 = osc(), fn()
+	local ms, raw = (c1 - c0) * 1000.0, r1 - r0
+	if ms <= 0 or raw <= 0 then return nil end
+	return ms / raw
+end
+
+local function probe_timer(fn)
+	local ok, raw = pcall(raw_resolution, fn)
+	if not ok or not raw then return nil end
+	local ok2, scale = pcall(ms_per_unit, fn)
+	if not ok2 or not scale then return nil end
+	local res_ms = raw * scale
+	if res_ms <= 0 or res_ms ~= res_ms then return nil end
+	return res_ms, scale
+end
+
 do
-	local builders = {
-		function()
-			local f = try_ffi_timer()
-			if f then return f, "ffi.QueryPerformanceCounter" end
-			return nil
-		end,
-		function()
-			if rawget(_G, "os") and type(os.clock) == "function" then
-				return function() return os.clock() * 1000.0 end, "os.clock"
-			end
-			return nil
-		end,
-		function()
-			local App = rawget(_G, "Application")
-			if App and type(App.time_since_launch) == "function" then
-				return function() return App.time_since_launch() * 1000.0 end, "Application.time_since_launch"
-			end
-			return nil
-		end,
+	local found = {}
+
+	local ffi_fn = try_ffi_timer()
+	if ffi_fn then found[#found + 1] = { name = "ffi.QueryPerformanceCounter", fn = ffi_fn, scale = 1 } end
+
+	if rawget(_G, "os") and type(os.clock) == "function" then
+		found[#found + 1] = { name = "os.clock", fn = os.clock, scale = 1000.0 }
+	end
+
+	local Mods_g = rawget(_G, "Mods")
+	local containers = {
+		{ "Application", rawget(_G, "Application") },
+		{ "Renderer", rawget(_G, "Renderer") },
+		{ "Profiler", rawget(_G, "Profiler") },
+		{ "Script", rawget(_G, "Script") },
+		{ "Engine", rawget(_G, "Engine") },
+		{ "Mods.lua", Mods_g and Mods_g.lua },
 	}
-	local best_fn, best_name, best_res
-	local fallback_fn, fallback_name
-	for _, build in ipairs(builders) do
-		local ok, fn, name = pcall(build)
-		if ok and type(fn) == "function" then
-			fallback_fn, fallback_name = fallback_fn or fn, fallback_name or name
-			local res = measure_res(fn)
-			if res < math_huge and (not best_res or res < best_res) then
-				best_fn, best_name, best_res = fn, name, res
-			end
+	for _, c in ipairs(containers) do
+		local cname, tbl = c[1], c[2]
+		if type(tbl) == "table" then
+			pcall(function()
+				for k, v in pairs(tbl) do
+					if type(k) == "string" and type(v) == "function" and is_time_getter(k) then
+						found[#found + 1] = { name = cname .. "." .. k, fn = v }
+					end
+				end
+			end)
 		end
 	end
-	if best_fn then
-		timer_now, timer_name, timer_res_ms = best_fn, best_name, best_res
-	elseif fallback_fn then
-		timer_now, timer_name, timer_res_ms = fallback_fn, fallback_name, 0.0
+
+	local report = {}
+	local best
+	for _, cand in ipairs(found) do
+		local res_ms, scale
+		if cand.scale then
+			local ok, raw = pcall(raw_resolution, cand.fn)
+			if ok and raw then res_ms, scale = raw * cand.scale, cand.scale end
+		else
+			res_ms, scale = probe_timer(cand.fn)
+		end
+		if res_ms then
+			report[#report + 1] = string_format("%s=%.5fms", cand.name, res_ms)
+			if not best or res_ms < best.res then
+				best = { name = cand.name, fn = cand.fn, scale = scale, res = res_ms }
+			end
+		else
+			report[#report + 1] = cand.name .. "=unusable"
+		end
+	end
+
+	if best then
+		local f, s = best.fn, best.scale
+		if s == 1 then
+			timer_now = f
+		else
+			timer_now = function() return f() * s end
+		end
+		timer_name, timer_res_ms = best.name, best.res
 	else
 		timer_now, timer_name, timer_res_ms = function() return 0.0 end, "none", 0.0
+	end
+
+	mod:info("Timer candidates: %s", #report > 0 and table.concat(report, "  ") or "(none found)")
+	if Mods_g and type(Mods_g.lua) == "table" then
+		local keys = {}
+		pcall(function() for k in pairs(Mods_g.lua) do keys[#keys + 1] = tostring(k) end end)
+		table.sort(keys)
+		mod:info("Mods.lua contains: %s", table.concat(keys, ", "))
 	end
 end
 
 mod._timer_name = timer_name
 mod._timer_res_ms = timer_res_ms
-local TIMER_OK = (timer_name == "ffi.QueryPerformanceCounter") or (timer_res_ms > 0 and timer_res_ms <= 0.2)
-mod:info("Timer: %s (resolution ~%.5f ms, usable=%s)", timer_name, timer_res_ms, tostring(TIMER_OK))
+local TIMER_OK = timer_res_ms > 0 and timer_res_ms <= 0.05
+mod._timer_ok = TIMER_OK
+mod:info("Timer: %s (resolution ~%.5f ms, high-resolution=%s)", timer_name, timer_res_ms, tostring(TIMER_OK))
 
 local SHIM_OVERHEAD_MS = 0
 local SUBTRACT_OVERHEAD = true
@@ -159,6 +233,11 @@ local child_ms = {}
 local child_kb = {}
 
 local SELF_NAME = "ModPerformanceMonitor"
+local CALIB_NAME = "__calibration__"
+
+local function is_internal(name)
+	return type(name) == "string" and name:sub(1, 2) == "__"
+end
 
 local EXCLUDED = {}
 do
@@ -176,10 +255,22 @@ local SHIM_SKIP = setmetatable({}, { __mode = "k" })
 local ft_vals, ft_n, ft_w = {}, 0, 1
 local worst_frame_ms = 0
 
+local function mem_kb()
+	local Prof = rawget(_G, "Profiler")
+	if Prof and type(Prof.lua_stats) == "function" then
+		local ok, m = pcall(Prof.lua_stats)
+		if ok and type(m) == "number" then return m end
+	end
+	local ok2, c = pcall(collectgarbage, "count")
+	if ok2 and type(c) == "number" then return c end
+	return nil
+end
+
 local function get_bucket(name)
 	local b = stats[name]
 	if not b then
 		b = {
+			name = name,
 			frame_self = 0, frame_incl = 0, frame_calls = 0, frame_mem = 0,
 			self_ms = 0, incl_ms = 0, calls = 0, mem_kb = 0,
 			peak_ms = 0, total_ms = 0, total_calls = 0,
@@ -193,9 +284,15 @@ local function get_bucket(name)
 	return b
 end
 
-local function make_wrapper(bucket, handler, source_label)
+local SUPPRESSED = {}
+
+local function make_wrapper(bucket, handler, source_label, suppressible)
 	local sources = bucket.sources
+	local bname = bucket.name
 	local w = function(...)
+		if suppressible and SUPPRESSED[bname] then
+			return
+		end
 		if not ENABLED then
 			return handler(...)
 		end
@@ -205,7 +302,7 @@ local function make_wrapper(bucket, handler, source_label)
 		local mem0
 		if TRACK_MEM then
 			child_kb[my] = 0
-			mem0 = collectgarbage("count")
+			mem0 = mem_kb()
 		end
 
 		local t0 = timer_now()
@@ -214,7 +311,11 @@ local function make_wrapper(bucket, handler, source_label)
 		if incl < 0 then incl = 0 end
 
 		local incl_mem = 0
-		if TRACK_MEM then incl_mem = collectgarbage("count") - mem0 end
+		if TRACK_MEM and mem0 then
+			local m1 = mem_kb()
+			if m1 then incl_mem = m1 - mem0 end
+			if incl_mem < 0 then incl_mem = 0 end
+		end
 
 		local self_ms = incl - (child_ms[my] or 0)
 		if self_ms < 0 then self_ms = 0 end
@@ -461,36 +562,14 @@ local function wrap_hud_elements()
 			if cls then
 				local bucket = get_bucket(mod_name)
 				if type(cls.update) == "function" then
-					cls.update = make_wrapper(bucket, cls.update, "hud " .. class_name .. ".update")
+					cls.update = make_wrapper(bucket, cls.update, "hud " .. class_name .. ".update", true)
 				end
 				if type(cls.draw) == "function" then
-					cls.draw = make_wrapper(bucket, cls.draw, "hud " .. class_name .. ".draw")
+					cls.draw = make_wrapper(bucket, cls.draw, "hud " .. class_name .. ".draw", true)
 				end
 				hud_wrapped[class_name] = true
 			end
 		end
-	end
-end
-
-if WRAP_OK then
-	local pt = get_persist("mpm_originals")
-	if type(pt.new_mod) ~= "function" then
-		local cur = rawget(_G, "new_mod")
-		if type(cur) == "function" then pt.new_mod = cur end
-	end
-	local orig_new_mod = pt.new_mod
-	if type(orig_new_mod) == "function" then
-		local nm = function(name, resources)
-			local t0 = timer_now()
-			local result = orig_new_mod(name, resources)
-			local dt = timer_now() - t0
-			if type(name) == "string" and name ~= SELF_NAME then
-				get_bucket(name).load_ms = dt
-			end
-			return result
-		end
-		SHIM_SKIP[nm] = true
-		rawset(_G, "new_mod", nm)
 	end
 end
 
@@ -511,7 +590,7 @@ local function instrument_events()
 			for _, ev in ipairs(EVENT_NAMES) do
 				local fn = rawget(other, ev)
 				if type(fn) == "function" then
-					other[ev] = make_wrapper(bucket, fn, "event " .. ev)
+					other[ev] = make_wrapper(bucket, fn, "event " .. ev, ev == "update")
 				end
 			end
 			instrumented[name] = true
@@ -563,8 +642,10 @@ local function fold_frame(frame_ms, baseline)
 		b.hist_w = (b.hist_w % HIST) + 1
 		if b.hist_n < HIST then b.hist_n = b.hist_n + 1 end
 
-		if fs > top_fs then top_fs = fs; top_name = name end
-		total = total + b.self_ms
+		if not is_internal(name) then
+			if fs > top_fs then top_fs = fs; top_name = name end
+			total = total + b.self_ms
+		end
 
 		for _, s in pairs(b.sources) do
 			s.self_ms = s.self_ms + DISPLAY_ALPHA * (s.frame_self - s.self_ms)
@@ -615,25 +696,25 @@ local function severity(ms)
 end
 
 local SORT_LABELS = {
-	self   = "CPU time",
-	incl   = "CPU time (inclusive)",
-	calls  = "calls per frame",
-	mem    = "memory per frame",
-	total  = "total time",
-	peak   = "peak (worst frame)",
-	spikes = "stutters caused",
-	load   = "load time",
+	self   = mod:localize("sort_self"),
+	incl   = mod:localize("sort_incl"),
+	calls  = mod:localize("sort_calls"),
+	mem    = mod:localize("sort_mem"),
+	total  = mod:localize("sort_total"),
+	peak   = mod:localize("sort_peak"),
+	spikes = mod:localize("sort_spikes"),
+	load   = mod:localize("sort_load"),
 }
 local current_sort = "self"
 local current_mode = "simplified"
 local current_tab = "all"
 
 local TABS = {
-	{ id = "all",    label = "All" },
-	{ id = "cpu",    label = "CPU" },
-	{ id = "mem",    label = "Memory" },
-	{ id = "spikes", label = "Stutters" },
-	{ id = "load",   label = "Loading" },
+	{ id = "all",    label = mod:localize("tab_all") },
+	{ id = "cpu",    label = mod:localize("tab_cpu") },
+	{ id = "mem",    label = mod:localize("tab_mem") },
+	{ id = "spikes", label = mod:localize("tab_spikes") },
+	{ id = "load",   label = mod:localize("tab_load") },
 }
 mod._tabs = TABS
 mod._active_tab = current_tab
@@ -670,8 +751,10 @@ local function refresh_order()
 	local arr, n = {}, 0
 	local sort_key = active_sort()
 	for name, b in pairs(stats) do
-		n = n + 1
-		arr[n] = { name = name, key = value_for(b, sort_key) }
+		if not is_internal(name) then
+			n = n + 1
+			arr[n] = { name = name, key = value_for(b, sort_key) }
+		end
 	end
 	table_sort(arr, function(x, y) return x.key > y.key end)
 	local order = {}
@@ -686,7 +769,7 @@ local function ordered_entries()
 		if b then n = n + 1; out[n] = { name = name, b = b }; seen[name] = true end
 	end
 	for name, b in pairs(stats) do
-		if not seen[name] then n = n + 1; out[n] = { name = name, b = b } end
+		if not seen[name] and not is_internal(name) then n = n + 1; out[n] = { name = name, b = b } end
 	end
 	return out
 end
@@ -697,22 +780,16 @@ local function trunc(s, w)
 end
 
 local function lua_mem_mb()
-	local ok, mem = pcall(function()
-		local Prof = rawget(_G, "Profiler")
-		if Prof and Prof.lua_stats then return (Prof.lua_stats()) end
-		return collectgarbage("count")
-	end)
-	local kb = (ok and type(mem) == "number") and mem or collectgarbage("count")
-	return kb / 1024
+	return (mem_kb() or 0) / 1024
 end
 
 local function lua_gc_stats()
 	local ok, m, g, _pct, _est, actual = pcall(function()
 		local Prof = rawget(_G, "Profiler")
 		if Prof and Prof.lua_stats then return Prof.lua_stats() end
-		return collectgarbage("count"), 0, 0, 0, 0
+		return mem_kb(), 0, 0, 0, 0
 	end)
-	if not ok then return collectgarbage("count") / 1024, 0, 0 end
+	if not ok then return (mem_kb() or 0) / 1024, 0, 0 end
 	return (m or 0) / 1024, (g or 0), (actual or 0)
 end
 
@@ -727,8 +804,66 @@ local function mem_trend()
 	else return mb, "steady", false end
 end
 
+local function median(t)
+	local n = #t
+	if n == 0 then return 0 end
+	local c = {}
+	for i = 1, n do c[i] = t[i] end
+	table_sort(c)
+	if n % 2 == 1 then return c[(n + 1) / 2] end
+	return (c[n / 2] + c[n / 2 + 1]) * 0.5
+end
+
+local T95 = { 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
+	2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086,
+	2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042 }
+
+local function t95(df)
+	if df < 1 then return 0 end
+	if df <= 30 then return T95[df] end
+	return 1.96
+end
+
+local function mean_ci(t)
+	local n = #t
+	if n == 0 then return 0, 0, 0 end
+	local sum = 0
+	for i = 1, n do sum = sum + t[i] end
+	local m = sum / n
+	if n < 2 then return m, 0, n end
+	local ss = 0
+	for i = 1, n do local d = t[i] - m; ss = ss + d * d end
+	local sd = math_sqrt(ss / (n - 1))
+	return m, t95(n - 1) * sd / math_sqrt(n), n
+end
+
 local function p95(b)
 	return percentile(b.hist, b.hist_n, 0.95)
+end
+
+local function self_ci(b)
+	local n = b.hist_n
+	if n < 2 then return b.self_ms, 0, n end
+	local h, sum = b.hist, 0
+	for i = 1, n do sum = sum + h[i] end
+	local m = sum / n
+	local ss = 0
+	for i = 1, n do local d = h[i] - m; ss = ss + d * d end
+	local sd = math_sqrt(ss / (n - 1))
+	return m, t95(n - 1) * sd / math_sqrt(n), n
+end
+
+local function confidence_word(b)
+	local m, ci = self_ci(b)
+	if m <= 0 then return mod:localize("conf_dash") end
+	local rel = ci / m
+	if not TIMER_OK then
+		if rel < 0.25 then return mod:localize("conf_med") end
+		return mod:localize("conf_low")
+	end
+	if rel < 0.15 then return mod:localize("conf_high") end
+	if rel < 0.40 then return mod:localize("conf_med") end
+	return mod:localize("conf_low")
 end
 
 local function one_percent_low_fps()
@@ -793,13 +928,13 @@ local function coverage_line()
 	local n = mod._mods_before
 	if n == nil then return nil end
 	if n <= 0 then
-		return "Hook coverage: full (loaded first)", COL.good
+		return mod:localize("stat_coverage_full"), COL.good
 	end
 	local names = mod._mods_before_names
 	if names and #names > 0 and #names <= 2 then
-		return "Hooks not measured for: " .. table.concat(names, ", "), COL.warn
+		return mod:localize("stat_coverage_partial", table.concat(names, ", ")), COL.warn
 	end
-	return string_format("Hook coverage: %d earlier mod%s not measured", n, n == 1 and "" or "s"), COL.warn
+	return mod:localize("stat_coverage_earlier", n, n == 1 and "" or "s"), COL.warn
 end
 
 local function spike_summary()
@@ -817,7 +952,7 @@ end
 local function recommendation_line()
 	local save = top_self_sum(3)
 	if save < 0.3 then return nil end
-	return string_format("Your 3 heaviest mods use %.2f ms/frame combined", save)
+	return mod:localize("stat_rec_heaviest", save)
 end
 
 local function build_tab_all(lines)
@@ -826,53 +961,53 @@ local function build_tab_all(lines)
 	local frame_pct = ms > 0 and (total_self_ms / ms * 100) or 0
 	local max_rows = mod:get("max_rows") or 12
 
-	local title = "MOD PERFORMANCE"
-	if frozen then title = title .. "   [FROZEN]" end
-	if not ENABLED then title = title .. "   [PAUSED]" end
+	local title = mod:localize("title_all")
+	if frozen then title = title .. "   " .. mod:localize("state_frozen") end
+	if not ENABLED then title = title .. "   " .. mod:localize("state_paused") end
 	add_line(lines, title, COL.title, true)
 
-	add_line(lines, "CPU used by mods", COL.sub,
+	add_line(lines, mod:localize("stat_cpu_used"), COL.sub,
 		false, string_format("%.1f ms/frame", total_self_ms))
-	add_line(lines, string_format("~%.0f%% of a frame at %d FPS", frame_pct, fps), COL.dim,
-		false, string_format("%d FPS avg", fps))
-	add_line(lines, "Smoothness (worst 1% of frames)", COL.dim,
-		false, string_format("%d FPS low", one_percent_low_fps()))
+	add_line(lines, mod:localize("stat_frame_pct", frame_pct, fps), COL.dim,
+		false, mod:localize("stat_fps_avg", fps))
+	add_line(lines, mod:localize("stat_smoothness"), COL.dim,
+		false, mod:localize("stat_fps_low", one_percent_low_fps()))
 
 	local mb, mtrend, mwarn = mem_trend()
-	add_line(lines, "Memory (Lua)", mwarn and COL.warn or COL.dim,
+	add_line(lines, mod:localize("stat_memory"), mwarn and COL.warn or COL.dim,
 		false, string_format("%.0f MB, %s", mb, mtrend))
-	add_line(lines, "Garbage collection", gc_ms_ema > 2 and COL.warn or COL.dim,
+	add_line(lines, mod:localize("stat_gc"), gc_ms_ema > 2 and COL.warn or COL.dim,
 		false, string_format("%.1f ms", gc_ms_ema))
 
 	local _, load_total = slowest_loads(1)
 	if load_total > 50 then
-		add_line(lines, "Slowed loading by", COL.dim,
+		add_line(lines, mod:localize("stat_load_slow"), COL.dim,
 			false, string_format("%.1f s", load_total / 1000))
 	end
 
 	if spike_summary() then
-		add_line(lines, "Stutters detected", COL.warn, false, "see Stutters tab")
+		add_line(lines, mod:localize("stat_stutters_detected"), COL.warn, false, mod:localize("stat_see_stutters_tab"))
 	else
-		add_line(lines, "Stutters", COL.dim, false, "none recently")
+		add_line(lines, mod:localize("stat_stutters"), COL.dim, false, mod:localize("msg_none_recently"))
 	end
 
 	local rec = recommendation_line()
-	add_line(lines, rec or "Overall mod impact is low right now", rec and COL.sub or COL.good)
+	add_line(lines, rec or mod:localize("stat_impact_low"), rec and COL.sub or COL.good)
 
 	if not TIMER_OK then
-		add_line(lines, "Coarse timer: averages OK, single-frame peaks approximate", COL.warn)
+		add_line(lines, mod:localize("stat_coarse_timer"), COL.warn)
 	end
 	if mod._safe_mode then
-		add_line(lines, "Safe mode on: no mods are being measured", COL.warn)
+		add_line(lines, mod:localize("stat_safe_mode"), COL.warn)
 	elseif not mod._shim_ok then
-		add_line(lines, "Stack shim inactive: measuring is off so nothing can break", COL.warn)
+		add_line(lines, mod:localize("stat_shim_inactive"), COL.warn)
 	end
 	local cov, covcol = coverage_line()
 	if cov then add_line(lines, cov, covcol) end
 
 	add_graph(lines)
 
-	add_line(lines, "MOD", COL.head, false, "TIME      SHARE")
+	add_line(lines, mod:localize("col_mod"), COL.head, false, mod:localize("col_time") .. "      " .. mod:localize("col_share"))
 
 	local shown, negligible = 0, 0
 	for _, e in ipairs(arr) do
@@ -887,10 +1022,11 @@ local function build_tab_all(lines)
 				false, string_format("%.2f ms    %2.0f%%", b.self_ms, share))
 		end
 	end
-	if shown == 0 then add_line(lines, "no mod is using measurable CPU right now", COL.good) end
+	if shown == 0 then add_line(lines, mod:localize("msg_no_cpu_measurable"), COL.good) end
 	if negligible > 0 then
-		add_line(lines, string_format("+ %d more with negligible impact", negligible), COL.dim)
+		add_line(lines, mod:localize("msg_negligible_more", negligible), COL.dim)
 	end
+	add_line(lines, mod:localize("stat_ranks_hint"), COL.dim)
 end
 
 local function build_tab_generic(lines)
@@ -899,17 +1035,17 @@ local function build_tab_generic(lines)
 	local fps, ms = frame_fps()
 	local names = { cpu = "CPU", mem = "MEMORY", spikes = "STUTTERS", load = "LOADING" }
 
-	local title = "MOD PERFORMANCE - " .. (names[tab] or "")
-	if frozen then title = title .. "   [FROZEN]" end
-	if not ENABLED then title = title .. "   [PAUSED]" end
+	local title = mod:localize("title_tab", names[tab] or "")
+	if frozen then title = title .. "   " .. mod:localize("state_frozen") end
+	if not ENABLED then title = title .. "   " .. mod:localize("state_paused") end
 	add_line(lines, title, COL.title, true)
 
 	if tab == "cpu" then
-		add_line(lines, "CPU used by mods", COL.sub, false, string_format("%.1f ms/frame", total_self_ms))
-		add_line(lines, string_format("~%.0f%% of a frame", ms > 0 and total_self_ms / ms * 100 or 0), COL.dim,
-			false, string_format("%d FPS avg", fps))
+		add_line(lines, mod:localize("stat_cpu_used"), COL.sub, false, string_format("%.1f ms/frame", total_self_ms))
+		add_line(lines, mod:localize("stat_frame_pct_simple", ms > 0 and total_self_ms / ms * 100 or 0), COL.dim,
+			false, mod:localize("stat_fps_avg", fps))
 		add_graph(lines)
-		add_line(lines, "MOD", COL.head, false, "TIME      SHARE")
+		add_line(lines, mod:localize("col_mod"), COL.head, false, mod:localize("col_time") .. "      " .. mod:localize("col_share"))
 		local arr = ordered_entries()
 		local shown, neg = 0, 0
 		for _, e in ipairs(arr) do
@@ -922,15 +1058,15 @@ local function build_tab_generic(lines)
 				add_line(lines, trunc(e.name, 30), col, false, string_format("%.2f ms    %2.0f%%", b.self_ms, share))
 			end
 		end
-		if shown == 0 then add_line(lines, "no measurable CPU use", COL.good) end
-		if neg > 0 then add_line(lines, string_format("+ %d more negligible", neg), COL.dim) end
+		if shown == 0 then add_line(lines, mod:localize("msg_no_cpu_use"), COL.good) end
+		if neg > 0 then add_line(lines, mod:localize("msg_negligible_more", neg), COL.dim) end
 
 	elseif tab == "mem" then
 		local mb, mtrend, mwarn = mem_trend()
-		add_line(lines, "Memory (Lua)", mwarn and COL.warn or COL.sub, false, string_format("%.0f MB, %s", mb, mtrend))
-		add_line(lines, "Garbage collection", gc_ms_ema > 2 and COL.warn or COL.dim, false, string_format("%.1f ms/frame", gc_ms_ema))
+		add_line(lines, mod:localize("stat_memory"), mwarn and COL.warn or COL.sub, false, string_format("%.0f MB, %s", mb, mtrend))
+		add_line(lines, mod:localize("stat_gc"), gc_ms_ema > 2 and COL.warn or COL.dim, false, string_format("%.1f ms/frame", gc_ms_ema))
 		if TRACK_MEM then
-			add_line(lines, "MOD", COL.head, false, "KB/frame")
+			add_line(lines, mod:localize("col_mod"), COL.head, false, mod:localize("col_kb_frame"))
 			local arr = ordered_entries()
 			local shown = 0
 			for _, e in ipairs(arr) do
@@ -939,19 +1075,22 @@ local function build_tab_generic(lines)
 					add_line(lines, trunc(e.name, 30), COL.text, false, string_format("%.0f KB", e.b.mem_kb))
 				end
 			end
-			if shown == 0 then add_line(lines, "no measurable allocation", COL.good) end
+			if shown == 0 then add_line(lines, mod:localize("msg_no_allocation"), COL.good) end
+		elseif mod._mem_available == false then
+			add_line(lines, "", COL.dim)
+			add_line(lines, mod:localize("stat_mem_unavailable"), COL.dim)
 		else
 			add_line(lines, "", COL.dim)
-			add_line(lines, "Turn on 'Track memory' in options", COL.dim)
-			add_line(lines, "to see per-mod memory here.", COL.dim)
+			add_line(lines, mod:localize("stat_track_memory_hint1"), COL.dim)
+			add_line(lines, mod:localize("stat_track_memory_hint2"), COL.dim)
 		end
 
 	elseif tab == "spikes" then
-		add_line(lines, "Smoothness (worst 1% of frames)", COL.sub, false, string_format("%d FPS low", one_percent_low_fps()))
-		add_line(lines, "Worst frame", COL.dim, false, string_format("%.1f ms", worst_frame_ms))
+		add_line(lines, mod:localize("stat_smoothness"), COL.sub, false, mod:localize("stat_fps_low", one_percent_low_fps()))
+		add_line(lines, mod:localize("stat_worst_frame"), COL.dim, false, string_format("%.1f ms", worst_frame_ms))
 		local spikes = spike_summary()
-		add_line(lines, "Suspects", spikes and COL.warn or COL.dim, false, spikes or "none recently")
-		add_line(lines, "MOD", COL.head, false, "stutters")
+		add_line(lines, mod:localize("stat_suspects"), spikes and COL.warn or COL.dim, false, spikes or mod:localize("msg_none_recently"))
+		add_line(lines, mod:localize("col_mod"), COL.head, false, mod:localize("col_stutters"))
 		local arr = ordered_entries()
 		local shown = 0
 		for _, e in ipairs(arr) do
@@ -961,21 +1100,12 @@ local function build_tab_generic(lines)
 					string_format("%d  (peak %.0fms)", e.b.spike_count, e.b.worst_spike_ms))
 			end
 		end
-		if shown == 0 then add_line(lines, "no stutters recorded", COL.good) end
+		if shown == 0 then add_line(lines, mod:localize("msg_no_stutters"), COL.good) end
 
 	elseif tab == "load" then
-		local _, load_total = slowest_loads(1)
-		add_line(lines, "Mods added to loading", COL.sub, false, string_format("%.1f s", load_total / 1000))
-		add_line(lines, "MOD", COL.head, false, "load time")
-		local arr = ordered_entries()
-		local shown = 0
-		for _, e in ipairs(arr) do
-			if (e.b.load_ms or 0) >= 50 and shown < max_rows then
-				shown = shown + 1
-				add_line(lines, trunc(e.name, 30), COL.text, false, string_format("%.2f s", e.b.load_ms / 1000))
-			end
-		end
-		if shown == 0 then add_line(lines, "no measurable load cost", COL.good) end
+		add_line(lines, "", COL.dim)
+		add_line(lines, mod:localize("stat_load_unavailable1"), COL.sub)
+		add_line(lines, mod:localize("stat_load_unavailable2"), COL.dim)
 	end
 end
 
@@ -986,23 +1116,24 @@ local function build_detailed(lines)
 
 	local _, load_total = slowest_loads(1)
 
-	local title = "MOD PERFORMANCE MONITOR - detailed"
-	if frozen then title = title .. "   [FROZEN]" end
-	if not ENABLED then title = title .. "   [PAUSED]" end
+	local title = mod:localize("title_detailed")
+	if frozen then title = title .. "   " .. mod:localize("state_frozen") end
+	if not ENABLED then title = title .. "   " .. mod:localize("state_paused") end
 	add_line(lines, title, COL.title, true)
 
-	add_line(lines, string_format("total %.2f ms/frame   Lua %.0f MB   %d mods   %d FPS (1%% low %d)",
+	add_line(lines, mod:localize("stat_detailed_summary",
 		total_self_ms, lua_mem_mb(), #arr, fps, one_percent_low_fps()), COL.sub)
-	add_line(lines, string_format("worst frame %.1f ms   mods added ~%.1fs to load   sort: %s",
+	add_line(lines, mod:localize("stat_detailed_footer",
 		worst_frame_ms, load_total / 1000, SORT_LABELS[active_sort()] or active_sort()), COL.dim)
-	add_line(lines, string_format("timer %s ~%.4fms   overhead ~%.4fms/call %s   (estimates)",
-		timer_name, timer_res_ms, SHIM_OVERHEAD_MS, SUBTRACT_OVERHEAD and "removed" or "shown"),
+	add_line(lines, mod:localize("stat_timer_info",
+		timer_name, timer_res_ms, SHIM_OVERHEAD_MS, SUBTRACT_OVERHEAD and mod:localize("removed") or mod:localize("shown")),
 		TIMER_OK and COL.dim or COL.warn)
 	local cov, covcol = coverage_line()
 	if cov then add_line(lines, cov, covcol) end
 
 	if tab_shows_graph() then add_graph(lines) end
-	add_cols(lines, COL.head, "MOD", { "self", "p95", "peak", "calls", "share" })
+	add_cols(lines, COL.head, mod:localize("col_mod"),
+		{ mod:localize("col_self"), mod:localize("col_ci"), mod:localize("col_conf"), mod:localize("col_calls"), mod:localize("col_share_detail") })
 
 	local shown = 0
 	for _, e in ipairs(arr) do
@@ -1011,16 +1142,17 @@ local function build_detailed(lines)
 		local b = e.b
 		local _, col = severity(b.self_ms)
 		local share = total_self_ms > 0 and (b.self_ms / total_self_ms * 100) or 0
+		local mean, ci = self_ci(b)
 		add_cols(lines, col, trunc(e.name, 22), {
-			string_format("%.3f", b.self_ms),
-			string_format("%.3f", p95(b)),
-			string_format("%.3f", b.peak_ms),
+			string_format("%.3f", mean),
+			string_format("%.3f", ci),
+			confidence_word(b),
 			string_format("%.0f", b.calls),
 			string_format("%.0f%%", share),
 		})
 	end
 	if #arr > shown then
-		add_line(lines, string_format("... %d more (raise Max rows, or dump full report)", #arr - shown), COL.dim)
+		add_line(lines, mod:localize("msg_rows_more", #arr - shown), COL.dim)
 	end
 end
 
@@ -1094,7 +1226,7 @@ function mod.get_graph()
 		hi = hi,
 		mid = mid,
 		ceiling = ceiling,
-		title = string_format("last %ds - all mods   now %.2f  peak %.2f   (line = %.2f ms)",
+		title = mod:localize("graph_title",
 			math_floor(cnt * graph_interval + 0.5), vals[cnt] or 0, mx, mid),
 	}
 end
@@ -1103,20 +1235,24 @@ local function build_full_report()
 	refresh_order()
 	local arr = ordered_entries()
 	local lines = {}
-	lines[#lines + 1] = "===== Mod Performance Report ====="
-	lines[#lines + 1] = "NOTE: figures estimate Lua MAIN-THREAD cost only (relative, not absolute). Spike blame is a heuristic. Not a substitute for engine profiling; please don't cite as proof against a mod author."
-	lines[#lines + 1] = string_format("timer: %s (~%.5f ms) | overhead ~%.5f ms/call | Lua %.0f MB | total mod CPU %.3f ms/frame | 1%% low %d FPS | worst frame %.1f ms",
+	lines[#lines + 1] = mod:localize("report_header")
+	lines[#lines + 1] = mod:localize("report_note")
+	lines[#lines + 1] = mod:localize("report_stats",
 		timer_name, timer_res_ms, SHIM_OVERHEAD_MS, lua_mem_mb(), total_self_ms, one_percent_low_fps(), worst_frame_ms)
-	lines[#lines + 1] = string_format("sorted by: %s | mods tracked: %d | memory tracking: %s",
-		SORT_LABELS[current_sort], #arr, TRACK_MEM and "on" or "off")
-	lines[#lines + 1] = string_format("stack shim: %s (%s) | safe mode: %s | instrumenting: %s",
-		mod._shim_ok and "active" or "INACTIVE", tostring(mod._shim_note),
-		mod._safe_mode and "on" or "off", mod._wrap_ok and "yes" or "no")
-	lines[#lines + 1] = "rank  self_ms   p95    peak   spikes  calls/f   total_ms  load_ms   mod"
+	lines[#lines + 1] = mod:localize("report_sorted",
+		SORT_LABELS[current_sort], #arr, TRACK_MEM and mod:localize("on") or mod:localize("off"))
+	lines[#lines + 1] = mod:localize("report_shim",
+		mod._shim_ok and mod:localize("active") or mod:localize("inactive"),
+		tostring(mod._shim_note),
+		mod._safe_mode and mod:localize("on") or mod:localize("off"),
+		mod._wrap_ok and mod:localize("yes") or mod:localize("no"))
+	lines[#lines + 1] = mod:localize("report_uncertainty", timer_res_ms)
+	lines[#lines + 1] = mod:localize("report_columns")
 	for i, e in ipairs(arr) do
 		local b = e.b
-		lines[#lines + 1] = string_format("%3d  %8.4f %6.3f %6.3f %6d %8.0f %10.1f %8.0f   %s",
-			i, b.self_ms, p95(b), b.peak_ms, b.spike_count, b.calls, b.total_ms, b.load_ms, e.name)
+		local mean, ci = self_ci(b)
+		lines[#lines + 1] = string_format("%3d  %8.4f %6.4f %6s %6.3f %6.3f %6d %8.0f %10.1f %8.0f   %s",
+			i, mean, ci, confidence_word(b), p95(b), b.peak_ms, b.spike_count, b.calls, b.total_ms, b.load_ms, e.name)
 		if i <= 8 and b.self_ms > 0.001 then
 			local srcs = {}
 			for label, s in pairs(b.sources) do srcs[#srcs + 1] = { label = label, self_ms = s.self_ms } end
@@ -1134,6 +1270,253 @@ end
 local function safe_echo(fmt, ...)
 	local text = string_format(fmt, ...)
 	if not pcall(function() return mod:echo(text) end) then mod:info(text) end
+end
+
+local function echo_loc(key, ...)
+	safe_echo("%s", mod:localize(key, ...))
+end
+
+local AB_WINDOW = 0.4
+local AB_BLOCKS = 6
+local AB_WARM = 5
+local AB_PATTERN = { true, false, false, true }
+local AB_SECONDS = AB_BLOCKS * 4 * (AB_WINDOW + 0.06)
+
+local calib_iters = 0
+local calib_wrapped = nil
+
+local function calib_work(n)
+	local x = 0.0
+	for i = 1, n do x = x + i * 0.5 end
+	return x
+end
+
+local function tune_calib_iters(target_ms)
+	local osc = os.clock
+	local n, ms = 20000, 0
+	for _ = 1, 14 do
+		local c0 = osc()
+		calib_work(n)
+		ms = (osc() - c0) * 1000.0
+		if ms >= 5 then break end
+		n = n * 2
+		if n > 40000000 then break end
+	end
+	if ms <= 0 then return 200000 end
+	local want = math_floor(target_ms / (ms / n))
+	if want < 1 then want = 1 end
+	return want
+end
+
+local ab = { active = false }
+
+local function ab_reset()
+	ab.active = false
+	ab.mode = nil
+	ab.target = nil
+	ab.step = 1
+	ab.block = 0
+	ab.t = 0
+	ab.warm = AB_WARM
+	ab.calib_n = 0
+	ab.samples = {}
+	ab.on_vals, ab.off_vals = {}, {}
+	ab.on_prof, ab.off_prof = {}, {}
+	ab.diffs, ab.pdiffs = {}, {}
+	ab.win_frames = 0
+	ab.win_total0 = 0
+end
+ab_reset()
+
+local function mod_set_hooks(name, enabled)
+	pcall(function()
+		local m = get_mod(name)
+		if m then
+			if enabled and m.enable_all_hooks then m:enable_all_hooks()
+			elseif not enabled and m.disable_all_hooks then m:disable_all_hooks() end
+		end
+	end)
+end
+
+local function ab_apply(on)
+	if ab.mode == "calib" then
+		calib_iters = on and ab.calib_n or 0
+	elseif ab.target then
+		mod_set_hooks(ab.target, on)
+		SUPPRESSED[ab.target] = (not on) or nil
+	end
+end
+
+local function ab_restore()
+	if ab.mode == "calib" then
+		calib_iters = 0
+	elseif ab.target then
+		mod_set_hooks(ab.target, true)
+		SUPPRESSED[ab.target] = nil
+	end
+end
+
+local function ab_finish()
+	local n = #ab.diffs
+	if n < 2 then
+		echo_loc("ab_failed")
+		ab_restore()
+		ab_reset()
+		return
+	end
+
+	local d, ci = mean_ci(ab.diffs)
+
+	if ab.mode == "calib" then
+		local p = mean_ci(ab.pdiffs)
+		echo_loc("calib_header", n)
+		echo_loc("calib_profiler", p)
+		echo_loc("calib_true", d, ci)
+		if d > 0.02 then
+			echo_loc("calib_ratio", p / d * 100.0)
+		else
+			echo_loc("calib_toosmall")
+		end
+		mod:info("Calibration: profiler=%.4f true=%.4f +/- %.4f (n=%d)", p, d, ci, n)
+	else
+		local t = tostring(ab.target)
+		if math_abs(d) <= ci then
+			echo_loc("ab_no_impact", t, d, ci)
+		else
+			echo_loc("ab_result", t, d, ci, n)
+		end
+		mod:info("A/B %s: delta=%.4f ci=%.4f n=%d", t, d, ci, n)
+	end
+
+	ab_restore()
+	ab_reset()
+end
+
+local function ab_update(dt, frame_ms)
+	if not ab.active then return end
+
+	if ab.warm > 0 then
+		ab.warm = ab.warm - 1
+		if ab.warm == 0 then
+			local b = stats[CALIB_NAME]
+			ab.win_total0 = (b and b.total_ms) or 0
+			ab.t = 0
+			ab.win_frames = 0
+			ab.samples = {}
+		end
+		return
+	end
+
+	ab.t = ab.t + dt
+	ab.win_frames = ab.win_frames + 1
+	ab.samples[#ab.samples + 1] = frame_ms
+	if ab.t < AB_WINDOW then return end
+
+	local med = median(ab.samples)
+	local prof = 0
+	if ab.mode == "calib" then
+		local b = stats[CALIB_NAME]
+		local total = (b and b.total_ms) or 0
+		prof = (total - ab.win_total0) / math_max(1, ab.win_frames)
+	end
+
+	if AB_PATTERN[ab.step] then
+		ab.on_vals[#ab.on_vals + 1] = med
+		ab.on_prof[#ab.on_prof + 1] = prof
+	else
+		ab.off_vals[#ab.off_vals + 1] = med
+		ab.off_prof[#ab.off_prof + 1] = prof
+	end
+
+	if ab.step == 4 then
+		ab.diffs[#ab.diffs + 1] =
+			(ab.on_vals[1] + ab.on_vals[2]) * 0.5 - (ab.off_vals[1] + ab.off_vals[2]) * 0.5
+		if ab.mode == "calib" then
+			ab.pdiffs[#ab.pdiffs + 1] =
+				(ab.on_prof[1] + ab.on_prof[2]) * 0.5 - (ab.off_prof[1] + ab.off_prof[2]) * 0.5
+		end
+		ab.on_vals, ab.off_vals = {}, {}
+		ab.on_prof, ab.off_prof = {}, {}
+		ab.block = ab.block + 1
+		ab.step = 1
+		if ab.block >= AB_BLOCKS then
+			ab_finish()
+			return
+		end
+	else
+		ab.step = ab.step + 1
+	end
+
+	ab_apply(AB_PATTERN[ab.step])
+	ab.warm = AB_WARM
+	ab.samples = {}
+	ab.t = 0
+	ab.win_frames = 0
+end
+
+local function ab_can_start()
+	if ab.active then
+		echo_loc("ab_running")
+		return false
+	end
+	if not WRAP_OK then
+		echo_loc("ab_nothing")
+		return false
+	end
+	if not ENABLED then
+		echo_loc("ab_need_enabled")
+		return false
+	end
+	return true
+end
+
+function mod.calibrate(is_pressed)
+	if is_pressed == false then return end
+	if ab.active then
+		ab_restore()
+		ab_reset()
+		echo_loc("ab_cancelled")
+		return
+	end
+	if not ab_can_start() then return end
+
+	if not calib_wrapped then
+		calib_wrapped = make_wrapper(get_bucket(CALIB_NAME), calib_work, "calibration load")
+	end
+
+	local n = tune_calib_iters(0.4)
+	ab_reset()
+	ab.mode = "calib"
+	ab.calib_n = n
+	calib_iters = n
+	ab.active = true
+	echo_loc("calib_start", AB_SECONDS)
+end
+
+function mod.ab_test(is_pressed)
+	if is_pressed == false then return end
+	if ab.active then
+		ab_restore()
+		ab_reset()
+		echo_loc("ab_cancelled")
+		return
+	end
+	if not ab_can_start() then return end
+
+	local top, topv = nil, -1
+	for name, b in pairs(stats) do
+		if not is_internal(name) and b.self_ms > topv then topv = b.self_ms; top = name end
+	end
+	if not top then
+		echo_loc("ab_no_mod")
+		return
+	end
+
+	ab_reset()
+	ab.mode = "mod"
+	ab.target = top
+	ab.active = true
+	echo_loc("ab_start", top, AB_SECONDS)
 end
 
 function mod.toggle_overlay(is_pressed)
@@ -1160,7 +1543,7 @@ function mod.dump_report(is_pressed)
 	if is_pressed == false then return end
 	local lines, arr = build_full_report()
 	for _, line in ipairs(lines) do mod:info("%s", line) end
-	safe_echo("[PerfMonitor] Full report written to the DMF log (%d mods).", #arr)
+	safe_echo("[PerfMonitor] " .. mod:localize("feedback_dump_log", #arr))
 end
 
 local function get_io_lib()
@@ -1190,7 +1573,7 @@ function mod.export_report(is_pressed)
 	if is_pressed == false then return end
 	local io_lib = get_io_lib()
 	if not (io_lib and io_lib.open) then
-		safe_echo("[PerfMonitor] File writing isn't available in this environment.")
+		safe_echo("[PerfMonitor] " .. mod:localize("feedback_no_io"))
 		return
 	end
 
@@ -1208,10 +1591,10 @@ function mod.export_report(is_pressed)
 	end
 
 	if ok_txt then
-		safe_echo("[PerfMonitor] Saved to mods/ModPerformanceMonitor/reports/perf_%s.txt", stamp)
+		safe_echo("[PerfMonitor] " .. mod:localize("feedback_export_saved", stamp))
 		mod:info("Wrote report: %s", txt_path)
 	else
-		safe_echo("[PerfMonitor] Could not write the report file (see log).")
+		safe_echo("[PerfMonitor] " .. mod:localize("feedback_export_fail"))
 	end
 end
 
@@ -1230,7 +1613,7 @@ function mod.reset_stats(is_pressed)
 	total_self_ms = 0
 	refresh_order()
 	rebuild_view()
-	safe_echo("[PerfMonitor] Stats reset.")
+	safe_echo("[PerfMonitor] " .. mod:localize("feedback_reset"))
 end
 
 local CE_DEF = {
@@ -1252,7 +1635,9 @@ local SMOOTH_MAP = { responsive = 0.20, balanced = 0.06, smooth = 0.02 }
 local function apply_settings()
 	local on = mod:is_enabled()
 	ENABLED   = on and (mod:get("enabled_profiling") ~= false)
-	TRACK_MEM = on and (mod:get("track_memory") == true)
+	local mem_ok = type(mem_kb()) == "number"
+	mod._mem_available = mem_ok
+	TRACK_MEM = on and (mod:get("track_memory") == true) and mem_ok
 	SUBTRACT_OVERHEAD = mod:get("subtract_overhead") ~= false
 	current_sort = mod:get("sort_mode") or "self"
 	current_mode = mod:get("display_mode") or "simplified"
@@ -1293,7 +1678,7 @@ function mod.on_all_mods_loaded()
 			mod._mods_before = #before_names
 			mod._mods_before_names = before_names
 			if #before_names > 0 then
-				mod:info("Loaded after these mods (their hooks are not measured): %s", table.concat(before_names, ", "))
+				mod:info(mod:localize("init_loaded_after", table.concat(before_names, ", ")))
 			end
 		end
 	end
@@ -1302,9 +1687,9 @@ function mod.on_all_mods_loaded()
 	rebuild_view()
 	local n = 0
 	for _ in pairs(instrumented) do n = n + 1 end
-	mod:info("Instrumented %d mods (+%d HUD elements). Loaded after %d other mods. Hook patch: %s.",
-		n, (function() local c = 0 for _ in pairs(hud_wrapped) do c = c + 1 end return c end)(),
-		mod._mods_before or -1, hook_patch_ok and "ok" or "FAILED")
+	local hud_count = 0
+	for _ in pairs(hud_wrapped) do hud_count = hud_count + 1 end
+	mod:info(mod:localize("init_instrumented", n, hud_count, mod._mods_before or -1, hook_patch_ok and "ok" or "FAILED"))
 end
 
 function mod.on_game_state_changed(status, state_name)
@@ -1326,6 +1711,11 @@ function mod.update(dt)
 	local baseline = frame_ms_ema
 	fold_frame(frame_ms, baseline)
 	frame_ms_ema = frame_ms_ema + 0.1 * (frame_ms - frame_ms_ema)
+
+	if ab.active and ab.mode == "calib" and calib_wrapped then
+		calib_wrapped(calib_iters)
+	end
+	ab_update(dt, frame_ms)
 
 	if frozen then return end
 

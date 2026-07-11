@@ -9,7 +9,7 @@ return {
 		})
 	end,
 	packages = {},
-	version = "1.0.1",
+	version = "1.2.1",
 
 	load_after = { "dmf" },
 }
