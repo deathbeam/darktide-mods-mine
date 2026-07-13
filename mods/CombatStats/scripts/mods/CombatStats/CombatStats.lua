@@ -178,8 +178,7 @@ mod:hook(
                     or nil
                 attacked_breed = attacked_breed and attacked_breed:breed()
 
-                -- Keep the per-enemy HP ledger current for ANY player's hit on a minion, so teammate
-                -- damage is reflected and the local player's killing blow sees an accurate pre-hit HP.
+                -- Update the HP ledger for any player hit so teammate damage is reflected.
                 local actual_damage, overkill_damage = damage, 0
                 if attacker_owner and Breed.is_minion(attacked_breed) then
                     actual_damage, overkill_damage =
@@ -187,7 +186,7 @@ mod:hook(
                 end
 
                 if player_unit and attacking_unit == player_unit and attacked_breed then
-                    mod.tracker:_start_enemy_engagement(attacked_unit, attacked_breed)
+                    mod.tracker:start_enemy_engagement(attacked_unit, attacked_breed)
 
                     local damage_profile_name = damage_profile and damage_profile.name
                     local effective_attack_type = damage_profile_name
@@ -195,21 +194,18 @@ mod:hook(
                             and 'companion'
                         or attack_type
 
-                    mod.tracker:_track_enemy_damage(
+                    mod.tracker:track_enemy_damage(
                         attacked_unit,
                         actual_damage,
                         overkill_damage,
                         effective_attack_type,
                         is_critical_strike,
                         hit_weakspot,
-                        damage_profile_name,
-                        attack_result
+                        damage_profile_name
                     )
 
-                    -- The local player landed the killing blow; count it now. Non-player/teammate
-                    -- deaths are caught by the engagement sweep without crediting a kill.
                     if attack_result == 'died' then
-                        mod.tracker:_finish_enemy_engagement(attacked_unit, true)
+                        mod.tracker:finish_enemy_engagement(attacked_unit, true)
                     end
                 elseif
                     player_unit
@@ -220,7 +216,7 @@ mod:hook(
                     local unit_data_extension = ScriptUnit.has_extension(attacking_unit, 'unit_data_system')
                     local breed = unit_data_extension and unit_data_extension:breed()
                     if breed then
-                        mod.tracker:_start_enemy_engagement(attacking_unit, breed)
+                        mod.tracker:start_enemy_engagement(attacking_unit, breed)
                     end
                 end
             end
@@ -244,8 +240,7 @@ mod:hook(
     end
 )
 
--- Seed each enemy's remaining HP at full max_health when it spawns. The overkill calc keeps its
--- own HP ledger because the husk extension's damage_taken/current_health is racy on clients.
+-- Seed at full max_health on spawn; the husk damage field is racy on clients.
 mod:hook_safe(CLASS.HuskHealthExtension, 'init', function(self, extension_init_context, unit, ...)
     if not mod.tracker:is_tracking() then
         return
@@ -273,7 +268,7 @@ mod:hook_safe('HudElementPlayerBuffs', '_update_buffs', function(self)
         end
     end
 
-    mod.tracker:_update_buffs(active_buffs_data, hidden_buffs_data, dt)
+    mod.tracker:update_buffs(active_buffs_data, hidden_buffs_data, dt)
 end)
 
 function mod.on_setting_changed(setting_id)
