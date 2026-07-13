@@ -5,7 +5,7 @@ return {
 	},
 	mod_description = {
 		en = "Shows which of your installed mods use the most CPU each frame, colour-coded from light to heavy. A Simplified view for a quick read, and a Detailed view with full numbers.",
-		["zh-cn"] = "显示每帧占用CPU最高的模组，按负载轻重使用不同颜色区分。简易视图方便快速查看，详细视图展示完整数值。"
+		["zh-cn"] = "显示各模组每帧CPU占用，颜色越深表示越吃性能。简易视图方便快速查看，详细视图展示完整数值。"
 	},
 
 	display_mode = {
@@ -14,7 +14,7 @@ return {
 	},
 	display_mode_tooltip = {
 		en = "Simplified = plain-language, colour-coded list (recommended). Detailed = full numeric table.",
-		["zh-cn"] = "简易：文字+彩色列表（推荐）；详细：完整数字表格。"
+		["zh-cn"] = "简易：文字+颜色排名（推荐）；详细：完整数字表格。"
 	},
 	display_mode_simplified = {
 		en = "Simplified (recommended)",
@@ -35,7 +35,7 @@ return {
 	},
 	sort_self = {
 		en = "CPU time (a mod's own work)",
-		["zh-cn"] = "CPU耗时（模组自身运算）"
+		["zh-cn"] = "CPU耗时（模组自身运算时间）"
 	},
 	sort_peak = {
 		en = "Peak (worst single frame)",
@@ -51,11 +51,11 @@ return {
 	},
 	sort_incl = {
 		en = "CPU time (including nested calls)",
-		["zh-cn"] = "CPU耗时（含嵌套调用）"
+		["zh-cn"] = "CPU耗时（连它调用的其他东西也算上）"
 	},
 	sort_calls = {
 		en = "Calls per frame",
-		["zh-cn"] = "每帧调用次数"
+		["zh-cn"] = "每帧被调用的次数"
 	},
 	sort_mem = {
 		en = "Memory used per frame",
@@ -63,7 +63,7 @@ return {
 	},
 	sort_total = {
 		en = "Total time since reset",
-		["zh-cn"] = "重置后总耗时"
+		["zh-cn"] = "从重置算起的总耗时"
 	},
 
 	show_graph = {
@@ -81,7 +81,7 @@ return {
 	},
 	smoothing_tooltip = {
 		en = "How steady the on-screen numbers are. Measurement stays exact either way; this only affects the display. 'Smooth' is easiest to read.",
-		["zh-cn"] = "控制屏幕数值跳动幅度，原始测量数据不受影响，仅改变显示效果。平滑模式更易阅读。"
+		["zh-cn"] = "控制屏幕上数字的跳动程度，实际测量不会变。平滑模式看着最舒服。"
 	},
 	smoothing_smooth = {
 		en = "Smooth (easiest to read)",
@@ -102,15 +102,15 @@ return {
 	},
 	safe_mode_tooltip = {
 		en = "Stop the monitor touching any other mod at all. No timings will be collected. You should not need this: the monitor hides its own stack frames so mods that read the call stack keep working. Turn it on only if another mod starts erroring after you install this one, then please report it. Takes effect after a relaunch.",
-		["zh-cn"] = "完全停止监测、不采集任何性能数据。一般无需开启；本模组会隐藏自身调用栈避免冲突。仅在其他模组报错时启用，重启生效。"
+		["zh-cn"] = "彻底关闭监视器的所有动作，不再采集任何数据。一般情况下不用开——监视器会把自己藏好，不影响别的模组。只有当你装了它后其他模组报错时才打开，然后请上报问题。重启游戏生效。"
 	},
 	subtract_overhead = {
 		en = "Subtract profiler overhead",
-		["zh-cn"] = "扣除监测自身开销"
+		["zh-cn"] = "扣掉监视器自身的开销"
 	},
 	subtract_overhead_tooltip = {
 		en = "Subtract the monitor's own per-call cost so you see each mod's real time rather than the measurement tax. Recommended on.",
-		["zh-cn"] = "扣除监视器本身产生的性能损耗，显示模组真实耗时，推荐开启。"
+		["zh-cn"] = "把监视器自己测速消耗的那点时间扣掉，显示模组真实耗时。推荐开启。"
 	},
 	enabled_profiling = {
 		en = "Profiling enabled",
@@ -118,24 +118,24 @@ return {
 	},
 	enabled_profiling_tooltip = {
 		en = "Master switch. When off, the monitor collects nothing and adds almost no overhead.",
-		["zh-cn"] = "总开关，关闭后不采集任何数据，几乎无性能消耗。"
+		["zh-cn"] = "总开关。关掉后监视器不再采集任何数据，对游戏性能的影响几乎为零。"
 	},
 	track_memory = {
 		en = "Track memory (approximate)",
-		["zh-cn"] = "追踪内存（估算值）"
+		["zh-cn"] = "追踪内存占用（估算值）"
 	},
 	track_memory_tooltip = {
 		en = "Also estimate per-mod Lua memory allocation each frame. Heavier and noisier; off by default.",
-		["zh-cn"] = "额外估算每个模组每帧Lua内存分配，开销更高、数值波动大，默认关闭。"
+		["zh-cn"] = "额外估算每个模组每帧吃掉了多少Lua内存，开销更大且数字跳动厉害，默认关闭。"
 	},
 
 	max_rows = {
 		en = "Max mods shown",
-		["zh-cn"] = "最大显示模组条数"
+		["zh-cn"] = "最多显示几个模组"
 	},
 	max_rows_tooltip = {
 		en = "How many mods to list on the overlay. The full log report always includes every mod.",
-		["zh-cn"] = "悬浮面板最多展示多少个模组，完整日志会记录全部模组。"
+		["zh-cn"] = "悬浮面板最多列出多少个模组，不影响日志，日志里会完整记录全部信息。"
 	},
 	overlay_font_size = {
 		en = "Font size",
@@ -151,39 +151,39 @@ return {
 	},
 	panel_width_tooltip = {
 		en = "Fixed width of the Simplified panel, in pixels. A fixed width keeps the columns aligned and stops the panel resizing as numbers change.",
-		["zh-cn"] = "简易面板固定像素宽度，保证列对齐，避免数值变化导致面板拉伸。"
+		["zh-cn"] = "简易面板的固定宽度（像素），这样数字变化时不会把面板撑大撑小，列对齐也好看。"
 	},
 	refresh_hz = {
 		en = "Refresh rate (Hz)",
-		["zh-cn"] = "刷新频率(赫兹)"
+		["zh-cn"] = "刷新频率（每秒几次）"
 	},
 	refresh_hz_tooltip = {
 		en = "How often the panel text updates per second. Timing is still measured every frame.",
-		["zh-cn"] = "面板文字每秒更新次数，性能数据依旧逐帧采集。"
+		["zh-cn"] = "面板文字每秒更新几次，计时依然是每帧都在测。"
 	},
 	hitch_ms = {
 		en = "Stutter threshold (ms)",
-		["zh-cn"] = "卡顿阈值(毫秒)"
+		["zh-cn"] = "卡顿判定阈值（毫秒）"
 	},
 	hitch_ms_tooltip = {
 		en = "A frame slower than this (and slower than ~1.8x your average) counts as a stutter, blamed on whichever mod dominated it. 28 ms is roughly a hitch below 36 FPS.",
-		["zh-cn"] = "单帧耗时超过该数值（且高于平均帧1.8倍）判定为卡顿，归属占用最高模组。28ms约等于帧率低于36帧。"
+		["zh-cn"] = "单帧超过这个时间（并且比平均帧慢约1.8倍以上）就记一次卡顿，然后把锅扣给当时最费时的模组。28毫秒差不多就是帧率掉到36帧以下。"
 	},
 	overlay_x = {
 		en = "Panel X position",
-		["zh-cn"] = "面板横向坐标"
+		["zh-cn"] = "面板水平位置"
 	},
 	overlay_x_tooltip = {
 		en = "Horizontal position of the panel, in pixels from the left edge.",
-		["zh-cn"] = "面板距离屏幕左边缘的像素位置。"
+		["zh-cn"] = "面板离屏幕左边缘的距离（像素）。"
 	},
 	overlay_y = {
 		en = "Panel Y position",
-		["zh-cn"] = "面板纵向坐标"
+		["zh-cn"] = "面板垂直位置"
 	},
 	overlay_y_tooltip = {
 		en = "Vertical position of the panel, in pixels from the top edge.",
-		["zh-cn"] = "面板距离屏幕上边缘的像素位置。"
+		["zh-cn"] = "面板离屏幕上边缘的距离（像素）。"
 	},
 
 	keybind_toggle_overlay = {
@@ -192,7 +192,7 @@ return {
 	},
 	keybind_toggle_overlay_tooltip = {
 		en = "Show or hide the on-screen panel. The overlay always starts hidden when you launch the game - press this to bring it up.",
-		["zh-cn"] = "开关屏幕悬浮面板，游戏启动默认隐藏，按快捷键调出。"
+		["zh-cn"] = "开关屏幕上的悬浮面板。游戏启动时默认是隐藏的，按这个快捷键把它叫出来。"
 	},
 	keybind_toggle_mode = {
 		en = "Switch Simplified / Detailed",
@@ -208,7 +208,7 @@ return {
 	},
 	keybind_cycle_tab_tooltip = {
 		en = "Cycle through the overlay tabs (All / CPU / Memory / Stutters / Loading).",
-		["zh-cn"] = "循环切换面板标签：全部、CPU、内存、卡顿、加载。"
+		["zh-cn"] = "循环切换面板上的不同标签页：全部、CPU、内存、卡顿、加载。"
 	},
 	keybind_toggle_freeze = {
 		en = "Freeze / unfreeze panel",
@@ -216,15 +216,15 @@ return {
 	},
 	keybind_toggle_freeze_tooltip = {
 		en = "Freeze the panel so you can read it. Measurement keeps running; press again to resume live updates.",
-		["zh-cn"] = "暂停面板刷新方便查看，后台持续采集数据，再次按键恢复实时更新。"
+		["zh-cn"] = "让面板画面停住，方便你仔细看。后台仍在继续测量，再按一次恢复实时刷新。"
 	},
 	keybind_dump_report = {
 		en = "Dump full report to log",
-		["zh-cn"] = "输出完整报告到日志"
+		["zh-cn"] = "把完整报告写进日志"
 	},
 	keybind_dump_report_tooltip = {
 		en = "Write a full report of every mod (with a breakdown of where each spends its time) to the DMF log, and echo the top 5 to chat. Works everywhere, including menus.",
-		["zh-cn"] = "将所有模组完整性能明细写入DMF日志，同时前5项输出聊天栏，菜单/对局均可使用。"
+		["zh-cn"] = "把所有模组的详细耗时（连每部分在哪花的都能看）输出到DMF日志文件，同时前5名会显示在聊天栏。菜单里也能用。"
 	},
 	keybind_export_report = {
 		en = "Export report (text file)",
@@ -232,7 +232,7 @@ return {
 	},
 	keybind_export_report_tooltip = {
 		en = "Write a timestamped, readable text report into the mods/ModPerformanceMonitor/reports folder.",
-		["zh-cn"] = "生成带时间戳的可读文本报告，保存至模组目录下的reports文件夹。"
+		["zh-cn"] = "生成一份带时间戳、容易读的文本报告，保存到 mods/ModPerformanceMonitor/reports 文件夹里。"
 	},
 	keybind_reset_stats = {
 		en = "Reset stats",
@@ -323,23 +323,23 @@ return {
 	},
 	stat_safe_mode = {
 		en = "Safe mode on: no mods are being measured",
-		["zh-cn"] = "安全模式已开启：未测量任何模组"
+		["zh-cn"] = "安全模式已开启：不会测量任何模组"
 	},
 	stat_shim_inactive = {
 		en = "Stack shim inactive: measuring is off so nothing can break",
-		["zh-cn"] = "堆栈桥接未激活：测量已关闭，不会影响其他模组"
+		["zh-cn"] = "为了绝对安全，监视器已彻底休眠，不会干扰任何其他模组正常运行"
 	},
 	stat_coverage_full = {
 		en = "Hook coverage: full (loaded first)",
-		["zh-cn"] = "Hook覆盖：完整（最先加载）"
+		["zh-cn"] = "监测覆盖：全部（最先加载，都能测到）"
 	},
 	stat_coverage_partial = {
 		en = "Hooks not measured for: %s",
-		["zh-cn"] = "未测量的Hook：%s"
+		["zh-cn"] = "以下模组启动太早，没装上测速器：%s"
 	},
 	stat_coverage_earlier = {
 		en = "Hook coverage: %d earlier mod%s not measured",
-		["zh-cn"] = "Hook覆盖：%d 个前置模组未被测量"
+		["zh-cn"] = "监测覆盖：有 %d 个前置模组没被测到"
 	},
 	stat_suspects = {
 		en = "Suspects",
@@ -359,15 +359,15 @@ return {
 	},
 	stat_detailed_summary = {
 		en = "total %.2f ms/frame   Lua %.0f MB   %d mods   %d FPS (1%% low %d)",
-		["zh-cn"] = "总耗时 %.2f ms/帧   Lua %.0f MB   %d 个模组   %d FPS (1%%低帧 %d)"
+		["zh-cn"] = "总耗时 %.2f 毫秒/帧  Lua内存 %.0f MB  模组数 %d  帧率 %d  FPS（最低1%%帧 %d）"
 	},
 	stat_detailed_footer = {
 		en = "worst frame %.1f ms   mods added ~%.1fs to load   sort: %s",
-		["zh-cn"] = "最差帧 %.1f ms   模组加载增加 ~%.1fs   排序：%s"
+		["zh-cn"] = "最卡帧 %.1f 毫秒  模组把加载拖慢了约 %.1f 秒  排序依据：%s"
 	},
 	stat_timer_info = {
 		en = "timer %s ~%.4fms   overhead ~%.4fms/call %s   (estimates)",
-		["zh-cn"] = "计时器 %s ~%.4fms   开销 ~%.4fms/次 %s   （估算值）"
+		["zh-cn"] = "计时器 %s 精度约 %.4f 毫秒  每次测量多耗约 %.4f 毫秒 %s（估算值）"
 	},
 
 	col_mod = {
@@ -433,15 +433,15 @@ return {
 	},
 	msg_none_recently = {
 		en = "none recently",
-		["zh-cn"] = "近期无"
+		["zh-cn"] = "最近没有"
 	},
 	msg_no_stutters = {
 		en = "no stutters recorded",
-		["zh-cn"] = "未记录到卡顿"
+		["zh-cn"] = "没记录到卡顿"
 	},
 	msg_no_load_cost = {
 		en = "no measurable load cost",
-		["zh-cn"] = "无显著的加载开销"
+		["zh-cn"] = "没有可测的加载开销"
 	},
 	msg_rows_more = {
 		en = "... %d more (raise Max rows, or dump full report)",
@@ -459,15 +459,15 @@ return {
 	},
 	report_note = {
 		en = "NOTE: these figures cover Lua MAIN-THREAD cost only. They are a RANKING, not an absolute measurement: GPU and engine C++ work are invisible here, so a mod can look cheap and still cost you frames. Spike blame is a heuristic. Please don't cite this as proof against a mod author.",
-		["zh-cn"] = "注意：以下数值仅涵盖Lua主线程开销，是排名参考而非绝对测量：GPU与引擎C++运算在此不可见，因此模组可能显示开销很低却仍拖慢帧率。卡顿归因为启发式判断。请勿以此作为指责模组作者的依据。"
+		["zh-cn"] = "注意：这些数据只统计Lua主线程的开销，是排名参考，不是精确绝对值。显卡和游戏引擎底层的C++运算在这里看不到，所以某个模组显示很省，实际可能照样拖慢你的帧率。卡顿归因也只是靠算法猜测。请勿拿这份报告去指责模组作者。"
 	},
 	report_uncertainty = {
 		en = "timer resolution is %.3f ms; values below are averages over many frames. The +/- column is a 95%% confidence interval, so a mod whose cost is smaller than its own +/- is not distinguishable from noise. Use the A/B keybind for a single trustworthy number.",
-		["zh-cn"] = "计时器精度为 %.3f ms；下列数值为多帧平均值。± 列为95%%置信区间：若某模组开销小于其 ± 值，则与噪声无法区分。如需单个可信数值，请使用 A/B 快捷键。"
+		["zh-cn"] = "计时器精度为 %.3f 毫秒，下方数值是多帧平均值。± 列表示95%%的误差范围——如果某个模组的耗时比它的±误差还小，那就说明这个数字跟随机噪音没啥区别，不太可信。想得到一个靠谱的单个数值，请用 A/B 测试快捷键。"
 	},
 	report_stats = {
 		en = "timer: %s (~%.5f ms) | overhead ~%.5f ms/call | Lua %.0f MB | total mod CPU %.3f ms/frame | 1%% low %d FPS | worst frame %.1f ms",
-		["zh-cn"] = "计时器：%s （~%.5f ms）| 开销 ~%.5f ms/次 | Lua %.0f MB | 模组总CPU %.3f ms/帧 | 1%%低帧 %d FPS | 最差帧 %.1f ms"
+		["zh-cn"] = "计时器：%s（约 %.5f 毫秒）| 每次测量多耗约 %.5f 毫秒 | Lua内存 %.0f MB | 模组总CPU %.3f 毫秒/帧 | 1%%低帧 %d FPS | 最卡帧 %.1f 毫秒"
 	},
 	report_sorted = {
 		en = "sorted by: %s | mods tracked: %d | memory tracking: %s",
@@ -479,7 +479,7 @@ return {
 	},
 	report_columns = {
 		en = "rank  self_ms    +/-    conf   p95    peak   spikes  calls/f   total_ms  load_ms   mod",
-		["zh-cn"] = "排名  自身(ms)   ±    置信   p95   峰值  卡顿次数  调用/帧  总耗时(ms)  加载(ms)  模组"
+		["zh-cn"] = "排名  自身(ms)   ±    可信度   p95   峰值  卡顿次数  调用/帧  总耗时(ms)  加载(ms)  模组"
 	},
 
 	feedback_dump_log = {
@@ -522,7 +522,7 @@ return {
 	},
 	stat_fps_low = {
 		en = "%d FPS low",
-		["zh-cn"] = "低帧 %d FPS"
+		["zh-cn"] = "最低帧 %d FPS"
 	},
 	stat_worst_frame = {
 		en = "Worst frame",
@@ -579,7 +579,7 @@ return {
 	},
 	col_conf = {
 		en = "conf",
-		["zh-cn"] = "置信"
+		["zh-cn"] = "可信度"
 	},
 	conf_high = {
 		en = "high",
@@ -599,7 +599,7 @@ return {
 	},
 	stat_ranks_hint = {
 		en = "This list ranks mods. For one mod's true cost, use the A/B keybind.",
-		["zh-cn"] = "此列表用于排名。要测量单个模组的真实开销，请使用 A/B 快捷键。"
+		["zh-cn"] = "这个排名仅供横向对比。要测单个模组的真实开销，请用 A/B 测试快捷键。"
 	},
 
 	keybind_ab_test = {
@@ -608,7 +608,7 @@ return {
 	},
 	keybind_ab_test_tooltip = {
 		en = "Turns the heaviest mod's work on and off many times over about 11 seconds and measures the real frame-time difference, with a 95%% confidence interval. If the result is indistinguishable from noise it says so instead of inventing a number. Stand still somewhere calm. The mod is briefly disabled during the test.",
-		["zh-cn"] = "在约11秒内反复开关最耗时模组的运算，测量真实帧时间差异并给出95%%置信区间。若结果与噪声无法区分，则如实说明而非编造数值。请在安静处站立不动。测试期间该模组会被短暂禁用。"
+		["zh-cn"] = "在大约11秒内反复开关最耗时的那个模组，对比帧数的真实变化，并给出95%%的误差范围。如果结果跟随机波动没区别，它会如实告诉你，而不是瞎编一个数字。测试时请站在一个安静的地方别动。测试期间那个模组会被临时禁用。"
 	},
 	keybind_calibrate = {
 		en = "Check accuracy (calibration)",
@@ -616,7 +616,7 @@ return {
 	},
 	keybind_calibrate_tooltip = {
 		en = "Runs a workload of a known size and compares what the profiler reports against the real frame-time cost. Tells you how much to trust the numbers on this machine. Stand still somewhere calm.",
-		["zh-cn"] = "运行已知大小的负载，将监测器读数与真实帧时间开销对比，评估本机数值的可信度。请在安静处站立不动。"
+		["zh-cn"] = "跑一段已知大小的计算任务，然后对比监视器测出来的值和真实帧时间差了多少，让你知道这台电脑上的数据有多靠谱。测试时请站着别动。"
 	},
 
 	ab_start = {
@@ -625,7 +625,7 @@ return {
 	},
 	ab_result = {
 		en = "[A/B] '%s' costs %.3f +/- %.3f ms/frame (95%% CI, %d blocks)",
-		["zh-cn"] = "[A/B] '%s' 开销 %.3f +/- %.3f ms/帧（95%% 置信区间，%d 组）"
+		["zh-cn"] = "[A/B] “%s” 开销 %.3f ± %.3f 毫秒/帧（95%%置信度，%d 组数据）"
 	},
 	ab_no_impact = {
 		en = "[A/B] '%s': no measurable impact (%.3f +/- %.3f ms/frame)",
@@ -633,7 +633,7 @@ return {
 	},
 	ab_no_mod = {
 		en = "[A/B] No mod has measurable cost yet.",
-		["zh-cn"] = "[A/B] 目前没有模组产生可测量的开销。"
+		["zh-cn"] = "[A/B] 目前还没有哪个模组有明显开销。"
 	},
 	ab_cancelled = {
 		en = "[PerfMonitor] Measurement cancelled.",
@@ -678,11 +678,11 @@ return {
 	},
 	calib_toosmall = {
 		en = "  load too small to verify; try again while standing still",
-		["zh-cn"] = "  负载过小无法验证；请站立不动后重试"
+		["zh-cn"] = "  任务太小测不准；请站着别动再试一次"
 	},
 	stat_mem_unavailable = {
 		en = "Per-mod memory isn't available in this game build.",
-		["zh-cn"] = "当前游戏版本无法获取各模组的内存数据。"
+		["zh-cn"] = "当前游戏版本没法获取各模组的内存数据。"
 	},
 	stat_load_unavailable1 = {
 		en = "Per-mod load timing isn't tracked.",
@@ -690,6 +690,6 @@ return {
 	},
 	stat_load_unavailable2 = {
 		en = "(removed so it can't interfere with reloading mods)",
-		["zh-cn"] = "（为避免干扰模组热重载已移除该功能）"
+		["zh-cn"] = "（为了避免干扰模组热重载，已移除这个功能）"
 	},
 }

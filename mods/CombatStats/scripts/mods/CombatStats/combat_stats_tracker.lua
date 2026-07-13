@@ -113,6 +113,7 @@ function CombatStatsTracker:reset()
     })
     self._active_engagements_by_unit = {}
     self._engagements_by_unit = {}
+    self._enemy_health = {}
     self._session_view = nil
 end
 
@@ -175,7 +176,6 @@ function CombatStatsTracker:start(mission_name, class_name)
     self._tracking = true
     self._mission_name = mission_name
     self._class_name = class_name
-    self._session_id = Managers and Managers.connection and Managers.connection:session_id() or nil
 end
 
 function CombatStatsTracker:stop()
@@ -190,6 +190,7 @@ function CombatStatsTracker:stop()
     end
 
     self._active_engagements_by_unit = {}
+    self._enemy_health = {}
 end
 
 function CombatStatsTracker:get_session_stats()
@@ -318,9 +319,36 @@ function CombatStatsTracker:_find_engagement(unit)
     return self._engagements_by_unit[unit]
 end
 
+-- Update the per-enemy HP ledger for any player attacker's hit and return the actual/overkill split.
+-- Called from the hook for every player attack on a minion (not just the local player), so teammate
+-- damage keeps the ledger honest and the local player's killing blow sees an accurate pre-hit HP.
+function CombatStatsTracker:update_enemy_health(unit, damage, attack_result)
+    local enemy_health = self._enemy_health[unit]
+    if not enemy_health then
+        local unit_health_extension = ScriptUnit.has_extension(unit, 'health_system')
+        enemy_health = unit_health_extension and unit_health_extension:current_health() or damage
+        self._enemy_health[unit] = enemy_health
+    end
+
+    local actual_damage = math.min(damage, enemy_health)
+    local overkill_damage = math.max(0, damage - enemy_health)
+
+    if attack_result == 'died' then
+        self._enemy_health[unit] = nil
+    else
+        local unit_health_extension = ScriptUnit.has_extension(unit, 'health_system')
+        local new_health = unit_health_extension and unit_health_extension:current_health()
+            or math.max(0, enemy_health - actual_damage)
+        self._enemy_health[unit] = new_health
+    end
+
+    return actual_damage, overkill_damage
+end
+
 function CombatStatsTracker:_track_enemy_damage(
     unit,
-    damage,
+    actual_damage,
+    overkill_damage,
     attack_type,
     is_critical,
     is_weakspot,
@@ -348,20 +376,8 @@ function CombatStatsTracker:_track_enemy_damage(
         end
     end
 
-    local actual_damage = damage
-    local overkill_damage = 0
-    if attack_result == 'died' then
-        local unit_health_extension = ScriptUnit.has_extension(unit, 'health_system')
-        if unit_health_extension then
-            local health_damage = unit_health_extension:max_health() - unit_health_extension:damage_taken()
-            local is_local_session = not self._session_id
-            if is_local_session then
-                health_damage = health_damage + damage
-            end
-            overkill_damage = math.max(0, damage - health_damage)
-        end
-    end
-
+    -- actual_damage/overkill_damage are precomputed by update_enemy_health, called from the hook for
+    -- every player attacker so the HP ledger stays accurate across teammate hits.
     -- Update the engagement and the session cache with the same event so the view stays in sync.
     add_damage(engagement.stats, actual_damage, overkill_damage, attack_type, is_critical, is_weakspot, damage_type)
     add_damage(self._session_stats, actual_damage, overkill_damage, attack_type, is_critical, is_weakspot, damage_type)
@@ -369,6 +385,12 @@ function CombatStatsTracker:_track_enemy_damage(
     local breed_type = engagement.type or 'unknown'
     self._session_stats.damage_by_type[breed_type] = (self._session_stats.damage_by_type[breed_type] or 0)
         + actual_damage
+end
+
+-- Seed an enemy's remaining HP at full max_health when it spawns, so the first damage event has a
+-- correct baseline independent of when the replicated damage field syncs on clients.
+function CombatStatsTracker:register_enemy_health(unit, health_extension)
+    self._enemy_health[unit] = health_extension:max_health()
 end
 
 function CombatStatsTracker:_finish_enemy_engagement(unit, killed)
@@ -382,6 +404,7 @@ function CombatStatsTracker:_finish_enemy_engagement(unit, killed)
     engagement.killed = killed or false
     self._active_engagements_by_unit[unit] = nil
     self._engagements_by_unit[unit] = nil
+    self._enemy_health[unit] = nil
 
     if killed then
         local breed_type = engagement.type or 'unknown'
@@ -415,6 +438,7 @@ function CombatStatsTracker:_update_active_engagements()
             engagement.end_time = current_time
             self._active_engagements_by_unit[unit] = nil
             self._engagements_by_unit[unit] = nil
+            self._enemy_health[unit] = nil
         end
     end
 end

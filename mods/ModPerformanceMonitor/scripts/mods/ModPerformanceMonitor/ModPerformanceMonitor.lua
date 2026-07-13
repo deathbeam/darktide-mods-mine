@@ -924,19 +924,6 @@ local function add_graph(lines)
 	lines[#lines + 1] = { graph = true }
 end
 
-local function coverage_line()
-	local n = mod._mods_before
-	if n == nil then return nil end
-	if n <= 0 then
-		return mod:localize("stat_coverage_full"), COL.good
-	end
-	local names = mod._mods_before_names
-	if names and #names > 0 and #names <= 2 then
-		return mod:localize("stat_coverage_partial", table.concat(names, ", ")), COL.warn
-	end
-	return mod:localize("stat_coverage_earlier", n, n == 1 and "" or "s"), COL.warn
-end
-
 local function spike_summary()
 	local arr, n = {}, 0
 	for name, b in pairs(stats) do
@@ -1002,8 +989,6 @@ local function build_tab_all(lines)
 	elseif not mod._shim_ok then
 		add_line(lines, mod:localize("stat_shim_inactive"), COL.warn)
 	end
-	local cov, covcol = coverage_line()
-	if cov then add_line(lines, cov, covcol) end
 
 	add_graph(lines)
 
@@ -1128,8 +1113,6 @@ local function build_detailed(lines)
 	add_line(lines, mod:localize("stat_timer_info",
 		timer_name, timer_res_ms, SHIM_OVERHEAD_MS, SUBTRACT_OVERHEAD and mod:localize("removed") or mod:localize("shown")),
 		TIMER_OK and COL.dim or COL.warn)
-	local cov, covcol = coverage_line()
-	if cov then add_line(lines, cov, covcol) end
 
 	if tab_shows_graph() then add_graph(lines) end
 	add_cols(lines, COL.head, mod:localize("col_mod"),

@@ -1,5 +1,7 @@
 local mod = get_mod('CombatStats')
 
+local Breed = mod:original_require('scripts/utilities/breed')
+
 local CombatStatsTracker = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_tracker')
 local CombatStatsHistory = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_history')
 local CombatStatsUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_utils')
@@ -166,35 +168,48 @@ mod:hook(
             local player = Managers.player and Managers.player:local_player_safe(1)
             if player then
                 local player_unit = player.player_unit
-                if player_unit and attacking_unit == player_unit and ALIVE[attacked_unit] then
-                    local unit_data_extension = ScriptUnit.has_extension(attacked_unit, 'unit_data_system')
-                    local breed = unit_data_extension and unit_data_extension:breed()
-                    if breed then
-                        mod.tracker:_start_enemy_engagement(attacked_unit, breed)
+                local player_unit_spawn_manager = Managers.state and Managers.state.player_unit_spawn
+                local attacker_owner = attacking_unit
+                    and player_unit_spawn_manager
+                    and player_unit_spawn_manager:owner(attacking_unit)
 
-                        -- The game resolves a companion's attacker to its owner player before this hook
-                        -- fires (AttackingUnitResolver), so attacking_unit is already the player. The only
-                        -- surviving trace of a companion origin is the damage profile name, which always
-                        -- contains "companion" for servo skull (lasgun/flamer) and adamant dog (pounce).
-                        local damage_profile_name = damage_profile and damage_profile.name
-                        local effective_attack_type = attack_type
-                        if damage_profile_name and damage_profile_name:find('companion') then
-                            effective_attack_type = 'companion'
-                        end
+                local attacked_breed = ALIVE[attacked_unit]
+                        and ScriptUnit.has_extension(attacked_unit, 'unit_data_system')
+                    or nil
+                attacked_breed = attacked_breed and attacked_breed:breed()
 
-                        mod.tracker:_track_enemy_damage(
-                            attacked_unit,
-                            damage,
-                            effective_attack_type,
-                            is_critical_strike,
-                            hit_weakspot,
-                            damage_profile and damage_profile.name,
-                            attack_result
-                        )
+                -- Keep the per-enemy HP ledger current for ANY player's hit on a minion, so teammate
+                -- damage is reflected and the local player's killing blow sees an accurate pre-hit HP.
+                local actual_damage, overkill_damage = damage, 0
+                if attacker_owner and Breed.is_minion(attacked_breed) then
+                    actual_damage, overkill_damage =
+                        mod.tracker:update_enemy_health(attacked_unit, damage, attack_result)
+                end
 
-                        if attack_result == 'died' then
-                            mod.tracker:_finish_enemy_engagement(attacked_unit, true)
-                        end
+                if player_unit and attacking_unit == player_unit and attacked_breed then
+                    mod.tracker:_start_enemy_engagement(attacked_unit, attacked_breed)
+
+                    local damage_profile_name = damage_profile and damage_profile.name
+                    local effective_attack_type = damage_profile_name
+                            and damage_profile_name:find('companion')
+                            and 'companion'
+                        or attack_type
+
+                    mod.tracker:_track_enemy_damage(
+                        attacked_unit,
+                        actual_damage,
+                        overkill_damage,
+                        effective_attack_type,
+                        is_critical_strike,
+                        hit_weakspot,
+                        damage_profile_name,
+                        attack_result
+                    )
+
+                    -- The local player landed the killing blow; count it now. Non-player/teammate
+                    -- deaths are caught by the engagement sweep without crediting a kill.
+                    if attack_result == 'died' then
+                        mod.tracker:_finish_enemy_engagement(attacked_unit, true)
                     end
                 elseif
                     player_unit
@@ -228,6 +243,15 @@ mod:hook(
         )
     end
 )
+
+-- Seed each enemy's remaining HP at full max_health when it spawns. The overkill calc keeps its
+-- own HP ledger because the husk extension's damage_taken/current_health is racy on clients.
+mod:hook_safe(CLASS.HuskHealthExtension, 'init', function(self, extension_init_context, unit, ...)
+    if not mod.tracker:is_tracking() then
+        return
+    end
+    mod.tracker:register_enemy_health(unit, self)
+end)
 
 mod:hook_safe('HudElementPlayerBuffs', '_update_buffs', function(self)
     if not mod.tracker:is_tracking() then
