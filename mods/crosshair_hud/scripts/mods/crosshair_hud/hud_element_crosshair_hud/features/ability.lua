@@ -212,47 +212,49 @@ local function _get_cooldown_symbol_for_percent_threshold(percent, remaining_abi
   return "content/ui/materials/icons/perks/perk_level_01"
 end
 
+local _ability_stance_buffs = {
+  psyker_overcharge_stance = true,
+  veteran_combat_ability_stance_master = true,
+  veteran_combat_ability_stance_master_increased_duration = true,
+  veteran_invisibility = true,
+  zealot_invisibility = true,
+  zealot_invisibility_increased_duration = true,
+  ogryn_ranged_stance = true,
+  cryptic_precision_stance_one_charge = true,
+  cryptic_precision_stance_two_charges = true,
+  cryptic_precision_stance_three_charges = true,
+  adamant_hunt_stance = true,
+  broker_focus_stance = true,
+  broker_focus_stance_improved = true,
+  broker_punk_rage_stance = true,
+}
+
 local function _get_ability_buff_duration(player_unit)
-  local longest_remaining = 0
-  local longest_max = 0
-  
   local buff_ext = ScriptUnit.has_extension(player_unit, "buff_system") and
     ScriptUnit.extension(player_unit, "buff_system")
-  
+
   if not buff_ext or not buff_ext._buffs_by_index then
     return 0, 0
   end
-  
-  local ability_stance_buffs = {
-    psyker_overcharge_stance_infinite_casting = true,
-    veteran_combat_ability_stance_master = true,
-    veteran_invisibility = true,
-    zealot_invisibility = true,
-    zealot_invisibility_increased_duration = true,
-    ogryn_ranged_stance = true,
-    broker_focus_stance = true,
-    broker_focus_stance_improved = true,
-    broker_punk_rage_stance = true,
-  }
-  
+
+  local longest_remaining = 0
+  local longest_max = 0
+  local t = Managers.time:time("gameplay")
+
   for _, buff in pairs(buff_ext._buffs_by_index) do
     if buff then
       local template = buff:template()
-      local buff_name = template and template.name
-      if not buff_name then
-        buff_name = buff.template_name and buff:template_name()
-      end
-      
-      if buff_name and ability_stance_buffs[buff_name] then
-        local get_duration = buff.duration
-        local get_progress = buff.duration_progress
-        
-        if get_duration and type(get_duration) == "function" and 
-           get_progress and type(get_progress) == "function" then
-          local max_dur = get_duration(buff)
-          if max_dur and max_dur > 0 then
-            local progress = get_progress(buff) or 0
-            local remaining = max_dur * progress
+      local buff_name = template and template.name or (buff.template_name and buff:template_name())
+
+      if buff_name and _ability_stance_buffs[buff_name] then
+        local max_dur = buff:duration()
+
+        if max_dur and max_dur > 0 then
+          local start_time = buff:start_time()
+
+          if start_time then
+            local remaining = math.max(max_dur - (t - start_time), 0)
+
             if remaining > longest_remaining then
               longest_remaining = remaining
               longest_max = max_dur
@@ -262,7 +264,7 @@ local function _get_ability_buff_duration(player_unit)
       end
     end
   end
-  
+
   return longest_remaining, longest_max
 end
 

@@ -13,20 +13,11 @@ local COLORS = {
     ATTACK = Color.ui_terminal(255, true),
     SPECIAL = Color.ui_orange_medium(255, true),
     CRIT = Color.ui_orange_light(255, true),
-    WEAKSPOT = Color.ui_hud_yellow_light(255, true),
-    DAMAGE = Color.terminal_text_body(255, true),
-    TIMING = Color.ui_hud_green_light(255, true),
+    DAMAGE = { 255, 171, 91, 81 },
+    IMPACT = { 255, 95, 152, 180 },
+    CLEAVE = Color.ui_hud_green_light(255, true),
+    TIMING = Color.ui_hud_yellow_light(255, true),
     META = Color.terminal_text_body_sub_header(255, true),
-}
-
-local ARMOR_COLORS = {
-    unarmored = Color.ui_hud_red_super_light(255, true),
-    armored = Color.ui_blue_light(255, true),
-    resistant = Color.ui_hud_red_light(255, true),
-    berserker = Color.ui_orange_light(255, true),
-    super_armor = Color.ui_brown_light(255, true),
-    disgustingly_resilient = Color.ui_hud_green_light(255, true),
-    void_shield = Color.ui_hud_warp_charge_low(255, true),
 }
 
 local ARMOR_ORDER = {
@@ -475,7 +466,6 @@ local function _compute_adm_values(profile, target_settings, action_lerp, is_ran
 
             rows[#rows + 1] = {
                 name = Utils.armor_name(armor_key),
-                name_color = ARMOR_COLORS[armor_key],
                 attack = normal_near,
                 attack_far = normal_far,
                 impact = normal_impact,
@@ -516,15 +506,15 @@ local function render_adm_table(records, profile, target_settings, action_lerp, 
     local columns
     if any_crit then
         columns = {
-            { label = adm_label, color = COLORS.DAMAGE },
-            { label = adm_label .. ' ' .. crit_label, color = COLORS.CRIT },
-            { label = impact_label, color = COLORS.DAMAGE },
-            { label = impact_label .. ' ' .. crit_label, color = COLORS.CRIT },
+            { label = adm_label },
+            { label = adm_label .. ' ' .. crit_label },
+            { label = impact_label },
+            { label = impact_label .. ' ' .. crit_label },
         }
     else
         columns = {
-            { label = adm_label, color = COLORS.DAMAGE },
-            { label = impact_label, color = COLORS.DAMAGE },
+            { label = adm_label },
+            { label = impact_label },
         }
     end
 
@@ -544,13 +534,13 @@ local function render_adm_table(records, profile, target_settings, action_lerp, 
             cells = {
                 cell(row.attack, row.attack_far, COLORS.DAMAGE),
                 cell(row.crit_attack, row.crit_attack_far, COLORS.CRIT),
-                cell(row.impact, row.impact_far, COLORS.DAMAGE),
+                cell(row.impact, row.impact_far, COLORS.IMPACT),
                 cell(row.crit_impact, row.crit_impact_far, COLORS.CRIT),
             }
         else
             cells = {
                 cell(row.attack, row.attack_far, COLORS.DAMAGE),
-                cell(row.impact, row.impact_far, COLORS.DAMAGE),
+                cell(row.impact, row.impact_far, COLORS.IMPACT),
             }
         end
         row.cells = cells
@@ -595,7 +585,7 @@ local function render_profile(records, ctx)
     if base_impact and (math.abs(base_impact) > 0.01 or extra_impact > 0.01) then
         local total = (base_impact or 0) + extra_impact
         if math.abs(total) > 0.01 then
-            add_stat(records, mod:localize('stat_impact'), fmt_num(total), COLORS.DAMAGE)
+            add_stat(records, mod:localize('stat_impact'), fmt_num(total), COLORS.IMPACT)
         end
     end
 
@@ -609,16 +599,16 @@ local function render_profile(records, ctx)
                 records,
                 mod:localize('stat_cleave'),
                 string.format('%.2f / %.2f', cleave_attack, cleave_impact),
-                COLORS.DAMAGE
+                COLORS.CLEAVE
             )
         else
-            add_stat(records, mod:localize('stat_cleave'), string.format('%.2f', cleave_attack), COLORS.DAMAGE)
+            add_stat(records, mod:localize('stat_cleave'), string.format('%.2f', cleave_attack), COLORS.CLEAVE)
         end
     end
 
     if profile.backstab_bonus and profile.backstab_bonus ~= 0 then
         local bonus = Utils.lerp_entry(profile.backstab_bonus)
-        add_stat(records, mod:localize('stat_backstab'), string.format('%.0f%%', bonus * 100), COLORS.WEAKSPOT)
+        add_stat(records, mod:localize('stat_backstab'), string.format('%.0f%%', bonus * 100), COLORS.CRIT)
     end
 
     local weakspot_mult = Utils.finesse_multiplier(profile, target_settings, action_lerp, true, false, target_index)
@@ -630,7 +620,7 @@ local function render_profile(records, ctx)
     if any_mult then
         add_subheader(records, mod:localize('stat_finesse_and_crit'))
         if weakspot_mult and math.abs(weakspot_mult - 1) > 0.005 then
-            add_stat(records, mod:localize('stat_weakspot'), fmt_mult(weakspot_mult), COLORS.WEAKSPOT, 1)
+            add_stat(records, mod:localize('stat_weakspot'), fmt_mult(weakspot_mult), COLORS.CRIT, 1)
         end
         if crit_mult and math.abs(crit_mult - 1) > 0.005 then
             add_stat(records, mod:localize('stat_crit'), fmt_mult(crit_mult), COLORS.CRIT, 1)
@@ -639,7 +629,7 @@ local function render_profile(records, ctx)
             crit_weakspot_mult
             and math.abs(crit_weakspot_mult - math.max(weakspot_mult or 1, crit_mult or 1)) > 0.005
         then
-            add_stat(records, mod:localize('stat_crit_plus_weakspot'), fmt_mult(crit_weakspot_mult), COLORS.WEAKSPOT, 1)
+            add_stat(records, mod:localize('stat_crit_plus_weakspot'), fmt_mult(crit_weakspot_mult), COLORS.CRIT, 1)
         end
     end
 
@@ -946,13 +936,24 @@ local function build_stats(item)
         if skip_actions and skip_actions[action_name] then
             -- skip
         elseif #profiles > 0 then
-            local first_profile_entry = profiles[1]
-            local category = categorize(action_name, first_profile_entry, weapon_template)
-            if category then
+            -- Group profiles by category so special-active variants (e.g. a
+            -- chainsword's revved hits) land in their own section instead of
+            -- duplicating inside light/heavy attacks.
+            local by_category = {}
+            for _, profile_entry in ipairs(profiles) do
+                local category = categorize(action_name, profile_entry, weapon_template)
+                if category then
+                    by_category[category] = by_category[category] or {}
+                    by_category[category][#by_category[category] + 1] = profile_entry
+                end
+            end
+
+            for category, category_profiles in pairs(by_category) do
                 local existing = attacks[category]
+                local first_profile_entry = category_profiles[1]
                 local merged = false
                 for _, existing_attack in ipairs(existing) do
-                    if profiles_equivalent(existing_attack.profiles[1], profiles[1]) then
+                    if profiles_equivalent(existing_attack.profiles[1], first_profile_entry) then
                         table.insert(existing_attack.names, action_name)
                         table.insert(existing_attack.merged_actions, action)
                         merged = true
@@ -965,7 +966,7 @@ local function build_stats(item)
                         merged_actions = { action },
                         action = action,
                         profile = first_profile_entry,
-                        profiles = profiles,
+                        profiles = category_profiles,
                         is_ranged = is_ranged_weapon or category == 'ranged',
                     })
                 end
