@@ -2,6 +2,7 @@ return {
 	mod_name = {
 		en = "Machine God's Beacon",
 		["zh-cn"] = "万机之神的灯塔",
+		["zh-tw"] = "萬機之神的燈塔",
 		ru = "Маяк Бога-Машины",
 		de = "Leuchtfeuer des Maschinengottes",
 		fr = "Balise du Dieu-Machine",
@@ -10,6 +11,7 @@ return {
 	mod_description = {
 		en = "By invocation of the Machine God, the lumen-spirits of the habitat are awakened.",
 		["zh-cn"] = "藉万机之神的召唤，栖息地的光魂已然苏醒。",
+		["zh-tw"] = "藉由祈求萬機之神，棲息地的流明之靈甦醒了。",
 		ru = "По призыву Бога-Машины пробуждаются люмен-духи обители.",
 		de = "Durch Anrufung des Maschinengottes erwachen die Lumen-Geister der Behausung.",
 		fr = "Par l'invocation du Dieu-Machine, les esprits-lumen de l'habitat s'éveillent.",
@@ -18,6 +20,7 @@ return {
 	light_group = {
 		en = "Light Control",
 		["zh-cn"] = "灯光控制",
+		["zh-tw"] = "燈光控制",
 		ru = "Управление светом",
 		de = "Lichtsteuerung",
 		fr = "Contrôle des lumières",
@@ -26,6 +29,7 @@ return {
 	flicker_group = {
 		en = "Flicker Settings",
 		["zh-cn"] = "闪烁设置",
+		["zh-tw"] = "閃爍設定",
 		ru = "Настройки мерцания",
 		de = "Flacker-Einstellungen",
 		fr = "Paramètres de scintillement",
@@ -34,16 +38,18 @@ return {
 	environment_group = {
 		en = "Environment Control",
 		["zh-cn"] = "环境控制",
+		["zh-tw"] = "環境控制",
 		ru = "Управление окружением",
 		de = "Umgebungssteuerung",
 		fr = "Contrôle de l'environnement",
 		es = "Control del entorno",
 	},
-	debug_group = {en = "Debug", ["zh-cn"] = "调试", ru = "Отладка", de = "Debug", fr = "Débogage", es = "Depuración"},
-	mode_none = {en = "Off", ["zh-cn"] = "关闭", ru = "Выкл", de = "Aus", fr = "Désactivé", es = "Desactivado"},
+	debug_group = {en = "Debug", ["zh-cn"] = "调试",["zh-tw"] = "除錯", ru = "Отладка", de = "Debug", fr = "Débogage", es = "Depuración"},
+	mode_none = {en = "Off", ["zh-cn"] = "关闭",["zh-tw"] = "關閉", ru = "Выкл", de = "Aus", fr = "Désactivé", es = "Desactivado"},
 	mode_all = {
 		en = "All Missions",
 		["zh-cn"] = "所有任务",
+		["zh-tw"] = "所有任務",
 		ru = "Все миссии",
 		de = "Alle Missionen",
 		fr = "Toutes les missions",
@@ -52,6 +58,7 @@ return {
 	mode_normal = {
 		en = "Normal Missions Only",
 		["zh-cn"] = "仅普通任务",
+		["zh-tw"] = "僅一般任務",
 		ru = "Только обычные",
 		de = "Nur normale Missionen",
 		fr = "Missions normales uniquement",
@@ -60,6 +67,7 @@ return {
 	mode_modified = {
 		en = "Special Missions Only",
 		["zh-cn"] = "仅特殊任务",
+		["zh-tw"] = "僅特殊任務",
 		ru = "Только особые",
 		de = "Nur Spezialmissionen",
 		fr = "Missions spéciales uniquement",
@@ -68,6 +76,7 @@ return {
 	light_control_mode_title = {
 		en = "Light Control",
 		["zh-cn"] = "灯光控制",
+		["zh-tw"] = "燈光控制",
 		ru = "Управление светом",
 		de = "Lichtsteuerung",
 		fr = "Contrôle des lumières",
@@ -76,6 +85,7 @@ return {
 	environment_control_mode_title = {
 		en = "Block Darkness/Fog",
 		["zh-cn"] = "阻挡黑暗/迷雾",
+		["zh-tw"] = "阻擋黑暗/迷霧",
 		ru = "Блокировка тьмы/тумана",
 		de = "Dunkelheit/Nebel blockieren",
 		fr = "Bloquer obscurité/brouillard",
@@ -84,6 +94,7 @@ return {
 	environment_control_mode_tooltip = {
 		en = "{#color(255, 35, 5)}Requires map/instance reload{#reset()}",
 		["zh-cn"] = "{#color(255, 35, 5)}需要重载地图/实例{#reset()}",
+		["zh-tw"] = "{#color(255, 35, 5)}需要重新載入地圖/實例{#reset()}",
 		ru = "{#color(255, 35, 5)}Требуется перезагрузка карты{#reset()}",
 		de = "{#color(255, 35, 5)}Karten-/Instanz-Neuladen erforderlich{#reset()}",
 		fr = "{#color(255, 35, 5)}Rechargement de carte/instance requis{#reset()}",
@@ -92,6 +103,7 @@ return {
 	light_percentage_title = {
 		en = "Light Percentage",
 		["zh-cn"] = "灯光百分比",
+		["zh-tw"] = "燈光百分比",
 		ru = "Процент освещения",
 		de = "Lichtanteil",
 		fr = "Pourcentage de lumières",
@@ -100,6 +112,7 @@ return {
 	light_selection_title = {
 		en = "Light Selection Mode",
 		["zh-cn"] = "灯光选择模式",
+		["zh-tw"] = "燈光選擇模式",
 		ru = "Режим выбора",
 		de = "Auswahlmodus",
 		fr = "Mode de sélection",
@@ -108,6 +121,7 @@ return {
 	light_selection_incremental = {
 		en = "Incremental",
 		["zh-cn"] = "递增",
+		["zh-tw"] = "遞增",
 		ru = "Последовательно",
 		de = "Fortlaufend",
 		fr = "Progressif",
@@ -116,6 +130,7 @@ return {
 	light_selection_alternating = {
 		en = "Alternating",
 		["zh-cn"] = "交替",
+		["zh-tw"] = "交替",
 		ru = "Чередование",
 		de = "Abwechselnd",
 		fr = "Alterné",
@@ -124,6 +139,7 @@ return {
 	light_selection_spread = {
 		en = "Spread",
 		["zh-cn"] = "分散",
+		["zh-tw"] = "分散",
 		ru = "Равномерно",
 		de = "Verteilt",
 		fr = "Réparti",
@@ -132,6 +148,7 @@ return {
 	light_selection_random = {
 		en = "Random",
 		["zh-cn"] = "随机",
+		["zh-tw"] = "隨機",
 		ru = "Случайно",
 		de = "Zufällig",
 		fr = "Aléatoire",
@@ -140,6 +157,7 @@ return {
 	light_state_title = {
 		en = "Light Mode",
 		["zh-cn"] = "灯光模式",
+		["zh-tw"] = "燈光模式",
 		ru = "Режим света",
 		de = "Lichtmodus",
 		fr = "Mode d'éclairage",
@@ -148,6 +166,7 @@ return {
 	light_state_static = {
 		en = "Static",
 		["zh-cn"] = "静态",
+		["zh-tw"] = "靜態",
 		ru = "Статично",
 		de = "Statisch",
 		fr = "Statique",
@@ -156,6 +175,7 @@ return {
 	light_state_flicker = {
 		en = "Flicker",
 		["zh-cn"] = "闪烁",
+		["zh-tw"] = "閃爍",
 		ru = "Мерцание",
 		de = "Flackern",
 		fr = "Scintillement",
@@ -164,6 +184,7 @@ return {
 	light_state_flicker_cascade = {
 		en = "Cascade Flicker",
 		["zh-cn"] = "级联闪烁",
+		["zh-tw"] = "級聯閃爍",
 		ru = "Каскадное мерцание",
 		de = "Kaskaden-Flackern",
 		fr = "Scintillement en cascade",
@@ -172,6 +193,7 @@ return {
 	light_state_flicker_random = {
 		en = "Random Flicker",
 		["zh-cn"] = "随机闪烁",
+		["zh-tw"] = "隨機閃爍",
 		ru = "Случайное мерцание",
 		de = "Zufälliges Flackern",
 		fr = "Scintillement aléatoire",
@@ -180,16 +202,18 @@ return {
 	flicker_default_title = {
 		en = "Flicker Default State",
 		["zh-cn"] = "闪烁默认状态",
+		["zh-tw"] = "閃爍預設狀態",
 		ru = "Состояние по умолчанию",
 		de = "Standard-Flickerzustand",
 		fr = "État par défaut",
 		es = "Estado por defecto",
 	},
-	flicker_default_on = {en = "On", ["zh-cn"] = "开", ru = "Вкл", de = "An", fr = "Allumé", es = "Encendido"},
-	flicker_default_off = {en = "Off", ["zh-cn"] = "关", ru = "Выкл", de = "Aus", fr = "Éteint", es = "Apagado"},
+	flicker_default_on = {en = "On", ["zh-cn"] = "开",["zh-tw"] = "開", ru = "Вкл", de = "An", fr = "Allumé", es = "Encendido"},
+	flicker_default_off = {en = "Off", ["zh-cn"] = "关",["zh-tw"] = "關", ru = "Выкл", de = "Aus", fr = "Éteint", es = "Apagado"},
 	flicker_interval_title = {
 		en = "Flicker Interval (seconds)",
 		["zh-cn"] = "闪烁间隔（秒）",
+		["zh-tw"] = "閃爍間隔（秒）",
 		ru = "Интервал мерцания (сек)",
 		de = "Flacker-Intervall (Sekunden)",
 		fr = "Intervalle de scintillement (secondes)",
@@ -198,6 +222,7 @@ return {
 	flicker_percentage_title = {
 		en = "Flicker Percentage",
 		["zh-cn"] = "闪烁百分比",
+		["zh-tw"] = "閃爍百分比",
 		ru = "Процент мерцания",
 		de = "Flacker-Prozentsatz",
 		fr = "Pourcentage de scintillement",
@@ -206,6 +231,7 @@ return {
 	flicker_duration_title = {
 		en = "Flicker Duration (seconds)",
 		["zh-cn"] = "闪烁持续时间（秒）",
+		["zh-tw"] = "閃爍持續時間（秒）",
 		ru = "Длительность мерцания (сек)",
 		de = "Flacker-Dauer (Sekunden)",
 		fr = "Durée du scintillement (secondes)",
@@ -214,6 +240,7 @@ return {
 	flicker_cooldown_title = {
 		en = "Flicker Cooldown (seconds)",
 		["zh-cn"] = "闪烁冷却（秒）",
+		["zh-tw"] = "閃爍冷卻（秒）",
 		ru = "Перезарядка мерцания (сек)",
 		de = "Flacker-Abklingzeit (Sekunden)",
 		fr = "Recharge du scintillement (secondes)",
@@ -222,6 +249,7 @@ return {
 	enable_stutter_title = {
 		en = "Enable Stutter",
 		["zh-cn"] = "启用频闪",
+		["zh-tw"] = "啟用頻閃",
 		ru = "Включить дребезг",
 		de = "Stottern aktivieren",
 		fr = "Activer le clignotement",
@@ -230,6 +258,7 @@ return {
 	stutter_count_title = {
 		en = "Stutter Count",
 		["zh-cn"] = "频闪次数",
+		["zh-tw"] = "頻閃次數",
 		ru = "Число циклов",
 		de = "Stotter-Anzahl",
 		fr = "Nombre de clignotements",
@@ -238,6 +267,7 @@ return {
 	debug_mode_title = {
 		en = "Debug Mode",
 		["zh-cn"] = "调试模式",
+		["zh-tw"] = "除錯模式",
 		ru = "Режим отладки",
 		de = "Debug-Modus",
 		fr = "Mode débogage",
