@@ -1013,7 +1013,7 @@ if ThemePackage and ThemePackage.level_resource_dependency_packages then
 		local state = MGB and MGB.state
 
 		if state then
-			state.hooks_called["ThemePackage.level_resfource_dependency_packages"] = true
+			state.hooks_called["ThemePackage.level_resource_dependency_packages"] = true
 		end
 
 		if not mod:is_enabled() then
