@@ -4,6 +4,7 @@
 Alfs_DMF_Extensions
 ModPerformanceMonitor
 MoreGraphicsOptions
+LocalizationExport
 
 -- Gameplay
 AutoAbilities
