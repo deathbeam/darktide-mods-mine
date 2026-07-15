@@ -34,7 +34,7 @@ ItemSorting
 crosshair_hud
 enemies_improved
 markers_aio
-ColorMyStamina
+stamina_dodge_bars
 DynamicCrosshair
 machine_gods_beacon
 danger_zone
