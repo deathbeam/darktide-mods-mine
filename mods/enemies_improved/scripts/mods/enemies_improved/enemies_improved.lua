@@ -201,7 +201,6 @@ mod.on_game_state_changed = function(state, state_name)
 
 	-- empty caches
 	mod.clear_caches()
-	table_clear(mod.marked_dead)
 
 	if mod.DEBUG and mod.anim_db_dirty then
 		--mod.save_anim_db()
@@ -247,6 +246,7 @@ mod.on_all_mods_loaded = function()
 
 	mod.load_toggled_debuffs_state()
 	mod.load_debuff_colours()
+
 	mod.load_anim_db()
 
 	mod.dmf = get_mod("DMF")
@@ -277,6 +277,7 @@ mod:hook_safe(CLASS.HudElementWorldMarkers, "init", function(self)
 end)
 
 mod.aimed_unit = {}
+mod.tagged_units = {}
 mod._periodic_cache_clear_timer = 0
 -----------------------------------------------------------------------
 -- Hook into the markers update to recalculate enemies.
@@ -300,8 +301,13 @@ mod:hook_safe(CLASS.HudElementWorldMarkers, "update", function(self, dt, t)
 	if mod.enabled then
 		-- Aim detection (clear enemy cache of non-aimed at enemies)
 		if fs.markers_show_only_aimed then
-			table.clear(mod.aimed_unit)
+			table_clear(mod.aimed_unit)
 			mod.do_aim_raycast()
+		end
+
+		-- Tagged detection (clear enemy cache of non-tagged enemies)
+		if fs.only_tagged_enemies then
+			mod.do_tagged_scan()
 		end
 
 		-- throttle updates according to enemy amounts to help keep performance in check...
@@ -400,9 +406,9 @@ mod:hook_safe(CLASS.HudElementWorldMarkers, "update", function(self, dt, t)
 			end
 		end
 
-		-- PERIODIC FULL CACHE CLEAR — runs every ~5 minutes to flush any accumulated stale data
+		-- PERIODIC FULL CACHE CLEAR — runs every ~2 minutes to flush any accumulated stale data
 		mod._periodic_cache_clear_timer = mod._periodic_cache_clear_timer + dt
-		if mod._periodic_cache_clear_timer >= 300 then
+		if mod._periodic_cache_clear_timer >= 120 then
 			mod._periodic_cache_clear_timer = 0
 			mod.clear_caches()
 		end
@@ -538,6 +544,7 @@ end
 
 mod.scan_enemies = function()
 	table_clear(_horde_units_all)
+	table_clear(_cull_pool)
 
 	local local_player = Managers_player:local_player(1)
 	if not local_player then
@@ -1362,16 +1369,24 @@ mod.clear_caches = function()
 
 	table_clear(mod._broadphase_results)
 	table_clear(mod.source_unit_cache)
-
 	table_clear(mod.enemy_markers)
 	table_clear(mod.enemy_healthbars)
 	table_clear(mod.enemy_debuffs)
-
 	table_clear(mod.enemy_cache)
+	table_clear(mod.marked_dead)
 
 	table_clear(_enemy_units_temp)
 	table_clear(_horde_clusters)
 	table_clear(_horde_cluster_by_unit)
+
+	table_clear(_spatial_hash)
+	table_clear(_visited)
+	table_clear(_z_samples)
+	table_clear(_bfs_queue)
+
+	table_clear(_cull_pool)
+	table_clear(_cull_cells)
+	table_clear(_units_to_remove)
 end
 
 mod.update_horde_clusters = function(temp, to_process)
@@ -1418,6 +1433,25 @@ mod.do_aim_raycast = function()
 						mod.aimed_unit[unit] = true
 					end
 				end
+			end
+		end
+	end
+end
+
+-- Build a set of units that are currently tagged via the smart-tag system.
+mod.do_tagged_scan = function()
+	table_clear(mod.tagged_units)
+
+	local smart_tag_system = Managers.state.extension:system("smart_tag_system")
+	if not smart_tag_system then
+		return
+	end
+
+	for unit in next, mod.enemy_cache do
+		if Unit_alive(unit) then
+			local tag_id = smart_tag_system:unit_tag_id(unit)
+			if tag_id then
+				mod.tagged_units[unit] = true
 			end
 		end
 	end

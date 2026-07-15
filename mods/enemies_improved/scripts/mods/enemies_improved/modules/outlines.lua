@@ -581,6 +581,100 @@ mod.apply_enemy_outlines = function(settings)
 			return true
 		end,
 	}
+
+	-- VANILLA OUTLINE COLOUR OVERRIDES
+
+	-- smart_tagged_enemy (active tag)
+	local tr = mod:get("outline_tagged_colour_R")
+	local tg = mod:get("outline_tagged_colour_G")
+	local tb = mod:get("outline_tagged_colour_B")
+
+	if tr and tg and tb then
+		settings.MinionOutlineExtension.smart_tagged_enemy = {
+			color = { tr / 255, tg / 255, tb / 255 },
+			material_layers = {
+				"minion_outline",
+				"minion_outline_reversed_depth",
+			},
+			priority = 3,
+			visibility_check = function(unit)
+				return HEALTH_ALIVE[unit]
+			end,
+		}
+	end
+
+	-- smart_tagged_enemy_passive (focus/passive tag)
+	local tpr = mod:get("outline_tagged_passive_colour_R")
+	local tpg = mod:get("outline_tagged_passive_colour_G")
+	local tpb = mod:get("outline_tagged_passive_colour_B")
+
+	-- tag
+	if tpr and tpg and tpb then
+		settings.MinionOutlineExtension.smart_tagged_enemy_passive = {
+			color = { tpr / 255, tpg / 255, tpb / 255 },
+			material_layers = {
+				"minion_outline",
+				"minion_outline_reversed_depth",
+			},
+			priority = 1,
+			visibility_check = function(unit)
+				if not HEALTH_ALIVE[unit] then
+					return false
+				end
+
+				return true
+			end,
+		}
+	end
+
+	-- veteran_smart_tag
+	local tr = mod:get("outline_veteran_tagged_colour_R")
+	local tg = mod:get("outline_veteran_tagged_colour_G")
+	local tb = mod:get("outline_veteran_tagged_colour_B")
+	if tr and tg and tb then
+		settings.MinionOutlineExtension.veteran_smart_tag = {
+			color = { tr / 255, tg / 255, tb / 255 },
+			material_layers = {
+				"minion_outline",
+				"minion_outline_reversed_depth",
+			},
+			priority = 1,
+			visibility_check = function(unit)
+				return true
+			end,
+		}
+	end
+
+	-- companion tag
+	local tr = mod:get("outline_companion_colour_R")
+	local tg = mod:get("outline_companion_colour_G")
+	local tb = mod:get("outline_companion_colour_B")
+
+	if tr and tg and tb then
+		settings.MinionOutlineExtension.adamant_smart_tag = {
+			color = { tr / 255, tg / 255, tb / 255 },
+			material_layers = {
+				"minion_outline",
+				"minion_outline_reversed_depth",
+			},
+			priority = 1,
+			visibility_check = function(unit)
+				return true
+			end,
+		}
+
+		settings.MinionOutlineExtension.clarity_of_aim_focus = {
+			color = { tr / 255, tg / 255, tb / 255 },
+			material_layers = {
+				"minion_outline",
+				"minion_outline_reversed_depth",
+			},
+			priority = 1,
+			visibility_check = function(unit)
+				return true
+			end,
+		}
+	end
 end
 
 mod:hook_require("scripts/settings/outline/outline_settings", function(settings)
