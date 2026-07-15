@@ -19,6 +19,7 @@ controlled_chaos
 show_crit_chance
 CombatStats
 WeaponStats
+EnemyStats
 
 -- General HUD
 custom_hud
