@@ -2,24 +2,11 @@ local mod = get_mod('EnemyStats')
 local SharedUtils = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_utils')
 
 local Breeds = require('scripts/settings/breed/breeds')
-local ArmorSettings = require('scripts/settings/damage/armor_settings')
 local MinionDifficultySettings = require('scripts/settings/difficulty/minion_difficulty_settings')
 local HavocModifierConfig = require('scripts/settings/havoc/havoc_modifier_config')
 local HavocSettings = require('scripts/settings/havoc_settings')
-local armor_types = ArmorSettings.types
 
 local DIFFICULTY_KEYS = { 'sedition', 'uprising', 'malice', 'heresy', 'damnation' }
-
-local ARMOR_COLOR = {
-    [armor_types.unarmored] = { 90, 195, 90 },
-    [armor_types.armored] = { 215, 150, 50 },
-    [armor_types.super_armor] = { 150, 155, 175 },
-    [armor_types.berserker] = { 210, 70, 70 },
-    [armor_types.resistant] = { 160, 95, 195 },
-    [armor_types.disgustingly_resilient] = { 150, 185, 70 },
-    [armor_types.player] = { 90, 195, 90 },
-    [armor_types.void_shield] = { 80, 165, 240 },
-}
 
 local HIT_ZONE_ORDER = {
     'head',
@@ -323,10 +310,12 @@ function EnemyStatsData.difficulty_table(breed_name)
         local health = health_settings and tier_value(health_settings, challenge)
         local hm = tier_value(hit_mass_setting, challenge)
         rows[#rows + 1] = {
-            difficulty = mod:localize('diff_' .. key),
+            name = mod:localize('diff_' .. key),
             is_havoc = false,
-            health = format_number(health),
-            hit_mass = format_number(hm),
+            cells = {
+                { text = format_number(health) },
+                { text = format_number(hm) },
+            },
         }
     end
 
@@ -349,8 +338,10 @@ function EnemyStatsData.difficulty_table(breed_name)
                 rank_start = rank,
                 rank_end = rank,
                 is_havoc = true,
-                health = format_number(hp),
-                hit_mass = format_number(hm),
+                cells = {
+                    { text = format_number(hp) },
+                    { text = format_number(hm) },
+                },
             }
         else
             havoc_rows[#havoc_rows].rank_end = rank
@@ -360,9 +351,9 @@ function EnemyStatsData.difficulty_table(breed_name)
     for i = 1, #havoc_rows do
         local r = havoc_rows[i]
         if r.rank_start == r.rank_end then
-            r.difficulty = havoc_label .. ' ' .. r.rank_start
+            r.name = havoc_label .. ' ' .. r.rank_start
         else
-            r.difficulty = havoc_label .. ' ' .. r.rank_start .. '-' .. r.rank_end
+            r.name = havoc_label .. ' ' .. r.rank_start .. '-' .. r.rank_end
         end
         rows[#rows + 1] = r
     end
@@ -386,14 +377,21 @@ function EnemyStatsData.hit_zones(breed_name)
         if zoneset[zone] then
             local armor_cat = zone_armor(breed, zone)
             local weakspot = weakspot_types[zone]
+            local weakspot_color = weakspot and Color.ui_terminal(255, true) or Color.terminal_text_body(255, true)
+            local armor_color = SharedUtils.armor_color(armor_cat) or { 200, 200, 200 }
             zones[#zones + 1] = {
                 zone = zone,
+                name = zone_name(zone),
                 label = zone_name(zone),
                 armor_cat = armor_cat,
                 armor_label = armor_cat and mod:localize('armor_' .. armor_cat) or '',
-                armor_color = ARMOR_COLOR[armor_cat] or { 200, 200, 200 },
+                armor_color = armor_color,
                 weakspot = weakspot,
                 weakspot_label = weakspot and weakspot_name(weakspot) or nil,
+                cells = {
+                    { text = armor_cat and mod:localize('armor_' .. armor_cat) or '', color = armor_color },
+                    { text = weakspot and weakspot_name(weakspot) or '', color = weakspot_color },
+                },
             }
         end
     end
@@ -410,14 +408,21 @@ function EnemyStatsData.hit_zones(breed_name)
         if not found then
             local armor_cat = zone_armor(breed, zone)
             local weakspot = weakspot_types[zone]
+            local weakspot_color = weakspot and Color.ui_terminal(255, true) or Color.terminal_text_body(255, true)
+            local armor_color = SharedUtils.armor_color(armor_cat) or { 200, 200, 200 }
             zones[#zones + 1] = {
                 zone = zone,
+                name = zone_name(zone),
                 label = zone_name(zone),
                 armor_cat = armor_cat,
                 armor_label = mod:localize('armor_' .. armor_cat),
-                armor_color = ARMOR_COLOR[armor_cat] or { 200, 200, 200 },
+                armor_color = armor_color,
                 weakspot = weakspot,
                 weakspot_label = weakspot and weakspot_name(weakspot) or nil,
+                cells = {
+                    { text = mod:localize('armor_' .. armor_cat), color = armor_color },
+                    { text = weakspot and weakspot_name(weakspot) or '', color = weakspot_color },
+                },
             }
         end
     end

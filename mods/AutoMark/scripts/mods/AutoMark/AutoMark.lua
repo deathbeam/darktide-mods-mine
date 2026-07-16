@@ -49,6 +49,7 @@ local mod_settings = {
     noospheric_command_boost_boss            = mod:get("noospheric_command_boost_boss") or false,
     focus_target_overwrite                   = mod:get("focus_target_overwrite") or false,
     focus_target_overwrite_delta             = mod:get("focus_target_overwrite_delta") or 5,
+    focus_target_ignore_unaggroed            = mod:get("focus_target_ignore_unaggroed") or false,
     focus_target_switch                      = mod:get("focus_target_switch") or false,
     focus_target_switch_melee                = mod:get("focus_target_switch_melee") or false,
     focus_target_switch_range                = mod:get("focus_target_switch_range") or false,
