@@ -29,7 +29,7 @@ modular_menu_buttons
 true_level
 DumpStatFinder
 ItemSorting
-InspectFromPartyFinder
+LoadoutPreviews
 
 -- In Game HUD
 crosshair_hud
