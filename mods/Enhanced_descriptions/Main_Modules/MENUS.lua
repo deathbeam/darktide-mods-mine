@@ -536,7 +536,7 @@ local menus_templates = {
 	["loc_stats_display_finesse_stat"] = {
 		-- en = "Finesse",
 		ru = "Ловкость", -- руоф Точность
-		["zh-tw"] = "技巧", -- 技巧
+		["zh-tw"] = "靈巧", -- 靈巧
 		["zh-cn"] = "灵巧", -- 灵巧
 	},
 	["loc_stats_display_flame_size_stat"] = {

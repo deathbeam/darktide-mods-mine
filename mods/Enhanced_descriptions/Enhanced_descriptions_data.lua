@@ -46,7 +46,7 @@ local COLOR_SETTINGS = {
 	{ id = "bleed",				default = "ui_zealot" },
 	{ id = "brittleness",		default = "medium_orchid" },
 	{ id = "burn",				default = "sienna" },
-	{ id = "cleave",			default = "player_slot_2_bright" },
+	{ id = "cleave",			default = "indian_red" },
 	{ id = "coherency",			default = "citadel_kindleflame" },
 	{ id = "combat_ability",	default = "olive_drab" },
 	{ id = "corruption",		default = "ui_corruption_medium" },

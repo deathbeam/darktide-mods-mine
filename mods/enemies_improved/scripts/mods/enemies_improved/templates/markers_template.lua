@@ -291,12 +291,12 @@ template.on_enter = function(widget, marker, template)
 
 	if not marker.unit or not Unit_alive(marker.unit) then
 		content.draw_mkr = false
+		content.m_built = false
 		return
 	end
 
 	template.position_offset = { 0, 0, fs.hb_y_offset }
 	content.m_built = false
-
 	content.draw_mkr = false -- force hidden until ready...
 
 	local unit = marker.unit
@@ -371,16 +371,29 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 
 	if not unit or not Unit_alive(unit) then
 		content.draw_mkr = false
+		content.m_built = false
 		return
 	end
 
-	local enemy_individual = content.breed and content.breed.name
-	local override_enabled = false
+	local breed_name = entry and entry.breed_name
+	local breed_type = entry and entry.breed_type
 
-	if enemy_individual then
-		local enabled = fs.breed_marker_toggle and fs.breed_marker_toggle[enemy_individual] or nil
+	local override_enabled = nil
+
+	-- group override
+	if breed_type then
+		local enabled = fs.breed_marker_type_enabled and fs.breed_marker_type_enabled[breed_type] or nil
 
 		if enabled ~= nil then
+			override_enabled = enabled
+		end
+	end
+
+	-- individual override
+	if breed_name then
+		local enabled = fs.breed_marker_toggle and fs.breed_marker_toggle[breed_name] or nil
+
+		if enabled and enabled == true then
 			override_enabled = enabled
 		end
 	end
@@ -388,12 +401,14 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 	-- Horde filter
 	if entry and entry.is_horde and not fs.markers_horde_enable and not override_enabled then
 		content.draw_mkr = false
+		content.m_built = false
 		return
 	end
 
 	-- Non-horde filter (elites, specials, monsters, etc.)
 	if entry and not entry.is_horde and not fs.markers_non_horde_enable and not override_enabled then
 		content.draw_mkr = false
+		content.m_built = false
 		return
 	end
 
@@ -407,10 +422,9 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 
 	if content.m_allowed == false then
 		content.draw_mkr = false
+		content.m_built = false
 		return
 	end
-
-	content.draw_mkr = true
 
 	local is_alive = mod.detect_alive(unit)
 
@@ -447,23 +461,6 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 			end
 		end
 	end
-
-	-- marker height
-	--[[if content.breed and is_alive then
-		local root_position = Unit.world_position(unit, 1)
-
-		if mod.frame_settings.healthbar_enable then
-			root_position.z = root_position.z + content.breed.base_height + 0.1
-		else
-			root_position.z = root_position.z + content.breed.base_height + 0.5
-		end
-
-		if not marker.world_position then
-			marker.world_position = Vector3Box(root_position)
-		else
-			marker.world_position:store(root_position)
-		end
-	end]]
 
 	template.max_distance = fs.draw_distance_broadphase or fs.draw_distance
 
@@ -556,7 +553,11 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 
 	if not marker.is_inside_frustum then
 		content.draw_mkr = false
+		content.m_built = false
+		return
 	end
+
+	content.draw_mkr = true
 
 	if content.draw_mkr then
 		content.m_built = true
