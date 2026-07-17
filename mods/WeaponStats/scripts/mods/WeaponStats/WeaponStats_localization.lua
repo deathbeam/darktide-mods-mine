@@ -15,6 +15,7 @@ return {
         armor_disgustingly_resilient = 'loc_weapon_stats_display_disgustingly_resilient',
         armor_resistant = 'loc_glossary_armour_type_resistant',
         armor_super_armor = 'loc_weapon_stats_display_super_armor',
+        -- Weapon kind
         kind_ranged = 'loc_setting_ranged',
         kind_melee = 'loc_setting_melee',
         -- Weapon stat labels
@@ -50,6 +51,11 @@ return {
         en = 'Toggle Stats View',
         ['zh-cn'] = '切换统计视图',
         ['zh-tw'] = '切換統計檢視',
+    },
+    add_to_esc_menu = {
+        en = 'Show in Options Menu',
+        ['zh-cn'] = '在选项菜单中显示',
+        ['zh-tw'] = '在選項選單中顯示',
     },
 
     -- Window
@@ -438,15 +444,6 @@ return {
     },
     stagger_sticky = {
         en = 'Sticky',
-    },
-    stagger_heavy = {
-        en = 'Heavy',
-    },
-    stagger_light = {
-        en = 'Light',
-    },
-    stagger_medium = {
-        en = 'Medium',
     },
     stagger_electrocuted = {
         en = 'Electrocuted',
