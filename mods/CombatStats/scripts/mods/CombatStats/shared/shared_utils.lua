@@ -108,11 +108,20 @@ function SharedUtils.copy_to_clipboard(text)
     return ok or false
 end
 
+-- Strips game rich-text tags ({#color(...)}, {#reset()}, {#size(...)}, etc.) so
+-- copied text is plain and readable.
+local function _strip_rich_text(text)
+    if not text then
+        return ''
+    end
+    return (tostring(text):gsub('{#%w+%b()}', ''))
+end
+
 local function _cell_text(cell)
     if type(cell) == 'table' then
-        return cell.text or ''
+        return _strip_rich_text(cell.text)
     end
-    return tostring(cell or '')
+    return _strip_rich_text(tostring(cell or ''))
 end
 
 local function _table_to_md(columns, rows, name_column_label)
@@ -150,9 +159,12 @@ function SharedUtils.layout_to_markdown(title, layout)
         local e = layout[i]
         local wt = e and e.widget_type
         if wt == 'header' or wt == 'header_icon' then
-            lines[#lines + 1] = '## ' .. (e.text or '')
+            lines[#lines + 1] = '## ' .. _strip_rich_text(e.text or '')
+            if e.subtext and e.subtext ~= '' then
+                lines[#lines + 1] = '*' .. _strip_rich_text(e.subtext) .. '*'
+            end
         elseif wt == 'subtext' then
-            lines[#lines + 1] = (e.text or '')
+            lines[#lines + 1] = _strip_rich_text(e.text or '')
         elseif wt == 'section' then
             local depth = e.level == 2 and 4 or (e.level == 3 and 5 or 3)
             lines[#lines + 1] = ''
@@ -160,7 +172,7 @@ function SharedUtils.layout_to_markdown(title, layout)
         elseif wt == 'stat' or wt == 'substat' then
             local label = e.label or ''
             local value = e.value or ''
-            lines[#lines + 1] = string.format('- **%s**: %s', label, value)
+            lines[#lines + 1] = string.format('- **%s**: %s', _strip_rich_text(label), _strip_rich_text(value))
         elseif wt == 'text' then
             lines[#lines + 1] = (e.text or '')
         elseif wt == 'table' then
@@ -185,7 +197,7 @@ function SharedUtils.layout_to_markdown(title, layout)
         elseif wt == 'progress_bar' then
             local label = e.label or ''
             local value = e.value or ''
-            lines[#lines + 1] = string.format('- **%s**: %s', label, value)
+            lines[#lines + 1] = string.format('- **%s**: %s', _strip_rich_text(label), _strip_rich_text(value))
         end
     end
     return table.concat(lines, '\n')
