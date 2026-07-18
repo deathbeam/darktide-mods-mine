@@ -6,10 +6,10 @@ MoreGraphicsOptions
 LocalizationExport
 
 -- Gameplay
-AutoAbilities
-AutoMark
-Skitarius
+SimpleAbilities
 SimpleMovement
+Skitarius
+AutoMark
 guarantee_weapon_swap
 guarantee_special_action
 guarantee_ability_activation

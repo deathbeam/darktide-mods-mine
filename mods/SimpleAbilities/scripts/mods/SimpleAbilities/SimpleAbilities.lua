@@ -3,7 +3,7 @@ local mod = get_mod('AutoAbilities')
 -- Constants
 local ACTION_STAGES = {
     NONE = 0,
-    WAITING_FOR_USE = 2,
+    WAITING_FOR_USE = 1,
 }
 
 local CHECK_INTERVAL = 0.5
