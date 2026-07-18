@@ -7,6 +7,8 @@ local MasterItems = require("scripts/backend/master_items")
 local ProfileUtils = require("scripts/utilities/profile_utils")
 local TalentBuilderViewSettings = require("scripts/ui/views/talent_builder_view/talent_builder_view_settings")
 local TalentLayoutParser = require("scripts/ui/views/talent_builder_view/utilities/talent_layout_parser")
+local UIRenderer = require("scripts/managers/ui/ui_renderer")
+local UIWidget = require("scripts/managers/ui/ui_widget")
 local UISoundEvents = require("scripts/settings/ui/ui_sound_events")
 local Game = {
 	BuffSettings = require("scripts/settings/buff/buff_settings"),
@@ -138,6 +140,32 @@ local GEAR_LAYOUT = {
 	compact_content_gap = 6,
 	compact_content_padding_top = 10,
 	compact_content_padding_bottom = 40,
+}
+local TEAM_PREVIEW_LAYOUT = {
+	canvas_width = 1920,
+	canvas_height = 1080,
+	applicant_scale = 0.74,
+	applicant_draw_layer = 5000,
+	applicant_z = 5000,
+	content_padding_bottom = 18,
+	content_padding_top = 18,
+	lobby_bottom_y = 744,
+	lobby_min_height = 810,
+	lobby_min_width = 460,
+	lobby_scale = 0.68,
+	loading_gap = 28,
+	loading_min_height = 810,
+	loading_min_width = 460,
+	loading_scale = 0.82,
+	loading_top_y = 34,
+	margin = 24,
+	panel_padding = 12,
+	title_height = 54,
+	title_text_height = 30,
+	title_text_y = 14,
+	z = 900,
+	applicant_scenegraph_id = "loadout_previews_applicant_overlay",
+	scenegraph_id = "loadout_previews_overlay",
 }
 local WEAPON_LAYOUT = {
 	row_height = 58,
@@ -356,6 +384,52 @@ local STAT_LAYOUT = {
 local Settings = {}
 local Layouts = {}
 local Stats = {}
+local TeamPreview = {}
+local ApplicantPreview = {}
+local active_preview_setting_scope
+local PREVIEW_SETTING_SCOPES = {
+	self = {
+		enabled = "loadout_preview_enabled",
+		mode = "talent_preview_mode",
+		delay = "preview_delay",
+		stats = "show_stats_preview",
+		stimm = "show_stimm_lab_preview",
+		weapons = "show_weapon_preview",
+		weapon_icons = "show_weapon_icons_preview",
+		weapon_text = "weapon_preview_text_mode",
+		weapon_blessings = "show_weapon_blessings_preview",
+		weapon_blessing_descriptions = "show_weapon_blessing_descriptions_preview",
+		weapon_perks = "show_weapon_perks_preview",
+		curios = "show_curio_preview",
+		curio_perks = "show_curio_perks_preview",
+	},
+	team = {
+		stimm = "show_team_stimm_lab_preview",
+		weapons = "show_team_weapon_preview",
+		weapon_icons = "show_team_weapon_icons_preview",
+		weapon_text = "team_weapon_preview_text_mode",
+		weapon_blessings = "show_team_weapon_blessings_preview",
+		weapon_blessing_descriptions = "show_team_weapon_blessing_descriptions_preview",
+		weapon_perks = "show_team_weapon_perks_preview",
+		curios = "show_team_curio_preview",
+		curio_perks = "show_team_curio_perks_preview",
+	},
+	party_finder = {
+		enabled = "show_group_finder_applicant_previews",
+		mode = "party_finder_preview_mode",
+		delay = "party_finder_preview_delay",
+		stats = "show_party_finder_stats_preview",
+		stimm = "show_party_finder_stimm_lab_preview",
+		weapons = "show_party_finder_weapon_preview",
+		weapon_icons = "show_party_finder_weapon_icons_preview",
+		weapon_text = "party_finder_weapon_preview_text_mode",
+		weapon_blessings = "show_party_finder_weapon_blessings_preview",
+		weapon_blessing_descriptions = "show_party_finder_weapon_blessing_descriptions_preview",
+		weapon_perks = "show_party_finder_weapon_perks_preview",
+		curios = "show_party_finder_curio_preview",
+		curio_perks = "show_party_finder_curio_perks_preview",
+	},
+}
 
 local function better_loadouts_mod()
 	local ok, better_loadouts = pcall(get_mod, "BetterLoadouts")
@@ -479,8 +553,33 @@ local function better_loadouts_tooltip_dimensions()
 	}
 end
 
+local function active_preview_settings()
+	return PREVIEW_SETTING_SCOPES[active_preview_setting_scope or "self"] or PREVIEW_SETTING_SCOPES.self
+end
+
+local function scoped_setting_id(key)
+	return active_preview_settings()[key]
+end
+
+local function scoped_preview_bool(key, disabled_by_default)
+	local setting_id = scoped_setting_id(key)
+
+	if not setting_id then
+		return false
+	end
+
+	local value = mod:get(setting_id)
+
+	if disabled_by_default then
+		return value == true
+	end
+
+	return value ~= false
+end
+
 function Settings.preview_mode()
-	local mode = mod:get("talent_preview_mode")
+	local setting_id = scoped_setting_id("mode") or "talent_preview_mode"
+	local mode = mod:get(setting_id)
 
 	if mode == PREVIEW_MODE.disabled or mode == PREVIEW_MODE.tree or mode == PREVIEW_MODE.compact or mode == PREVIEW_MODE.stats or mode == PREVIEW_MODE.tree_stats or mode == PREVIEW_MODE.compact_stats then
 		return mode
@@ -490,53 +589,98 @@ function Settings.preview_mode()
 end
 
 function Settings.loadout_preview_enabled()
-	return mod:get("loadout_preview_enabled") ~= false
+	return scoped_preview_bool("enabled")
+end
+
+function Settings.with_preview_settings(scope, callback)
+	local previous_scope = active_preview_setting_scope
+
+	active_preview_setting_scope = scope
+
+	local ok, result = pcall(callback)
+
+	active_preview_setting_scope = previous_scope
+
+	if not ok then
+		error(result)
+	end
+
+	return result
+end
+
+function Settings.with_team_preview_settings(callback)
+	return Settings.with_preview_settings("team", callback)
+end
+
+function Settings.with_party_finder_preview_settings(callback)
+	return Settings.with_preview_settings("party_finder", callback)
+end
+
+function Settings.show_lobby_team_previews()
+	return mod:get("show_lobby_team_previews") ~= false
+end
+
+function Settings.show_mission_intro_team_previews()
+	return Settings.show_lobby_team_previews()
+end
+
+function Settings.show_group_finder_applicant_previews()
+	return mod:get("show_group_finder_applicant_previews") ~= false
+end
+
+function Settings.show_own_lobby_team_preview()
+	return mod:get("show_own_lobby_team_preview") == true
 end
 
 function Settings.preview_delay()
-	local delay = tonumber(mod:get("preview_delay")) or 0
+	local setting_id = scoped_setting_id("delay")
+	local delay = tonumber(setting_id and mod:get(setting_id)) or 0
 
 	return math.min(math.max(delay, 0), 3)
 end
 
+function Settings.show_stats_preview()
+	return scoped_preview_bool("stats")
+end
+
 function Settings.show_weapon_preview()
-	return mod:get("show_weapon_preview") ~= false
+	return scoped_preview_bool("weapons")
 end
 
 function Settings.show_weapon_icons_preview()
-	return mod:get("show_weapon_icons_preview") ~= false
+	return scoped_preview_bool("weapon_icons")
 end
 
 function Settings.show_curio_preview()
-	return mod:get("show_curio_preview") ~= false
+	return scoped_preview_bool("curios")
 end
 
 function Settings.show_stimm_lab_preview()
-	return mod:get("show_stimm_lab_preview") ~= false
+	return scoped_preview_bool("stimm")
 end
 
 function Settings.weapon_preview_text_mode()
-	return mod:get("weapon_preview_text_mode") == true
+	return scoped_preview_bool("weapon_text", true)
 end
 
 function Settings.show_weapon_blessings_preview()
-	return mod:get("show_weapon_blessings_preview") ~= false
+	return scoped_preview_bool("weapon_blessings")
 end
 
 function Settings.show_weapon_blessing_descriptions_preview()
-	return mod:get("show_weapon_blessing_descriptions_preview") == true
+	return scoped_preview_bool("weapon_blessing_descriptions", true)
 end
 
 function Settings.show_weapon_perks_preview()
-	return mod:get("show_weapon_perks_preview") ~= false
+	return scoped_preview_bool("weapon_perks")
 end
 
 function Settings.show_curio_perks_preview()
-	return mod:get("show_curio_perks_preview") ~= false
+	return scoped_preview_bool("curio_perks")
 end
 
 function Settings.preview_key(mode)
-	return string.format("%s:%s:%s:%s:%s:%s:%s:%s:%s:%s", mode, tostring(Settings.show_stimm_lab_preview()), tostring(Settings.show_weapon_preview()), tostring(Settings.show_weapon_icons_preview()), tostring(Settings.show_curio_preview()), tostring(Settings.weapon_preview_text_mode()), tostring(Settings.show_weapon_blessings_preview()), tostring(Settings.show_weapon_blessing_descriptions_preview()), tostring(Settings.show_weapon_perks_preview()), tostring(Settings.show_curio_perks_preview()))
+	return string.format("%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s", mode, tostring(Settings.show_stats_preview()), tostring(Settings.show_stimm_lab_preview()), tostring(Settings.show_weapon_preview()), tostring(Settings.show_weapon_icons_preview()), tostring(Settings.show_curio_preview()), tostring(Settings.weapon_preview_text_mode()), tostring(Settings.show_weapon_blessings_preview()), tostring(Settings.show_weapon_blessing_descriptions_preview()), tostring(Settings.show_weapon_perks_preview()), tostring(Settings.show_curio_perks_preview()))
 end
 
 function Layouts.local_player_profile()
@@ -1391,8 +1535,9 @@ local function hide_preview(view, restore_grid)
 	end
 end
 
-local function sorted_selected_nodes(profile_preset)
-	local profile = Layouts.local_player_profile()
+local function sorted_selected_nodes(profile_preset, profile)
+	profile = profile or Layouts.local_player_profile()
+
 	local archetype = profile and profile.archetype
 	local talents = profile_preset and profile_preset.talents
 
@@ -2353,8 +2498,9 @@ function Stats.context_toughness_melee_kill(archetype, context, max_toughness)
 	return max_toughness * (recovery_percentages[recovery_type] or 0) * stat_buff_multiplier * modifier
 end
 
-function Stats.collect_preview_data(view, profile_preset)
-	local profile = Layouts.local_player_profile()
+function Stats.collect_preview_data(view, profile_preset, profile)
+	profile = profile or Layouts.local_player_profile()
+
 	local archetype = profile and profile.archetype
 
 	if not archetype then
@@ -2459,12 +2605,13 @@ local function selected_talents_for_layout(profile_preset, layout)
 	return selected, total_points
 end
 
-local function collect_stimm_preview_data(profile_preset)
+local function collect_stimm_preview_data(profile_preset, profile)
 	if not Settings.show_stimm_lab_preview() then
 		return nil
 	end
 
-	local profile = Layouts.local_player_profile()
+	profile = profile or Layouts.local_player_profile()
+
 	local archetype = profile and profile.archetype
 	local layout = Layouts.archetype_stimm(archetype)
 	local selected, points = selected_talents_for_layout(profile_preset, layout)
@@ -2480,8 +2627,9 @@ local function collect_stimm_preview_data(profile_preset)
 	}
 end
 
-local function primary_preview_layout(profile_preset)
-	local profile = Layouts.local_player_profile()
+local function primary_preview_layout(profile_preset, profile)
+	profile = profile or Layouts.local_player_profile()
+
 	local archetype = profile and profile.archetype
 
 	if not archetype then
@@ -4001,15 +4149,15 @@ local function add_talent_only_preview(layout, talent_pass_template, preview_lay
 	}
 end
 
-local function build_preview_layout(view, profile_preset, mode)
+local function build_preview_layout(view, profile_preset, mode, profile)
 	local layout = {}
-	local stats_visible = preview_mode_has_stats(mode)
+	local stats_visible = preview_mode_has_stats(mode) and Settings.show_stats_preview()
 	local stats_only = preview_mode_stats_only(mode)
 	local talents_visible = mode ~= PREVIEW_MODE.disabled and not stats_only
 	local base_preview_layout = preview_layout_settings(mode)
 	local gear_data = collect_gear_preview_data(view, profile_preset)
-	local stats_data = stats_visible and Stats.collect_preview_data(view, profile_preset) or nil
-	local stimm_data = talents_visible and collect_stimm_preview_data(profile_preset) or nil
+	local stats_data = stats_visible and Stats.collect_preview_data(view, profile_preset, profile) or nil
+	local stimm_data = talents_visible and collect_stimm_preview_data(profile_preset, profile) or nil
 	local talent_preview_layout = base_preview_layout
 	local talent_pass_template
 	local compact_with_gear
@@ -4035,8 +4183,8 @@ local function build_preview_layout(view, profile_preset, mode)
 	end
 
 	if talents_visible then
-		local selected_nodes = sorted_selected_nodes(profile_preset)
-		local talent_layout, map_selected = primary_preview_layout(profile_preset)
+		local selected_nodes = sorted_selected_nodes(profile_preset, profile)
+		local talent_layout, map_selected = primary_preview_layout(profile_preset, profile)
 
 		if talent_layout and preview_mode_is_tree(mode) then
 			base_preview_layout = dynamic_tree_preview_layout(talent_layout)
@@ -4122,6 +4270,1083 @@ local function build_preview_layout(view, profile_preset, mode)
 
 	return layout
 end
+
+function TeamPreview.inject_overlay_scenegraph(definitions)
+	local scenegraph_definition = definitions and definitions.scenegraph_definition
+
+	if scenegraph_definition and not scenegraph_definition[TEAM_PREVIEW_LAYOUT.scenegraph_id] then
+		scenegraph_definition[TEAM_PREVIEW_LAYOUT.scenegraph_id] = {
+			horizontal_alignment = "left",
+			parent = "canvas",
+			vertical_alignment = "top",
+			size = {
+				0,
+				0,
+			},
+			position = {
+				0,
+				0,
+				TEAM_PREVIEW_LAYOUT.z,
+			},
+		}
+	end
+
+	if scenegraph_definition and not scenegraph_definition[TEAM_PREVIEW_LAYOUT.applicant_scenegraph_id] then
+		scenegraph_definition[TEAM_PREVIEW_LAYOUT.applicant_scenegraph_id] = {
+			horizontal_alignment = "left",
+			parent = "canvas",
+			vertical_alignment = "top",
+			size = {
+				0,
+				0,
+			},
+			position = {
+				0,
+				0,
+				TEAM_PREVIEW_LAYOUT.applicant_z,
+			},
+		}
+	end
+end
+
+function TeamPreview.enabled(context)
+	if not Settings.loadout_preview_enabled() then
+		return false
+	end
+
+	if context == "lobby" then
+		return Settings.show_lobby_team_previews()
+	elseif context == "mission_intro" then
+		return Settings.show_mission_intro_team_previews()
+	elseif context == "applicant" then
+		return Settings.show_group_finder_applicant_previews()
+	end
+
+	return false
+end
+
+function TeamPreview.player_method(player, method_name)
+	if not player then
+		return nil, false
+	end
+
+	local ok, method = pcall(function ()
+		return player[method_name]
+	end)
+
+	if not ok then
+		return nil, false
+	end
+
+	if type(method) == "function" then
+		return method, true
+	end
+
+	return nil, true
+end
+
+function TeamPreview.is_human_player(player)
+	local is_human_controlled, valid_player = TeamPreview.player_method(player, "is_human_controlled")
+
+	if not valid_player then
+		return false
+	end
+
+	if not is_human_controlled then
+		return true
+	end
+
+	local ok, is_human = pcall(is_human_controlled, player)
+
+	return ok and is_human == true
+end
+
+function TeamPreview.is_local_player(player)
+	local player_manager = Managers.player
+
+	if not player or not player_manager or not player_manager.local_player then
+		return false
+	end
+
+	local ok, local_player = pcall(player_manager.local_player, player_manager, 1)
+
+	return ok and player == local_player
+end
+
+function TeamPreview.should_show_lobby_slot(slot)
+	if not slot or not slot.occupied then
+		return false
+	end
+
+	if TeamPreview.is_local_player(slot.player) and not Settings.show_own_lobby_team_preview() then
+		return false
+	end
+
+	return true
+end
+
+function TeamPreview.player_profile(player)
+	local profile = TeamPreview.player_method(player, "profile")
+
+	if not profile then
+		return nil
+	end
+
+	local ok, result = pcall(profile, player)
+
+	return ok and result or nil
+end
+
+function TeamPreview.player_name(player)
+	local name = TeamPreview.player_method(player, "name")
+
+	if not name then
+		return nil
+	end
+
+	local ok, result = pcall(name, player)
+
+	return ok and result or nil
+end
+
+function TeamPreview.profile_title(player, profile)
+	local name = TeamPreview.player_name(player) or mod:localize("team_preview_unknown_player")
+	local ok, archetype_title = pcall(ProfileUtils.character_archetype_title, profile)
+
+	if ok and archetype_title and archetype_title ~= "" then
+		return string.format("%s - %s", name, archetype_title)
+	end
+
+	return name
+end
+
+function TeamPreview.profile_preset(profile)
+	if not profile then
+		return nil
+	end
+
+	return {
+		loadout = profile.loadout,
+		talents = profile.selected_nodes or {},
+	}
+end
+
+function TeamPreview.profile_key(player, profile, title)
+	local pieces = {
+		Settings.with_team_preview_settings(function ()
+			return Settings.preview_key(PREVIEW_MODE.compact)
+		end),
+		tostring(title or ""),
+	}
+	local unique_id
+
+	local unique_id = TeamPreview.player_method(player, "unique_id")
+
+	if unique_id then
+		local ok, value = pcall(unique_id, player)
+
+		unique_id = ok and value or nil
+	end
+
+	pieces[#pieces + 1] = tostring(unique_id)
+
+	local loadout = profile and profile.loadout
+
+	for i = 1, #WEAPON_LAYOUT.preview_slots do
+		pieces[#pieces + 1] = tostring(loadout_slot_gear_id(loadout, WEAPON_LAYOUT.preview_slots[i]))
+	end
+
+	for i = 1, #CURIO_LAYOUT.preview_slots do
+		pieces[#pieces + 1] = tostring(loadout_slot_gear_id(loadout, CURIO_LAYOUT.preview_slots[i]))
+	end
+
+	local selected_nodes = profile and profile.selected_nodes
+
+	if selected_nodes then
+		local names = {}
+
+		for name, _ in pairs(selected_nodes) do
+			names[#names + 1] = name
+		end
+
+		table.sort(names)
+
+		for i = 1, #names do
+			local name = names[i]
+
+			pieces[#pieces + 1] = tostring(name) .. "=" .. tostring(selected_nodes[name])
+		end
+	end
+
+	return table.concat(pieces, "|")
+end
+
+function TeamPreview.preview_element(layout)
+	if not layout then
+		return nil
+	end
+
+	for i = 1, #layout do
+		local element = layout[i]
+		local widget_type = element.widget_type
+
+		if element.pass_template and element.size and (widget_type == "loadout_organizer_preview" or widget_type == "loadout_organizer_compact_talents" or widget_type == "loadout_organizer_talent_map") then
+			return element
+		end
+	end
+end
+
+function TeamPreview.add_panel_passes(pass_template, width, height, has_title)
+	pass_template[#pass_template + 1] = {
+		pass_type = "rect",
+		style_id = "team_preview_tooltip_icon_bg",
+		style = {
+			horizontal_alignment = "center",
+			vertical_alignment = "center",
+			offset = {
+				0,
+				0,
+				0,
+			},
+			size_addition = {
+				-24,
+				-24,
+			},
+			color = Color.terminal_grid_background_icon(255, true),
+		},
+	}
+	pass_template[#pass_template + 1] = {
+		pass_type = "texture",
+		style_id = "team_preview_tooltip_bg",
+		value = "content/ui/materials/backgrounds/terminal_basic",
+		style = {
+			horizontal_alignment = "center",
+			scale_to_material = true,
+			vertical_alignment = "center",
+			offset = {
+				0,
+				0,
+				1,
+			},
+			color = Color.terminal_grid_background(255, true),
+		},
+	}
+
+	if has_title then
+		pass_template[#pass_template + 1] = {
+			pass_type = "text",
+			style_id = "team_preview_title",
+			value = "",
+			value_id = "team_preview_title",
+			style = {
+				font_size = 18,
+				font_type = "proxima_nova_bold",
+				text_horizontal_alignment = "center",
+				text_vertical_alignment = "center",
+				text_color = Color.terminal_text_header(255, true),
+				offset = {
+					0,
+					TEAM_PREVIEW_LAYOUT.title_text_y,
+					6,
+				},
+				size = {
+					width,
+					TEAM_PREVIEW_LAYOUT.title_text_height,
+				},
+			},
+		}
+	end
+end
+
+function TeamPreview.min_frame_size(context)
+	if context == "lobby" then
+		return TEAM_PREVIEW_LAYOUT.lobby_min_width, TEAM_PREVIEW_LAYOUT.lobby_min_height
+	elseif context == "mission_intro" then
+		return TEAM_PREVIEW_LAYOUT.loading_min_width, TEAM_PREVIEW_LAYOUT.loading_min_height
+	end
+
+	return nil, nil
+end
+
+function TeamPreview.wrap_element(element, title, context)
+	local has_title = title ~= nil and title ~= ""
+	local content_width = element.size[1]
+	local content_height = element.size[2]
+	local preview_layout = element.loadout_organizer_preview_layout or {
+		preview_width = content_width,
+		preview_height = content_height,
+	}
+	local title_height = has_title and TEAM_PREVIEW_LAYOUT.title_height or 0
+	local min_width, min_height = TeamPreview.min_frame_size(context)
+	local width = math.max(preview_tooltip_width(preview_layout), min_width or 0)
+	local content_area_height = preview_tooltip_height(preview_layout)
+	local content_padding_top = TEAM_PREVIEW_LAYOUT.content_padding_top
+	local content_padding_bottom = TEAM_PREVIEW_LAYOUT.content_padding_bottom
+	local height = content_area_height + title_height + content_padding_top + content_padding_bottom
+
+	if min_height and height < min_height then
+		content_area_height = content_area_height + min_height - height
+		height = min_height
+	end
+
+	local content_x = math.max((width - content_width) * 0.5, 0)
+	local content_y = title_height + content_padding_top + math.max((content_area_height - content_height) * 0.5, 0)
+	local pass_template = {}
+
+	TeamPreview.add_panel_passes(pass_template, width, height, has_title)
+	append_passes_with_offset(pass_template, element.pass_template, content_x, content_y, "team_preview_")
+
+	return {
+		gear_preview_data = element.gear_preview_data,
+		loadout_organizer_preview_layout = element.loadout_organizer_preview_layout,
+		pass_template = pass_template,
+		size = {
+			width,
+			height,
+		},
+		stats_preview_data = element.stats_preview_data,
+		team_preview_title = title,
+	}
+end
+
+function TeamPreview.scale_pass_template(pass_template, scale)
+	if not pass_template or scale == 1 then
+		return pass_template
+	end
+
+	local scaled_pass_template = {}
+
+	for i = 1, #pass_template do
+		local pass = table.clone(pass_template[i])
+		local style = pass.style
+
+		if style then
+			style = table.clone(style)
+			pass.style = style
+
+			if style.offset then
+				style.offset = table.clone(style.offset)
+				style.offset[1] = (style.offset[1] or 0) * scale
+				style.offset[2] = (style.offset[2] or 0) * scale
+			end
+
+			if style.size then
+				style.size = table.clone(style.size)
+				style.size[1] = (style.size[1] or 0) * scale
+				style.size[2] = (style.size[2] or 0) * scale
+			end
+
+			if style.size_addition then
+				style.size_addition = table.clone(style.size_addition)
+				style.size_addition[1] = (style.size_addition[1] or 0) * scale
+				style.size_addition[2] = (style.size_addition[2] or 0) * scale
+			end
+
+			if style.pivot then
+				style.pivot = table.clone(style.pivot)
+				style.pivot[1] = (style.pivot[1] or 0) * scale
+				style.pivot[2] = (style.pivot[2] or 0) * scale
+			end
+
+			if style.font_size then
+				style.font_size = math.max(math.floor(style.font_size * scale + 0.5), 8)
+			end
+		end
+
+		scaled_pass_template[i] = pass
+	end
+
+	return scaled_pass_template
+end
+
+function TeamPreview.scale_element(element, scale)
+	if not element or scale == 1 then
+		return element
+	end
+
+	return {
+		gear_preview_data = element.gear_preview_data,
+		loadout_organizer_preview_layout = element.loadout_organizer_preview_layout,
+		pass_template = TeamPreview.scale_pass_template(element.pass_template, scale),
+		size = {
+			element.size[1] * scale,
+			element.size[2] * scale,
+		},
+		stats_preview_data = element.stats_preview_data,
+		team_preview_title = element.team_preview_title,
+	}
+end
+
+function TeamPreview.context_scale(context)
+	if context == "lobby" then
+		return TEAM_PREVIEW_LAYOUT.lobby_scale
+	elseif context == "mission_intro" then
+		return TEAM_PREVIEW_LAYOUT.loading_scale
+	elseif context == "applicant" then
+		return TEAM_PREVIEW_LAYOUT.applicant_scale
+	end
+
+	return 1
+end
+
+function TeamPreview.build_element(view, player, profile, include_title, context)
+	local profile_preset = TeamPreview.profile_preset(profile)
+	local layout = profile_preset and Settings.with_team_preview_settings(function ()
+		return build_preview_layout(view, profile_preset, PREVIEW_MODE.compact, profile)
+	end)
+	local element = TeamPreview.preview_element(layout)
+
+	if not element then
+		return nil
+	end
+
+	local title = include_title and TeamPreview.profile_title(player, profile) or nil
+
+	return TeamPreview.scale_element(TeamPreview.wrap_element(element, title, context), TeamPreview.context_scale(context))
+end
+
+function TeamPreview.destroy_slot_widget(view, slot)
+	local widget = slot and slot._loadout_previews_widget
+
+	if widget and view and view._unregister_widget_name then
+		view:_unregister_widget_name(widget.name)
+	end
+
+	if slot then
+		slot._loadout_previews_widget = nil
+		slot._loadout_previews_widget_key = nil
+	end
+end
+
+function TeamPreview.refresh_slot_widget(view, slot, context, include_title)
+	if not TeamPreview.enabled(context) or not slot or not slot.occupied then
+		TeamPreview.destroy_slot_widget(view, slot)
+
+		return nil
+	end
+
+	local player = slot.player
+
+	if not TeamPreview.is_human_player(player) then
+		TeamPreview.destroy_slot_widget(view, slot)
+
+		return nil
+	end
+
+	local profile = TeamPreview.player_profile(player)
+	local title = include_title and TeamPreview.profile_title(player, profile) or nil
+	local key = profile and TeamPreview.profile_key(player, profile, title)
+
+	if not key then
+		TeamPreview.destroy_slot_widget(view, slot)
+
+		return nil
+	end
+
+	if slot._loadout_previews_widget and slot._loadout_previews_widget_key == key then
+		return slot._loadout_previews_widget
+	end
+
+	TeamPreview.destroy_slot_widget(view, slot)
+
+	local element = TeamPreview.build_element(view, player, profile, include_title, context)
+
+	if not element then
+		return nil
+	end
+
+	local widget_definition = UIWidget.create_definition(element.pass_template, TEAM_PREVIEW_LAYOUT.scenegraph_id, nil, element.size)
+	local widget_name = string.format("loadout_previews_%s_%s", context, tostring(slot.index or 0))
+	local widget = view:_create_widget(widget_name, widget_definition)
+
+	init_gear_preview_widget(view, widget, element)
+
+	widget.content.team_preview_title = element.team_preview_title or ""
+	widget._loadout_previews_size = element.size
+	slot._loadout_previews_widget = widget
+	slot._loadout_previews_widget_key = key
+
+	return widget
+end
+
+function TeamPreview.set_widget_offset(widget, x, y)
+	if not widget then
+		return
+	end
+
+	widget.offset[1] = math.floor(x + 0.5)
+	widget.offset[2] = math.floor(y + 0.5)
+	widget.offset[3] = TEAM_PREVIEW_LAYOUT.z
+end
+
+function TeamPreview.widget_size(widget)
+	local size = widget and widget._loadout_previews_size
+
+	return size and size[1] or 0, size and size[2] or 0
+end
+
+function TeamPreview.clear_view_widgets(view)
+	local spawn_slots = view and view._spawn_slots
+
+	if not spawn_slots then
+		return
+	end
+
+	for i = 1, #spawn_slots do
+		TeamPreview.destroy_slot_widget(view, spawn_slots[i])
+	end
+end
+
+function TeamPreview.lobby_slot_hovered(slot)
+	local panel_hotspot = slot and slot.panel_widget and slot.panel_widget.content and slot.panel_widget.content.hotspot
+
+	if panel_hotspot and (panel_hotspot.is_hover or panel_hotspot.is_selected) then
+		return true
+	end
+
+	local weapon_widgets = slot and slot.weapon_widgets
+
+	if weapon_widgets then
+		for i = 1, #weapon_widgets do
+			local hotspot = weapon_widgets[i].content and weapon_widgets[i].content.hotspot
+
+			if hotspot and (hotspot.is_hover or hotspot.is_selected) then
+				return true
+			end
+		end
+	end
+
+	local talent_widgets = slot and slot.talent_widgets
+
+	if talent_widgets then
+		for i = 1, #talent_widgets do
+			local hotspot = talent_widgets[i].content and talent_widgets[i].content.hotspot
+
+			if hotspot and (hotspot.is_hover or hotspot.is_selected) then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+function TeamPreview.hovered_lobby_slot(view)
+	local spawn_slots = view and view._spawn_slots
+
+	if not spawn_slots then
+		return nil
+	end
+
+	for i = 1, #spawn_slots do
+		local slot = spawn_slots[i]
+
+		if slot.occupied and TeamPreview.lobby_slot_hovered(slot) then
+			return slot
+		end
+	end
+end
+
+function TeamPreview.position_lobby_widget(widget, slot)
+	local width, height = TeamPreview.widget_size(widget)
+	local panel_x = slot and slot.panel_widget and slot.panel_widget.offset and slot.panel_widget.offset[1] or TEAM_PREVIEW_LAYOUT.canvas_width * 0.5
+	local x = panel_x - width * 0.5
+	local y = TEAM_PREVIEW_LAYOUT.lobby_bottom_y - height
+	local margin = TEAM_PREVIEW_LAYOUT.margin
+
+	x = clamp(x, margin, TEAM_PREVIEW_LAYOUT.canvas_width - width - margin)
+	y = clamp(y, margin, TEAM_PREVIEW_LAYOUT.canvas_height - height - margin)
+
+	TeamPreview.set_widget_offset(widget, x, y)
+end
+
+function TeamPreview.position_lobby_widgets(widgets)
+	local total_width = 0
+	local max_height = 0
+	local gap = TEAM_PREVIEW_LAYOUT.loading_gap
+
+	for i = 1, #widgets do
+		local width, height = TeamPreview.widget_size(widgets[i])
+
+		total_width = total_width + width
+		max_height = math.max(max_height, height)
+	end
+
+	total_width = total_width + math.max(#widgets - 1, 0) * gap
+
+	local margin = TEAM_PREVIEW_LAYOUT.margin
+	local x = math.max((TEAM_PREVIEW_LAYOUT.canvas_width - total_width) * 0.5, margin)
+	local y = clamp(TEAM_PREVIEW_LAYOUT.lobby_bottom_y - max_height, margin, TEAM_PREVIEW_LAYOUT.canvas_height - max_height - margin)
+
+	for i = 1, #widgets do
+		local widget = widgets[i]
+		local width = TeamPreview.widget_size(widget)
+
+		TeamPreview.set_widget_offset(widget, x, y)
+
+		x = x + width + gap
+	end
+end
+
+function TeamPreview.draw_lobby(view, ui_renderer)
+	local spawn_slots = view and view._spawn_slots
+
+	if not spawn_slots or not TeamPreview.enabled("lobby") then
+		TeamPreview.clear_view_widgets(view)
+
+		return
+	end
+
+	for i = 1, #spawn_slots do
+		local slot = spawn_slots[i]
+
+		if TeamPreview.should_show_lobby_slot(slot) then
+			local widget = TeamPreview.refresh_slot_widget(view, slot, "lobby", false)
+
+			if widget then
+				TeamPreview.position_lobby_widget(widget, slot)
+				UIWidget.draw(widget, ui_renderer)
+			end
+		else
+			TeamPreview.destroy_slot_widget(view, slot)
+		end
+	end
+end
+
+function TeamPreview.position_mission_widgets(widgets)
+	local total_width = 0
+	local gap = TEAM_PREVIEW_LAYOUT.loading_gap
+
+	for i = 1, #widgets do
+		local width = TeamPreview.widget_size(widgets[i])
+
+		total_width = total_width + width
+	end
+
+	total_width = total_width + math.max(#widgets - 1, 0) * gap
+
+	local x = math.max((TEAM_PREVIEW_LAYOUT.canvas_width - total_width) * 0.5, TEAM_PREVIEW_LAYOUT.margin)
+	local y = TEAM_PREVIEW_LAYOUT.loading_top_y
+
+	for i = 1, #widgets do
+		local widget = widgets[i]
+		local width = TeamPreview.widget_size(widget)
+
+		TeamPreview.set_widget_offset(widget, x, y)
+
+		x = x + width + gap
+	end
+end
+
+function TeamPreview.draw_mission_intro(view, ui_renderer)
+	local spawn_slots = view and view._spawn_slots
+
+	if not spawn_slots or not TeamPreview.enabled("mission_intro") then
+		TeamPreview.clear_view_widgets(view)
+
+		return
+	end
+
+	local widgets = {}
+
+	for i = 1, #spawn_slots do
+		local slot = spawn_slots[i]
+		local widget = TeamPreview.refresh_slot_widget(view, slot, "mission_intro", true)
+
+		if widget then
+			widgets[#widgets + 1] = widget
+		end
+	end
+
+	TeamPreview.position_mission_widgets(widgets)
+
+	for i = 1, #widgets do
+		UIWidget.draw(widgets[i], ui_renderer)
+	end
+end
+
+function TeamPreview.draw_mission_intro_pass(view, dt, t, input_service, layer)
+	local ui_renderer = view and view._ui_renderer
+	local ui_scenegraph = view and view._ui_scenegraph
+	local render_settings = view and view._render_settings
+
+	if not ui_renderer or not ui_scenegraph or not render_settings then
+		return
+	end
+
+	local render_scale = view._render_scale
+	local alpha_multiplier = render_settings.alpha_multiplier
+
+	render_settings.start_layer = layer or 0
+	render_settings.scale = render_scale
+	render_settings.inverse_scale = render_scale and 1 / render_scale
+
+	UIRenderer.begin_pass(ui_renderer, ui_scenegraph, input_service, dt, render_settings)
+	TeamPreview.draw_mission_intro(view, ui_renderer)
+	UIRenderer.end_pass(ui_renderer)
+
+	render_settings.alpha_multiplier = alpha_multiplier
+end
+
+function ApplicantPreview.destroy_widget(view)
+	local widget = view and view._loadout_previews_applicant_widget
+
+	if widget and view._unregister_widget_name then
+		view:_unregister_widget_name(widget.name)
+	end
+
+	if view then
+		view._loadout_previews_applicant_widget = nil
+		view._loadout_previews_applicant_widget_key = nil
+	end
+end
+
+function ApplicantPreview.profile(element)
+	local presence_info = element and element.presence_info
+
+	return presence_info and presence_info.profile or nil
+end
+
+function ApplicantPreview.profile_key(profile)
+	return Settings.with_party_finder_preview_settings(function ()
+		local mode = Settings.preview_mode()
+		local pieces = {
+			Settings.preview_key(mode),
+		}
+		local loadout = profile and profile.loadout
+
+		for i = 1, #WEAPON_LAYOUT.preview_slots do
+			pieces[#pieces + 1] = tostring(loadout_slot_gear_id(loadout, WEAPON_LAYOUT.preview_slots[i]))
+		end
+
+		for i = 1, #CURIO_LAYOUT.preview_slots do
+			pieces[#pieces + 1] = tostring(loadout_slot_gear_id(loadout, CURIO_LAYOUT.preview_slots[i]))
+		end
+
+		local selected_nodes = profile and profile.selected_nodes
+
+		if selected_nodes then
+			local names = {}
+
+			for name, _ in pairs(selected_nodes) do
+				names[#names + 1] = name
+			end
+
+			table.sort(names)
+
+			for i = 1, #names do
+				local name = names[i]
+
+				pieces[#pieces + 1] = tostring(name) .. "=" .. tostring(selected_nodes[name])
+			end
+		end
+
+		return table.concat(pieces, "|")
+	end)
+end
+
+function ApplicantPreview.wrap_tooltip_element(element)
+	local content_width = element.size[1]
+	local content_height = element.size[2]
+	local preview_layout = element.loadout_organizer_preview_layout or {
+		preview_width = content_width,
+		preview_height = content_height,
+	}
+	local width = preview_tooltip_width(preview_layout)
+	local height = preview_tooltip_height(preview_layout)
+	local content_x = math.max((width - content_width) * 0.5, 0)
+	local content_y = math.max((height - content_height) * 0.5, 0)
+	local pass_template = {
+		{
+			pass_type = "rect",
+			style_id = "applicant_preview_tooltip_icon_bg",
+			style = {
+				horizontal_alignment = "center",
+				vertical_alignment = "center",
+				color = Color.terminal_grid_background_icon(255, true),
+				size_addition = {
+					-24,
+					-24,
+				},
+				offset = {
+					0,
+					0,
+					0,
+				},
+			},
+		},
+		{
+			pass_type = "texture",
+			style_id = "applicant_preview_tooltip_bg",
+			value = "content/ui/materials/backgrounds/terminal_basic",
+			style = {
+				horizontal_alignment = "center",
+				scale_to_material = true,
+				vertical_alignment = "center",
+				color = Color.terminal_grid_background(255, true),
+				offset = {
+					0,
+					0,
+					1,
+				},
+			},
+		},
+	}
+
+	append_passes_with_offset(pass_template, element.pass_template, content_x, content_y, "applicant_preview_")
+
+	return {
+		gear_preview_data = element.gear_preview_data,
+		loadout_organizer_preview_layout = element.loadout_organizer_preview_layout,
+		pass_template = pass_template,
+		size = {
+			width,
+			height,
+		},
+		stats_preview_data = element.stats_preview_data,
+	}
+end
+
+function ApplicantPreview.build_element(view, profile)
+	local profile_preset = TeamPreview.profile_preset(profile)
+
+	return Settings.with_party_finder_preview_settings(function ()
+		local layout = profile_preset and build_preview_layout(view, profile_preset, Settings.preview_mode(), profile)
+		local element = TeamPreview.preview_element(layout)
+
+		return element and ApplicantPreview.wrap_tooltip_element(element) or nil
+	end)
+end
+
+function ApplicantPreview.entry_hovered(widget)
+	local content = widget and widget.content
+	local element = content and content.element
+
+	if not element or element.widget_type ~= "player_request_entry" then
+		return false
+	end
+
+	local hotspot = content.hotspot
+
+	if not hotspot or not (hotspot.is_hover or hotspot.is_selected) then
+		return false
+	end
+
+	local accept_hotspot = content.accept_hotspot
+	local decline_hotspot = content.decline_hotspot
+
+	return not ((accept_hotspot and accept_hotspot.is_hover) or (decline_hotspot and decline_hotspot.is_hover))
+end
+
+function ApplicantPreview.hovered_entry(view)
+	local grid = view and view._player_request_grid
+	local widgets = grid and grid.widgets and grid:widgets()
+
+	if not widgets then
+		return nil, nil
+	end
+
+	for i = 1, #widgets do
+		local widget = widgets[i]
+
+		if ApplicantPreview.entry_hovered(widget) then
+			local element = widget.content and widget.content.element
+			local profile = ApplicantPreview.profile(element)
+
+			if profile then
+				return widget, element
+			end
+		end
+	end
+
+	return nil, nil
+end
+
+function ApplicantPreview.refresh_widget(view, element, cached_key)
+	if not TeamPreview.enabled("applicant") then
+		ApplicantPreview.destroy_widget(view)
+
+		return nil
+	end
+
+	local profile = ApplicantPreview.profile(element)
+	local key = cached_key or profile and ApplicantPreview.profile_key(profile)
+
+	if not key then
+		ApplicantPreview.destroy_widget(view)
+
+		return nil
+	end
+
+	if view._loadout_previews_applicant_widget and view._loadout_previews_applicant_widget_key == key then
+		return view._loadout_previews_applicant_widget
+	end
+
+	ApplicantPreview.destroy_widget(view)
+
+	local element_preview = ApplicantPreview.build_element(view, profile)
+
+	if not element_preview then
+		return nil
+	end
+
+	local widget_definition = UIWidget.create_definition(element_preview.pass_template, TEAM_PREVIEW_LAYOUT.applicant_scenegraph_id, nil, element_preview.size)
+	local widget = view:_create_widget("loadout_previews_group_finder_applicant", widget_definition)
+
+	init_gear_preview_widget(view, widget, element_preview)
+
+	widget.content.team_preview_title = ""
+	widget._loadout_previews_size = element_preview.size
+	view._loadout_previews_applicant_widget = widget
+	view._loadout_previews_applicant_widget_key = key
+
+	return widget
+end
+
+function ApplicantPreview.clear_hover_delay(view)
+	if view then
+		view._loadout_previews_applicant_hover_key = nil
+		view._loadout_previews_applicant_pending_since = nil
+	end
+end
+
+function ApplicantPreview.scenegraph_position(view, scenegraph_id)
+	if not view or not view._scenegraph_world_position then
+		return nil
+	end
+
+	local ok, position = pcall(view._scenegraph_world_position, view, scenegraph_id)
+
+	return ok and position or nil
+end
+
+function ApplicantPreview.scenegraph_size(view, scenegraph_id)
+	local scenegraph = view and view._ui_scenegraph and view._ui_scenegraph[scenegraph_id]
+
+	return scenegraph and scenegraph.size or nil
+end
+
+function ApplicantPreview.position_widget(view, widget)
+	local width, height = TeamPreview.widget_size(widget)
+	local position = ApplicantPreview.scenegraph_position(view, "player_request_window")
+	local size = ApplicantPreview.scenegraph_size(view, "player_request_window")
+	local margin = TEAM_PREVIEW_LAYOUT.margin
+	local x = TEAM_PREVIEW_LAYOUT.canvas_width - width - margin
+	local y = margin
+
+	if position and size then
+		x = position[1] - width - 16
+		y = position[2] + (size[2] - height) * 0.5
+	end
+
+	x = clamp(x, margin, TEAM_PREVIEW_LAYOUT.canvas_width - width - margin)
+	y = clamp(y, margin, TEAM_PREVIEW_LAYOUT.canvas_height - height - margin)
+
+	TeamPreview.set_widget_offset(widget, x, y)
+	widget.offset[3] = TEAM_PREVIEW_LAYOUT.applicant_z
+end
+
+function ApplicantPreview.delay_elapsed(view, key, t)
+	local delay = Settings.with_party_finder_preview_settings(function ()
+		return Settings.preview_delay()
+	end)
+
+	if delay <= 0 then
+		return true
+	end
+
+	local current_time = t or 0
+
+	if view._loadout_previews_applicant_hover_key ~= key then
+		view._loadout_previews_applicant_hover_key = key
+		view._loadout_previews_applicant_pending_since = current_time
+
+		ApplicantPreview.destroy_widget(view)
+
+		return false
+	end
+
+	return current_time - (view._loadout_previews_applicant_pending_since or current_time) >= delay
+end
+
+function ApplicantPreview.draw(view, ui_renderer, t)
+	if not TeamPreview.enabled("applicant") then
+		ApplicantPreview.destroy_widget(view)
+		ApplicantPreview.clear_hover_delay(view)
+
+		return
+	end
+
+	local _, element = ApplicantPreview.hovered_entry(view)
+
+	if not element then
+		ApplicantPreview.destroy_widget(view)
+		ApplicantPreview.clear_hover_delay(view)
+
+		return
+	end
+
+	local profile = ApplicantPreview.profile(element)
+	local key = profile and ApplicantPreview.profile_key(profile)
+
+	if not key then
+		ApplicantPreview.destroy_widget(view)
+		ApplicantPreview.clear_hover_delay(view)
+
+		return
+	end
+
+	if not ApplicantPreview.delay_elapsed(view, key, t) then
+		return
+	end
+
+	local widget = ApplicantPreview.refresh_widget(view, element, key)
+
+	if widget then
+		ApplicantPreview.position_widget(view, widget)
+		UIWidget.draw(widget, ui_renderer)
+	end
+end
+
+function ApplicantPreview.overlay_renderer(view)
+	local player_request_grid = view and view._player_request_grid
+	local group_grid = view and view._group_grid
+	local preview_grid = view and view._preview_grid
+
+	return player_request_grid and player_request_grid._ui_grid_renderer
+		or group_grid and group_grid._ui_grid_renderer
+		or preview_grid and preview_grid._ui_grid_renderer
+		or view and view._ui_renderer
+end
+
+function ApplicantPreview.draw_pass(view, dt, t, input_service, layer)
+	local ui_renderer = ApplicantPreview.overlay_renderer(view)
+	local ui_scenegraph = view and view._ui_scenegraph
+	local render_settings = view and view._render_settings
+
+	if not ui_renderer or not ui_scenegraph or not render_settings then
+		return
+	end
+
+	local render_scale = view._render_scale
+	local alpha_multiplier = render_settings.alpha_multiplier
+	local start_layer = render_settings.start_layer
+
+	render_settings.start_layer = (layer or 0) + TEAM_PREVIEW_LAYOUT.applicant_draw_layer
+	render_settings.scale = render_scale
+	render_settings.inverse_scale = render_scale and 1 / render_scale
+
+	UIRenderer.begin_pass(ui_renderer, ui_scenegraph, input_service, dt, render_settings)
+	ApplicantPreview.draw(view, ui_renderer, t)
+	UIRenderer.end_pass(ui_renderer)
+
+	render_settings.start_layer = start_layer
+	render_settings.alpha_multiplier = alpha_multiplier
+end
+
+mod:hook_require("scripts/ui/views/lobby_view/lobby_view_definitions", TeamPreview.inject_overlay_scenegraph)
+mod:hook_require("scripts/ui/views/mission_intro_view/mission_intro_view_definitions", TeamPreview.inject_overlay_scenegraph)
+mod:hook_require("scripts/ui/views/group_finder_view/group_finder_view_definitions", TeamPreview.inject_overlay_scenegraph)
 
 local function refresh_active_preview_geometry(view)
 	if not view or not view._loadout_organizer_preview_visible then
@@ -4466,4 +5691,42 @@ mod:hook_safe("ViewElementProfilePresets", "update", function (self, dt, t)
 	if self._loadout_organizer_preview_visible then
 		refresh_active_preview_geometry(self)
 	end
+end)
+
+mod:hook_safe("LobbyView", "_draw_widgets", function (self, dt, t, input_service, ui_renderer)
+	TeamPreview.draw_lobby(self, ui_renderer)
+end)
+
+mod:hook_safe("GroupFinderView", "on_exit", function (self)
+	ApplicantPreview.destroy_widget(self)
+end)
+
+mod:hook_safe("LobbyView", "_reset_spawn_slot", function (self, slot)
+	TeamPreview.destroy_slot_widget(self, slot)
+end)
+
+mod:hook("LobbyView", "_destroy_spawn_slots", function (func, self, ...)
+	TeamPreview.clear_view_widgets(self)
+
+	return func(self, ...)
+end)
+
+mod:hook("MissionIntroView", "draw", function (func, self, dt, t, input_service, layer, ...)
+	local result = func(self, dt, t, input_service, layer, ...)
+
+	TeamPreview.draw_mission_intro_pass(self, dt, t, input_service, layer)
+
+	return result
+end)
+
+mod:hook("GroupFinderView", "draw", function (func, self, dt, t, input_service, layer, ...)
+	local result = func(self, dt, t, input_service, layer, ...)
+
+	ApplicantPreview.draw_pass(self, dt, t, input_service, layer)
+
+	return result
+end)
+
+mod:hook_safe("MissionIntroView", "_reset_spawn_slot", function (self, slot)
+	TeamPreview.destroy_slot_widget(self, slot)
 end)
