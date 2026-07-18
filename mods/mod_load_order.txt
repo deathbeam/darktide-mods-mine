@@ -2,7 +2,6 @@
 
 -- Base
 Alfs_DMF_Extensions
-ModPerformanceMonitor
 MoreGraphicsOptions
 LocalizationExport
 
@@ -17,6 +16,7 @@ guarantee_ability_activation
 
 -- Debugging
 controlled_chaos
+ImprovedMeatGrinder
 show_crit_chance
 CombatStats
 WeaponStats
@@ -41,5 +41,3 @@ machine_gods_beacon
 danger_zone
 DisableScreenEffects
 vfx_swapper
-SpawnFeed
-Killfeed Details
