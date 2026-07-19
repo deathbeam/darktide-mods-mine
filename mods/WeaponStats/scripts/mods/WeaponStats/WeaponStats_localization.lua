@@ -357,6 +357,9 @@ return {
     damage_type_sawing = {
         en = 'Sawing',
     },
+    damage_type_sawing_2h = {
+        en = 'Sawing',
+    },
     damage_type_sawing_stuck = {
         en = 'Sawing',
     },
@@ -454,6 +457,12 @@ return {
     },
     stagger_hatchet = {
         en = 'Hatchet',
+    },
+    damage_type_heavy_stubber_bullet = {
+        en = 'Heavy Stubber',
+    },
+    damage_type_shock_stuck = {
+        en = 'Shock',
     },
 
     -- Flags

@@ -329,6 +329,14 @@ return {
         en = 'Tail (Lower)',
         ['zh-cn'] = '尾巴（下）',
     },
+    zone_hound_tail = {
+        en = 'Tail',
+        ['zh-cn'] = '尾巴',
+    },
+    zone_canister = {
+        en = 'Canister',
+        ['zh-cn'] = '罐子',
+    },
 
     -- Weakspot types
     weakspot_headshot = {
