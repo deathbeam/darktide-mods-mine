@@ -2,6 +2,13 @@ local ArmorSettings = require('scripts/settings/damage/armor_settings')
 
 local SharedUtils = {}
 
+-- View names registered via register_stats_view. Lives on _G because each mod loads
+-- its own copy of this file (via io_dofile), so a SharedUtils field would be per-mod
+-- and never see the sibling mods' views. Opening one stats view closes the others.
+local stats_view_names = rawget(_G, 'dmf_stats_view_names') or {}
+_G.dmf_stats_view_names = stats_view_names
+SharedUtils.stats_view_names = stats_view_names
+
 -- Localize a game loc key, returning nil on miss or when the game has no entry.
 function SharedUtils.safe_localize(text)
     if not text or text == '' or text == 'n/a' then
@@ -36,6 +43,20 @@ function SharedUtils.prettify(key)
         return first:upper() .. rest
     end)
     return prettified
+end
+
+-- Localize `prefix .. key`, falling back to prettify(key) when the loc entry is
+-- missing (DMF returns "<...>"). Returns nil when key itself is nil.
+function SharedUtils.localize_or_prettify(mod, prefix, key)
+    if key == nil then
+        return nil
+    end
+    local loc_id = prefix .. tostring(key)
+    local localized = mod:localize(loc_id)
+    if localized and not localized:find('^<') then
+        return localized
+    end
+    return SharedUtils.prettify(key)
 end
 
 -- Register global localization strings (e.g. for ESC menu buttons) and patch
@@ -233,6 +254,77 @@ function SharedUtils.armor_color(armor_key)
         return nil
     end
     return { 255, rgb[1], rgb[2], rgb[3] }
+end
+
+-- Register a stats view with the framework and add an ESC-menu button that opens
+-- it. `button_text_loc` is the localization key for the button label; the button
+-- honors the mod's `add_to_esc_menu` setting.
+function SharedUtils.register_stats_view(mod, view_name, class_name, path, button_text_loc)
+    stats_view_names[#stats_view_names + 1] = view_name
+    mod:add_require_path(path)
+    mod:register_view({
+        view_name = view_name,
+        view_settings = {
+            init_view_function = function()
+                return true
+            end,
+            class = class_name,
+            disable_game_world = false,
+            game_world_blur = 0,
+            load_always = true,
+            load_in_hub = true,
+            path = path,
+            package = 'packages/ui/views/options_view/options_view',
+            state_bound = false,
+            enter_sound_events = {
+                'wwise/events/ui/play_ui_enter_short',
+            },
+            exit_sound_events = {
+                'wwise/events/ui/play_ui_back_short',
+            },
+            wwise_states = {
+                options = 'ingame_menu',
+            },
+        },
+        view_transitions = {},
+        view_options = {
+            close_all = false,
+            close_previous = false,
+            close_transition_time = nil,
+            transition_time = nil,
+        },
+    })
+
+    local menu_button = {
+        text = button_text_loc,
+        type = 'button',
+        icon = 'content/ui/materials/icons/system/escape/settings',
+        trigger_function = function()
+            Managers.ui:open_view(view_name)
+        end,
+    }
+
+    mod:hook(CLASS.SystemView, '_setup_content_widgets', function(func, self, content, ...)
+        local patched = content
+        if content then
+            patched = {}
+            for state_key, list in pairs(content) do
+                local cloned = table.clone(list)
+                local insert_at = #cloned + 1
+                for i = 1, #cloned do
+                    if cloned[i].type == 'spacing_vertical' then
+                        insert_at = i
+                        break
+                    end
+                end
+                if mod:get('add_to_esc_menu') then
+                    table.insert(cloned, insert_at, menu_button)
+                end
+                patched[state_key] = cloned
+            end
+        end
+        return func(self, patched, ...)
+    end)
 end
 
 return SharedUtils

@@ -59,19 +59,8 @@ local MODE_SWAP_PATTERNS = { '_activate', '_deactivate' }
 
 local _TARGET_SETTINGS_NO_LERP_VALUES = {}
 
-local function _localize_or_prettify(loc_id, key)
-    local localized = mod:localize(loc_id)
-    if localized and not localized:find('^<') then
-        return localized
-    end
-    return SharedUtils.prettify(key)
-end
-
 local function _label(prefix, key)
-    if key == nil then
-        return nil
-    end
-    return _localize_or_prettify(prefix .. tostring(key), key)
+    return SharedUtils.localize_or_prettify(mod, prefix, key)
 end
 
 local WeaponStatsUtils = {
@@ -102,11 +91,7 @@ function WeaponStatsUtils.friendly_action_label(action_name)
         return localized
     end
     key = key:gsub('^light_', 'light '):gsub('^heavy_', 'heavy '):gsub('^special_', 'special ')
-    local prettified = key:gsub('_', ' ')
-    prettified = prettified:gsub('(%a)(%a+)', function(first, rest)
-        return first:upper() .. rest
-    end)
-    return prettified
+    return SharedUtils.prettify(key)
 end
 
 -- Combo action numbering
@@ -589,6 +574,18 @@ local function _restore_lerps(action_lerp, prev)
     end
 end
 
+local function _apply_power_level_multiplier(power_level, target_settings, action_lerp)
+    if not target_settings or not target_settings.power_level_multiplier then
+        return power_level
+    end
+    local pl_lerp = WeaponStatsUtils.lerp_from_path(action_lerp, 'targets', 1, 'power_level_multiplier')
+    local mult = WeaponStatsUtils.lerp_entry(target_settings.power_level_multiplier, pl_lerp)
+    if type(mult) == 'number' then
+        return power_level * mult
+    end
+    return power_level
+end
+
 function WeaponStatsUtils.base_powers(
     damage_profile,
     target_settings,
@@ -599,14 +596,8 @@ function WeaponStatsUtils.base_powers(
 )
     local cur_lerps, prev = _with_target_lerps(action_lerp, target_index)
 
-    local resolved_power_level = power_level or DEFAULT_POWER_LEVEL
-    if target_settings.power_level_multiplier then
-        local pl_lerp = WeaponStatsUtils.lerp_from_path(cur_lerps, 'targets', target_index, 'power_level_multiplier')
-        local mult = WeaponStatsUtils.lerp_entry(target_settings.power_level_multiplier, pl_lerp)
-        if type(mult) == 'number' then
-            resolved_power_level = resolved_power_level * mult
-        end
-    end
+    local resolved_power_level =
+        _apply_power_level_multiplier(power_level or DEFAULT_POWER_LEVEL, target_settings, action_lerp)
 
     local ok, attack, impact = pcall(
         DamageCalculation.base_ui_damage,
@@ -732,7 +723,7 @@ function WeaponStatsUtils.cleave_values(profile, power_level, action_lerp)
 
     local cleave_distribution = profile.cleave_distribution or PowerLevelSettings.default_cleave_distribution
 
-    local scaled_power_level, _ =
+    local scaled_power_level =
         PowerLevel.scale_by_charge_level(power_level or DEFAULT_POWER_LEVEL, 1, profile.charge_level_scaler)
     local scaled_cleave_power_level =
         PowerLevel.scale_power_level_to_power_type_curve(scaled_power_level, 'cleave', nil, nil, nil, nil, nil, profile)
@@ -777,11 +768,7 @@ function WeaponStatsUtils.extra_damage_entries(action, main_profile, template_in
             if type(instances) == 'number' and instances > 0 then
                 local normal_profile = damage.damage_profile
                 local last_profile = damage.last_damage_profile or normal_profile
-                local power_level = damage.stat_power_level
-                    or damage.power_level
-                    or settings.stat_power_level
-                    or settings.power_level
-                    or DEFAULT_POWER_LEVEL
+                local power_level = damage.stat_power_level or damage.power_level or DEFAULT_POWER_LEVEL
 
                 local normal_ticks = instances - 1
                 if normal_ticks > 0 and normal_profile then
@@ -796,6 +783,24 @@ function WeaponStatsUtils.extra_damage_entries(action, main_profile, template_in
     end
 
     return #entries > 0 and entries or nil
+end
+
+function WeaponStatsUtils.explosion_suppression(action, template_index)
+    if type(action) ~= 'table' then
+        return nil, nil
+    end
+    local ok, explosion_template = pcall(Action.explosion_template, action, template_index)
+    if not ok or not explosion_template then
+        return nil, nil
+    end
+    local area = explosion_template.explosion_area_suppression
+    if type(area) ~= 'table' then
+        return nil, nil
+    end
+    local value = WeaponStatsUtils.lerp_entry(area.suppression_value)
+    local radius = WeaponStatsUtils.lerp_entry(area.distance)
+    return (type(value) == 'number' and math.abs(value) > 0.01 and value or nil),
+        (type(radius) == 'number' and radius > 0.01 and radius or nil)
 end
 
 function WeaponStatsUtils.crit_chance_modifier(action, weapon_template, weapon_tweak_templates, action_name)
