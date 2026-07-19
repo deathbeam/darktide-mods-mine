@@ -63,9 +63,7 @@ return {
     search_placeholder = {
         en = 'Search weapons...',
     },
-    stat_attack_type = {
-        en = 'Attack Type',
-    },
+
     -- Headers
     header_attack_pattern = {
         en = 'ATTACK PATTERN',
@@ -93,6 +91,9 @@ return {
     },
 
     -- Stat keys
+    stat_attack_type = {
+        en = 'Attack Type',
+    },
     stat_crit_modifier = {
         en = 'Crit Chance',
     },
@@ -127,6 +128,7 @@ return {
         en = 'Direction',
     },
 
+    -- Attack labels
     label_primary = {
         en = 'Light',
     },
@@ -140,6 +142,7 @@ return {
         en = 'Secondary',
     },
 
+    -- Directions
     direction_left = {
         en = 'Left',
     },
@@ -159,7 +162,7 @@ return {
         en = 'Cross',
     },
 
-    -- Armor Types
+    -- Armor Types (void_shield has no game loc key; the rest are in game_loc)
     armor_void_shield = {
         en = 'Void Shield',
     },
@@ -363,6 +366,12 @@ return {
     damage_type_sawing_stuck = {
         en = 'Sawing',
     },
+    damage_type_shock_stuck = {
+        en = 'Shock',
+    },
+    damage_type_heavy_stubber_bullet = {
+        en = 'Heavy Stubber',
+    },
     damage_type_shovel_light = {
         en = 'Shovel',
     },
@@ -457,12 +466,6 @@ return {
     },
     stagger_hatchet = {
         en = 'Hatchet',
-    },
-    damage_type_heavy_stubber_bullet = {
-        en = 'Heavy Stubber',
-    },
-    damage_type_shock_stuck = {
-        en = 'Shock',
     },
 
     -- Flags
