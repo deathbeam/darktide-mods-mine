@@ -24,6 +24,7 @@ local Game = {
 local PREVIEW_MODE = {
 	disabled = "disabled",
 	tree = "tree",
+	tree_gear = "tree_gear",
 	compact = "compact",
 	stats = "stats",
 	tree_stats = "tree_stats",
@@ -35,7 +36,7 @@ local function preview_mode_is_compact(mode)
 end
 
 local function preview_mode_is_tree(mode)
-	return mode == PREVIEW_MODE.tree or mode == PREVIEW_MODE.tree_stats
+	return mode == PREVIEW_MODE.tree or mode == PREVIEW_MODE.tree_gear or mode == PREVIEW_MODE.tree_stats
 end
 
 local function preview_mode_has_stats(mode)
@@ -153,12 +154,18 @@ local TEAM_PREVIEW_LAYOUT = {
 	lobby_min_height = 810,
 	lobby_min_width = 460,
 	lobby_scale = 0.68,
+	lobby_tree_hover_scale = 0.82,
 	loading_gap = 28,
 	loading_min_height = 810,
 	loading_min_width = 460,
 	loading_scale = 0.82,
+	loading_title_text_y = 22,
+	loading_tree_gear_min_scale = 0.32,
+	loading_tree_scale = 0.56,
 	loading_top_y = 34,
 	margin = 24,
+	mission_brief_default_clear_y = 360,
+	mission_brief_gap = 32,
 	panel_padding = 12,
 	title_height = 54,
 	title_text_height = 30,
@@ -431,6 +438,70 @@ local PREVIEW_SETTING_SCOPES = {
 	},
 }
 
+function Settings.report_guarded_error(context, error_message)
+	local message = string.format("%s: %s", tostring(context or "guarded call"), tostring(error_message))
+
+	if mod._loadout_previews_last_guarded_error == message then
+		return
+	end
+
+	mod._loadout_previews_last_guarded_error = message
+
+	if mod.warning then
+		mod:warning("%s", "[LoadoutPreviews] " .. message)
+	end
+end
+
+function Settings.safe_call(context, func, ...)
+	if type(func) ~= "function" then
+		return false, nil
+	end
+
+	local ok, result = pcall(func, ...)
+
+	if not ok then
+		Settings.report_guarded_error(context, result)
+
+		return false, nil
+	end
+
+	return true, result
+end
+
+function Settings.safe_method(context, object, method_name, ...)
+	local ok, method = pcall(function ()
+		return object and object[method_name]
+	end)
+
+	if not ok then
+		Settings.report_guarded_error(context, method)
+
+		return false, nil
+	end
+
+	if type(method) ~= "function" then
+		return false, nil
+	end
+
+	return Settings.safe_call(context, method, object, ...)
+end
+
+function Settings.get(setting_id)
+	local ok, value = Settings.safe_call("read setting " .. tostring(setting_id), mod.get, mod, setting_id)
+
+	return ok and value or nil
+end
+
+function Settings.localize(key, fallback)
+	local ok, value = Settings.safe_call("localize " .. tostring(key), mod.localize, mod, key)
+
+	if ok and value then
+		return value
+	end
+
+	return fallback or tostring(key or "")
+end
+
 local function better_loadouts_mod()
 	local ok, better_loadouts = pcall(get_mod, "BetterLoadouts")
 
@@ -561,6 +632,22 @@ local function scoped_setting_id(key)
 	return active_preview_settings()[key]
 end
 
+function Settings.value_is_false(value)
+	if type(value) == "string" then
+		value = string.lower(value)
+	end
+
+	return value == false or value == 0 or value == "false" or value == "0" or value == "off" or value == "disabled"
+end
+
+function Settings.value_is_true(value)
+	if type(value) == "string" then
+		value = string.lower(value)
+	end
+
+	return value == true or value == 1 or value == "true" or value == "1" or value == "on" or value == "enabled"
+end
+
 local function scoped_preview_bool(key, disabled_by_default)
 	local setting_id = scoped_setting_id(key)
 
@@ -568,20 +655,20 @@ local function scoped_preview_bool(key, disabled_by_default)
 		return false
 	end
 
-	local value = mod:get(setting_id)
+	local value = Settings.get(setting_id)
 
 	if disabled_by_default then
-		return value == true
+		return Settings.value_is_true(value)
 	end
 
-	return value ~= false
+	return not Settings.value_is_false(value)
 end
 
 function Settings.preview_mode()
 	local setting_id = scoped_setting_id("mode") or "talent_preview_mode"
-	local mode = mod:get(setting_id)
+	local mode = Settings.get(setting_id)
 
-	if mode == PREVIEW_MODE.disabled or mode == PREVIEW_MODE.tree or mode == PREVIEW_MODE.compact or mode == PREVIEW_MODE.stats or mode == PREVIEW_MODE.tree_stats or mode == PREVIEW_MODE.compact_stats then
+	if mode == PREVIEW_MODE.disabled or mode == PREVIEW_MODE.tree or mode == PREVIEW_MODE.tree_gear or mode == PREVIEW_MODE.compact or mode == PREVIEW_MODE.stats or mode == PREVIEW_MODE.tree_stats or mode == PREVIEW_MODE.compact_stats then
 		return mode
 	end
 
@@ -597,12 +684,12 @@ function Settings.with_preview_settings(scope, callback)
 
 	active_preview_setting_scope = scope
 
-	local ok, result = pcall(callback)
+	local ok, result = Settings.safe_call("preview settings scope " .. tostring(scope), callback)
 
 	active_preview_setting_scope = previous_scope
 
 	if not ok then
-		error(result)
+		return nil
 	end
 
 	return result
@@ -617,7 +704,7 @@ function Settings.with_party_finder_preview_settings(callback)
 end
 
 function Settings.show_lobby_team_previews()
-	return mod:get("show_lobby_team_previews") ~= false
+	return not Settings.value_is_false(Settings.get("show_lobby_team_previews"))
 end
 
 function Settings.show_mission_intro_team_previews()
@@ -625,16 +712,34 @@ function Settings.show_mission_intro_team_previews()
 end
 
 function Settings.show_group_finder_applicant_previews()
-	return mod:get("show_group_finder_applicant_previews") ~= false
+	return not Settings.value_is_false(Settings.get("show_group_finder_applicant_previews"))
 end
 
 function Settings.show_own_lobby_team_preview()
-	return mod:get("show_own_lobby_team_preview") == true
+	return Settings.value_is_true(Settings.get("show_own_lobby_team_preview"))
+end
+
+function Settings.show_lobby_tree_on_hover()
+	return Settings.value_is_true(Settings.get("show_lobby_tree_on_hover"))
+end
+
+function Settings.valkyrie_team_preview_mode()
+	local mode = Settings.get("valkyrie_team_preview_mode")
+
+	if mode == PREVIEW_MODE.tree_gear then
+		return PREVIEW_MODE.tree_gear
+	end
+
+	if mode == PREVIEW_MODE.tree then
+		return PREVIEW_MODE.tree
+	end
+
+	return PREVIEW_MODE.compact
 end
 
 function Settings.preview_delay()
 	local setting_id = scoped_setting_id("delay")
-	local delay = tonumber(setting_id and mod:get(setting_id)) or 0
+	local delay = tonumber(setting_id and Settings.get(setting_id)) or 0
 
 	return math.min(math.max(delay, 0), 3)
 end
@@ -657,6 +762,26 @@ end
 
 function Settings.show_stimm_lab_preview()
 	return scoped_preview_bool("stimm")
+end
+
+function Settings.show_team_stimm_lab_preview()
+	local value = Settings.get("show_team_stimm_lab_preview")
+
+	if value == nil then
+		value = Settings.get("show_stimm_lab_preview")
+	end
+
+	return not Settings.value_is_false(value)
+end
+
+function Settings.show_party_finder_stimm_lab_preview()
+	local value = Settings.get("show_party_finder_stimm_lab_preview")
+
+	if value == nil then
+		value = Settings.get("show_stimm_lab_preview")
+	end
+
+	return not Settings.value_is_false(value)
 end
 
 function Settings.weapon_preview_text_mode()
@@ -684,10 +809,24 @@ function Settings.preview_key(mode)
 end
 
 function Layouts.local_player_profile()
-	local player_manager = Managers.player
-	local player = player_manager and player_manager:local_player(1)
+	local player_manager = Managers and Managers.player
+	local ok, player = Settings.safe_method("get local player", player_manager, "local_player", 1)
 
-	return player and player:profile()
+	if not ok or not player then
+		return nil
+	end
+
+	local profile_read_ok, profile = pcall(function ()
+		return player.profile
+	end)
+
+	if not profile_read_ok or type(profile) ~= "function" then
+		return nil
+	end
+
+	local profile_ok, result = Settings.safe_call("get local player profile", profile, player)
+
+	return profile_ok and result or nil
 end
 
 function Layouts.require(path)
@@ -723,7 +862,7 @@ local function preview_layout_settings(mode)
 end
 
 local function preview_layout_from_grid_layout(layout)
-	if layout then
+	if type(layout) == "table" then
 		for i = 1, #layout do
 			local element = layout[i]
 
@@ -749,7 +888,7 @@ local function preview_tooltip_height(preview_layout)
 end
 
 local function layout_contains_reorder_controls(layout)
-	if not layout then
+	if type(layout) ~= "table" then
 		return false
 	end
 
@@ -763,7 +902,7 @@ local function layout_contains_reorder_controls(layout)
 end
 
 local function layout_contains_widget_type(layout, widget_type)
-	if not layout then
+	if type(layout) ~= "table" then
 		return false
 	end
 
@@ -777,7 +916,7 @@ local function layout_contains_widget_type(layout, widget_type)
 end
 
 local function layout_contains_preview(layout)
-	if not layout then
+	if type(layout) ~= "table" then
 		return false
 	end
 
@@ -791,7 +930,7 @@ local function layout_contains_preview(layout)
 end
 
 local function layout_is_profile_preset_customize(layout)
-	if not layout then
+	if type(layout) ~= "table" then
 		return false
 	end
 
@@ -805,7 +944,7 @@ local function layout_is_profile_preset_customize(layout)
 end
 
 local function layout_spacing_width(layout)
-	if layout then
+	if type(layout) == "table" then
 		for i = 1, #layout do
 			local element = layout[i]
 			local size = element and element.size
@@ -820,6 +959,10 @@ local function layout_spacing_width(layout)
 end
 
 local function insert_reorder_controls_before_delete(layout)
+	if type(layout) ~= "table" then
+		return layout
+	end
+
 	local injected_layout = {}
 	local inserted = false
 	local spacing_width = layout_spacing_width(layout)
@@ -874,7 +1017,7 @@ local function apply_tooltip_dimensions(view, layout)
 	local better_loadouts_preview = preview and better_loadouts_loaded()
 	local grid_position_x = preview and (better_loadouts_preview and 0 or (tooltip_width - grid_width) * 0.5) or TOOLTIP_LAYOUT.grid_position_x
 	local grid = view._profile_preset_tooltip_grid
-	local menu_settings = grid and grid:menu_settings()
+	local _, menu_settings = Settings.safe_method("profile preset tooltip menu settings", grid, "menu_settings")
 
 	if menu_settings then
 		menu_settings.grid_size[1] = grid_width
@@ -886,18 +1029,18 @@ local function apply_tooltip_dimensions(view, layout)
 		end
 	end
 
-	view:_set_scenegraph_size("profile_preset_tooltip", tooltip_width, tooltip_height)
-	view:_set_scenegraph_size("profile_preset_tooltip_grid", grid_width, grid_height)
-	view:_set_scenegraph_position("profile_preset_tooltip_grid", grid_position_x, 0)
+	Settings.safe_method("set tooltip scenegraph size", view, "_set_scenegraph_size", "profile_preset_tooltip", tooltip_width, tooltip_height)
+	Settings.safe_method("set tooltip grid scenegraph size", view, "_set_scenegraph_size", "profile_preset_tooltip_grid", grid_width, grid_height)
+	Settings.safe_method("set tooltip grid scenegraph position", view, "_set_scenegraph_position", "profile_preset_tooltip_grid", grid_position_x, 0)
 
 	if grid and grid._update_window_size then
-		grid:_update_window_size()
+		Settings.safe_method("update tooltip window size", grid, "_update_window_size")
 	elseif grid and grid.force_update_list_size then
-		grid:force_update_list_size()
+		Settings.safe_method("force tooltip list size update", grid, "force_update_list_size")
 	end
 
 	if view._update_profile_preset_tooltip_grid_position then
-		view:_update_profile_preset_tooltip_grid_position()
+		Settings.safe_method("update tooltip grid position", view, "_update_profile_preset_tooltip_grid_position")
 	end
 end
 
@@ -914,10 +1057,10 @@ local function fit_better_loadouts_tooltip_to_screen(view, tooltip_width, toolti
 	end
 
 	if view._force_update_scenegraph then
-		view:_force_update_scenegraph()
+		Settings.safe_method("force profile preset scenegraph update", view, "_force_update_scenegraph")
 	end
 
-	local world_position = view.scenegraph_world_position and view:scenegraph_world_position("profile_preset_tooltip")
+	local _, world_position = Settings.safe_method("profile preset tooltip world position", view, "scenegraph_world_position", "profile_preset_tooltip")
 	local world_y = world_position and world_position[2]
 	local world_x = world_position and world_position[1]
 
@@ -947,7 +1090,7 @@ local function fit_better_loadouts_tooltip_to_screen(view, tooltip_width, toolti
 	end
 
 	if adjusted_x ~= tooltip_position[1] or adjusted_y ~= tooltip_position[2] then
-		view:_set_scenegraph_position("profile_preset_tooltip", adjusted_x, adjusted_y, tooltip_position[3])
+		Settings.safe_method("fit tooltip scenegraph position", view, "_set_scenegraph_position", "profile_preset_tooltip", adjusted_x, adjusted_y, tooltip_position[3])
 	end
 end
 
@@ -993,12 +1136,12 @@ local function apply_better_loadouts_tooltip_position(view, tooltip_width, toolt
 		end
 	end
 
-	view:_set_scenegraph_position("profile_preset_tooltip", x, y, z)
+	Settings.safe_method("set BetterLoadouts tooltip position", view, "_set_scenegraph_position", "profile_preset_tooltip", x, y, z)
 
 	fit_better_loadouts_tooltip_to_screen(view, tooltip_width, tooltip_height)
 
 	if view._update_profile_preset_tooltip_grid_position then
-		view:_update_profile_preset_tooltip_grid_position()
+		Settings.safe_method("update BetterLoadouts tooltip grid position", view, "_update_profile_preset_tooltip_grid_position")
 	end
 end
 
@@ -1009,7 +1152,7 @@ local function restore_better_loadouts_tooltip_dimensions(view)
 
 	local dimensions = better_loadouts_tooltip_dimensions()
 	local grid = view._profile_preset_tooltip_grid
-	local menu_settings = grid and grid:menu_settings()
+	local _, menu_settings = Settings.safe_method("restore tooltip menu settings", grid, "menu_settings")
 
 	if menu_settings then
 		menu_settings.grid_size[1] = dimensions.grid_width
@@ -1018,12 +1161,12 @@ local function restore_better_loadouts_tooltip_dimensions(view)
 		menu_settings.mask_size[2] = 1 + TOOLTIP_LAYOUT.grid_mask_padding
 	end
 
-	view:_set_scenegraph_size("profile_preset_tooltip", dimensions.tooltip_width, dimensions.tooltip_height)
-	view:_set_scenegraph_size("profile_preset_tooltip_grid", dimensions.grid_width, 1)
-	view:_set_scenegraph_position("profile_preset_tooltip_grid", better_loadouts_picker_grid_position_x(), 0)
+	Settings.safe_method("restore tooltip scenegraph size", view, "_set_scenegraph_size", "profile_preset_tooltip", dimensions.tooltip_width, dimensions.tooltip_height)
+	Settings.safe_method("restore tooltip grid scenegraph size", view, "_set_scenegraph_size", "profile_preset_tooltip_grid", dimensions.grid_width, 1)
+	Settings.safe_method("restore tooltip grid scenegraph position", view, "_set_scenegraph_position", "profile_preset_tooltip_grid", better_loadouts_picker_grid_position_x(), 0)
 	apply_better_loadouts_tooltip_position(view, dimensions.tooltip_width, dimensions.tooltip_height)
 
-	local scrollbar = grid and grid.grid_scrollbar and grid:grid_scrollbar()
+	local _, scrollbar = Settings.safe_method("restore profile preset tooltip scrollbar", grid, "grid_scrollbar")
 	local content = scrollbar and scrollbar.content
 	local hotspot = content and content.hotspot
 
@@ -1037,13 +1180,13 @@ local function restore_better_loadouts_tooltip_dimensions(view)
 	end
 
 	if grid and grid.force_update_list_size then
-		grid:force_update_list_size()
+		Settings.safe_method("force restored tooltip list size update", grid, "force_update_list_size")
 	end
 end
 
 local function hide_preview_scrollbar(view)
 	local grid = view and view._profile_preset_tooltip_grid
-	local scrollbar = grid and grid.grid_scrollbar and grid:grid_scrollbar()
+	local _, scrollbar = Settings.safe_method("profile preset tooltip scrollbar", grid, "grid_scrollbar")
 
 	if not scrollbar then
 		return
@@ -1069,7 +1212,7 @@ local function hide_preview_scrollbar(view)
 	end
 
 	if grid._set_scenegraph_size then
-		grid:_set_scenegraph_size("grid_scrollbar", 0, 0)
+		Settings.safe_method("hide tooltip scrollbar scenegraph", grid, "_set_scenegraph_size", "grid_scrollbar", 0, 0)
 	end
 end
 
@@ -1213,7 +1356,7 @@ local function move_row_button_passes(hotspot_id, text_id, x, base_style_id)
 end
 
 local function append_preview_detail_lines(lines, values)
-	if not values then
+	if type(values) ~= "table" then
 		return
 	end
 
@@ -1229,11 +1372,11 @@ end
 local function preview_detail_line_count(first, second)
 	local count = 0
 
-	if first then
+	if type(first) == "table" then
 		count = count + #first
 	end
 
-	if second then
+	if type(second) == "table" then
 		count = count + #second
 	end
 
@@ -1315,27 +1458,34 @@ local function estimated_wrapped_line_count(text, width, average_char_width)
 end
 
 local function init_gear_preview_widget(parent, widget, element)
-	local content = widget.content
+	local content = widget and widget.content
+
+	if not content or not element then
+		return
+	end
+
 	local gear_data = element.gear_preview_data
 
 	content.element = element
-	content.preview_no_talents = mod:localize("preview_no_talents")
-	content.preview_weapons_title = mod:localize("preview_weapons_title")
-	content.preview_curios_title = mod:localize("preview_curios_title")
-	content.preview_stats_title = mod:localize("preview_stats_title")
+	content.preview_no_talents = Settings.localize("preview_no_talents")
+	content.preview_weapons_title = Settings.localize("preview_weapons_title")
+	content.preview_curios_title = Settings.localize("preview_curios_title")
+	content.preview_stats_title = Settings.localize("preview_stats_title")
 
 	if element.stats_preview_data then
-		local rows = element.stats_preview_data.rows
+		local rows = element.stats_preview_data.rows or {}
 
 		for i = 1, #rows do
-			content["stats_label_" .. i] = rows[i].label
-			content["stats_value_" .. i] = rows[i].value
+			local row = rows[i]
+
+			content["stats_label_" .. i] = row and row.label or ""
+			content["stats_value_" .. i] = row and row.value or ""
 		end
 	end
 
 	if gear_data then
-		local weapons = gear_data.weapons
-		local curios = gear_data.curios
+		local weapons = gear_data.weapons or {}
+		local curios = gear_data.curios or {}
 
 		for i = 1, #weapons do
 			local weapon = weapons[i]
@@ -1357,25 +1507,36 @@ local function init_gear_preview_widget(parent, widget, element)
 		for i = 1, #curios do
 			local curio = curios[i]
 
-			content["curio_text_" .. i] = curio.text or mod:localize("preview_missing_curio")
+			content["curio_text_" .. i] = curio.text or Settings.localize("preview_missing_curio")
 			content["curio_perk_text_" .. i] = format_preview_detail_text(curio.perks)
 		end
 	end
 end
 
 mod:hook_require("scripts/ui/view_elements/view_element_profile_presets/view_element_profile_presets_definitions", function (definitions)
+	local blueprints = definitions and definitions.profile_preset_grid_blueprints
+
+	if not blueprints then
+		return
+	end
+
 	local move_row_pass_template = {}
 	local left_passes = move_row_button_passes("left_hotspot", "left_text", 0, "left")
 	local right_passes = move_row_button_passes("right_hotspot", "right_text", MOVE_LAYOUT.button_width + MOVE_LAYOUT.button_gap, "right")
 	local preview_blueprint = {
 		size_function = function (parent, element)
-			return element.size
+			return element and element.size or {
+				0,
+				0,
+			}
 		end,
 		pass_template_function = function (parent, element)
-			return element.pass_template
+			return element and element.pass_template or {}
 		end,
 		init = function (parent, widget, element)
-			widget.content.element = element
+			if widget and widget.content then
+				widget.content.element = element
+			end
 		end,
 	}
 
@@ -1387,38 +1548,51 @@ mod:hook_require("scripts/ui/view_elements/view_element_profile_presets/view_ele
 		move_row_pass_template[#move_row_pass_template + 1] = right_passes[i]
 	end
 
-	definitions.profile_preset_grid_blueprints.loadout_organizer_preview = {
+	blueprints.loadout_organizer_preview = {
 		size_function = function (parent, element)
-			return element.size
+			return element and element.size or {
+				0,
+				0,
+			}
 		end,
 		pass_template_function = function (parent, element)
-			return element.pass_template
+			return element and element.pass_template or {}
 		end,
 		init = init_gear_preview_widget,
 	}
-	definitions.profile_preset_grid_blueprints.loadout_organizer_talent_map = preview_blueprint
-	definitions.profile_preset_grid_blueprints.loadout_organizer_compact_talents = preview_blueprint
-	definitions.profile_preset_grid_blueprints.loadout_organizer_move_row = {
+	blueprints.loadout_organizer_talent_map = preview_blueprint
+	blueprints.loadout_organizer_compact_talents = preview_blueprint
+	blueprints.loadout_organizer_move_row = {
 		size = {
 			MOVE_LAYOUT.row_width,
 			MOVE_LAYOUT.row_height,
 		},
 		pass_template = move_row_pass_template,
 		init = function (parent, widget, element, callback_name)
-			local content = widget.content
+			local content = widget and widget.content
+
+			if not content then
+				return
+			end
+
 			local left_label_key, right_label_key = move_row_label_keys()
 
 			content.element = element
-			content.left_text = mod:localize(left_label_key)
-			content.right_text = mod:localize(right_label_key)
+			content.left_text = Settings.localize(left_label_key)
+			content.right_text = Settings.localize(right_label_key)
 
 			if callback_name then
-				content.left_hotspot.pressed_callback = callback(parent, callback_name, widget, {
-					loadout_organizer_move_direction = MOVE_LAYOUT.left,
-				})
-				content.right_hotspot.pressed_callback = callback(parent, callback_name, widget, {
-					loadout_organizer_move_direction = MOVE_LAYOUT.right,
-				})
+				if content.left_hotspot then
+					content.left_hotspot.pressed_callback = callback(parent, callback_name, widget, {
+						loadout_organizer_move_direction = MOVE_LAYOUT.left,
+					})
+				end
+
+				if content.right_hotspot then
+					content.right_hotspot.pressed_callback = callback(parent, callback_name, widget, {
+						loadout_organizer_move_direction = MOVE_LAYOUT.right,
+					})
+				end
 			end
 		end,
 	}
@@ -1426,27 +1600,27 @@ end)
 
 local function set_reorder_button_states(view)
 	local grid = view and view._profile_preset_tooltip_grid
-	local widgets = grid and grid:widgets()
+	local _, widgets = Settings.safe_method("profile preset tooltip widgets", grid, "widgets")
 
 	if not widgets then
 		return
 	end
 
 	local index = view._active_customize_preset_index
-	local presets = ProfileUtils.get_profile_presets()
+	local _, presets = Settings.safe_call("get profile presets for move buttons", ProfileUtils and ProfileUtils.get_profile_presets)
 	local count = presets and #presets or 0
 
 	for i = 1, #widgets do
 		local widget = widgets[i]
-		local content = widget.content
+		local content = widget and widget.content
 		local element = content and content.element
 		local direction = element and element.loadout_organizer_move_direction
 
 		if element and element.loadout_organizer_move_row then
 			local left_label_key, right_label_key = move_row_label_keys()
 
-			content.left_text = mod:localize(left_label_key)
-			content.right_text = mod:localize(right_label_key)
+			content.left_text = Settings.localize(left_label_key)
+			content.right_text = Settings.localize(right_label_key)
 
 			if content.left_hotspot then
 				content.left_hotspot.disabled = not index or index <= 1
@@ -1467,7 +1641,7 @@ end
 
 local function restore_customize_grid(view)
 	if view and view._custom_icons_initialized and view._setup_custom_icons_grid then
-		view:_setup_custom_icons_grid()
+		Settings.safe_method("restore customize icon grid", view, "_setup_custom_icons_grid")
 	end
 end
 
@@ -1527,7 +1701,7 @@ local function hide_preview(view, restore_grid)
 	view._loadout_organizer_preview_grid_layout = nil
 
 	apply_preview_grid_rendering(view, false)
-	view:_set_tooltip_visibility(false, false)
+	Settings.safe_method("hide profile preset tooltip", view, "_set_tooltip_visibility", false, false)
 
 	if restore_grid then
 		restore_better_loadouts_tooltip_dimensions(view)
@@ -1541,7 +1715,7 @@ local function sorted_selected_nodes(profile_preset, profile)
 	local archetype = profile and profile.archetype
 	local talents = profile_preset and profile_preset.talents
 
-	if not archetype or not talents then
+	if not archetype or type(talents) ~= "table" then
 		return {}, 0
 	end
 
@@ -1550,13 +1724,13 @@ local function sorted_selected_nodes(profile_preset, profile)
 	local total_points = 0
 	local nodes = layout and layout.nodes
 
-	if nodes then
+	if type(nodes) == "table" then
 		for i = 1, #nodes do
 			local node = nodes[i]
-			local node_name = node.widget_name
+			local node_name = node and node.widget_name
 			local points = node_name and talents[node_name]
 
-			if points and points > 0 and node.type ~= "start" then
+			if points and points > 0 and node and node.type ~= "start" then
 				selected_nodes[#selected_nodes + 1] = {
 					node = node,
 					points = points,
@@ -1567,20 +1741,24 @@ local function sorted_selected_nodes(profile_preset, profile)
 	end
 
 	table.sort(selected_nodes, function (left, right)
-		local left_node = left.node
-		local right_node = right.node
+		local left_node = left and left.node or {}
+		local right_node = right and right.node or {}
 		local left_important = IMPORTANT_NODE_TYPES[left_node.type] and 0 or 1
 		local right_important = IMPORTANT_NODE_TYPES[right_node.type] and 0 or 1
+		local left_y = left_node.y or 0
+		local right_y = right_node.y or 0
+		local left_x = left_node.x or 0
+		local right_x = right_node.x or 0
 
 		if left_important ~= right_important then
 			return left_important < right_important
 		end
 
-		if left_node.y ~= right_node.y then
-			return left_node.y < right_node.y
+		if left_y ~= right_y then
+			return left_y < right_y
 		end
 
-		return left_node.x < right_node.x
+		return left_x < right_x
 	end)
 
 	return selected_nodes, total_points
@@ -1591,14 +1769,14 @@ local function talent_name(archetype, node, points)
 	local talent_definition = talent_key and archetype and archetype.talents and archetype.talents[talent_key]
 
 	if talent_definition then
-		local title = TalentLayoutParser.talent_title(talent_definition, points, Color.ui_terminal(255, true))
+		local ok, title = Settings.safe_call("parse talent title", TalentLayoutParser and TalentLayoutParser.talent_title, talent_definition, points, Color.ui_terminal(255, true))
 
-		if title then
+		if ok and title then
 			return title
 		end
 	end
 
-	return talent_key or node.widget_name or "n/a"
+	return talent_key or node and node.widget_name or "n/a"
 end
 
 local function add_spacing(layout, height, preview_layout)
@@ -1621,7 +1799,7 @@ end
 local function shallow_copy(source)
 	local copy = {}
 
-	for key, value in pairs(source) do
+	for key, value in pairs(source or {}) do
 		copy[key] = value
 	end
 
@@ -1664,17 +1842,41 @@ local function safe_item_display_name(item)
 		return nil
 	end
 
-	local ok, display_name = pcall(ItemUtils.display_name, item)
+	local ok, display_name = Settings.safe_call("get item display name", ItemUtils and ItemUtils.display_name, item)
 
 	if ok and display_name and display_name ~= "" then
 		return display_name
 	end
 
-	return item.display_name and Localize(item.display_name) or item.name
+	local read_ok, display_name_key = pcall(function ()
+		return item.display_name
+	end)
+	local localize_ok, localized = false, nil
+	local name_ok, name = pcall(function ()
+		return item.name
+	end)
+
+	if read_ok and display_name_key then
+		localize_ok, localized = Settings.safe_call("localize item display name", Localize, display_name_key)
+	end
+
+	if localize_ok and localized and localized ~= "" then
+		return localized
+	end
+
+	return name_ok and tostring(name or "") or nil
 end
 
 local function weapon_preview_icon(item)
-	return item and item.hud_icon and item.hud_icon ~= "" and item.hud_icon or nil
+	local ok, icon = pcall(function ()
+		return item and item.hud_icon
+	end)
+
+	if not ok or type(icon) ~= "string" or string.sub(icon, 1, 8) ~= "content/" then
+		return nil
+	end
+
+	return icon
 end
 
 local function modifier_item(modifier)
@@ -1684,7 +1886,7 @@ local function modifier_item(modifier)
 		return nil
 	end
 
-	local ok, item = pcall(MasterItems.get_item, modifier_id)
+	local ok, item = Settings.safe_call("get modifier master item", MasterItems and MasterItems.get_item, modifier_id)
 
 	return ok and item or nil
 end
@@ -1718,7 +1920,7 @@ local function trait_description(modifier, item)
 
 	local rarity = modifier and modifier.rarity
 	local value = modifier and modifier.value or 0
-	local ok, description = pcall(ItemUtils.trait_description, item, rarity, value)
+	local ok, description = Settings.safe_call("get trait description", ItemUtils and ItemUtils.trait_description, item, rarity, value)
 
 	return ok and description or nil
 end
@@ -1743,7 +1945,7 @@ local function curio_main_stat_text(item)
 	local fallback_modifier
 	local fallback_item
 
-	if traits then
+	if type(traits) == "table" then
 		for i = 1, #traits do
 			local modifier = traits[i]
 			local trait_item = modifier_item(modifier)
@@ -1763,7 +1965,7 @@ local function curio_main_stat_text(item)
 		return trait_description(fallback_modifier, fallback_item)
 	end
 
-	if perks then
+	if type(perks) == "table" then
 		for i = 1, #perks do
 			local modifier = perks[i]
 			local perk_item = modifier_item(modifier)
@@ -1782,7 +1984,7 @@ local function perk_description_list(item, max_count)
 	local descriptions = {}
 	local perks = item and item.perks
 
-	if not perks then
+	if type(perks) ~= "table" then
 		return descriptions
 	end
 
@@ -1807,7 +2009,7 @@ local function weapon_blessing_lines(item, include_descriptions)
 	local blessings = {}
 	local traits = item and item.traits
 
-	if not traits then
+	if type(traits) ~= "table" then
 		return blessings
 	end
 
@@ -1848,7 +2050,7 @@ local function collect_gear_preview_data(view, profile_preset)
 			local item, gear_id = resolve_loadout_item(view, profile_preset, slot_name)
 
 			if item or gear_id then
-				local display_text = item and safe_item_display_name(item) or mod:localize("preview_missing_weapon")
+				local display_text = item and safe_item_display_name(item) or Settings.localize("preview_missing_weapon")
 
 				weapons[#weapons + 1] = {
 					blessings = blessings_visible and item and weapon_blessing_lines(item, blessing_descriptions_visible) or nil,
@@ -1872,7 +2074,7 @@ local function collect_gear_preview_data(view, profile_preset)
 				curios[#curios + 1] = {
 					perks = curio_perks_visible and item and perk_description_list(item, CURIO_LAYOUT.perk_max) or nil,
 					slot_name = slot_name,
-					text = item and curio_main_stat_text(item) or mod:localize("preview_missing_curio"),
+					text = item and curio_main_stat_text(item) or Settings.localize("preview_missing_curio"),
 				}
 			end
 		end
@@ -1899,13 +2101,13 @@ function Stats.buff_key(stat_name)
 end
 
 function Stats.buff_type(stat_key)
-	local stat_types = Game.BuffSettings.stat_buff_types
+	local stat_types = Game.BuffSettings and Game.BuffSettings.stat_buff_types
 
 	return stat_types and stat_types[stat_key] or "value"
 end
 
 function Stats.base_value(stat_key)
-	local base_values = Game.BuffSettings.stat_buff_type_base_values
+	local base_values = Game.BuffSettings and Game.BuffSettings.stat_buff_type_base_values
 
 	return base_values and base_values[stat_key] or 0
 end
@@ -1948,7 +2150,7 @@ function Stats.number(value, tier)
 end
 
 function Stats.apply_value(stats, stat_key, raw_value, tier)
-	if not stat_key or raw_value == nil then
+	if type(stats) ~= "table" or not stat_key or raw_value == nil then
 		return
 	end
 
@@ -1975,7 +2177,7 @@ function Stats.apply_value(stats, stat_key, raw_value, tier)
 end
 
 function Stats.apply_table(stats, stat_table, tier)
-	if not stat_table then
+	if type(stat_table) ~= "table" then
 		return
 	end
 
@@ -1985,7 +2187,7 @@ function Stats.apply_table(stats, stat_table, tier)
 end
 
 function Stats.apply_buff_template(stats, buff_template_name, tier, include_conditionals)
-	local template = buff_template_name and Game.BuffTemplates[buff_template_name]
+	local template = buff_template_name and Game.BuffTemplates and Game.BuffTemplates[buff_template_name]
 
 	if not template then
 		return
@@ -2001,7 +2203,7 @@ end
 function Stats.copy_values(source)
 	local copy = {}
 
-	for stat_key, value in pairs(source) do
+	for stat_key, value in pairs(source or {}) do
 		copy[stat_key] = value
 	end
 
@@ -2010,7 +2212,7 @@ end
 
 function Stats.value(stats, stat_name)
 	local stat_key = Stats.buff_key(stat_name)
-	local value = stats[stat_key]
+	local value = type(stats) == "table" and stats[stat_key] or nil
 
 	if value == nil then
 		value = Stats.base_value(stat_key)
@@ -2074,13 +2276,13 @@ function Stats.apply_item_modifiers(stats, item, include_template_fallback)
 	local traits = item and item.traits
 	local perks = item and item.perks
 
-	if traits then
+	if type(traits) == "table" then
 		for i = 1, #traits do
 			Stats.apply_modifier(stats, traits[i], include_template_fallback)
 		end
 	end
 
-	if perks then
+	if type(perks) == "table" then
 		for i = 1, #perks do
 			Stats.apply_modifier(stats, perks[i], include_template_fallback)
 		end
@@ -2095,7 +2297,11 @@ function Stats.apply_talents(stats, profile, profile_preset)
 		return
 	end
 
-	local ok, selected_talents = pcall(Game.CharacterSheet.convert_selected_nodes_to_selected_talents, archetype, talents)
+	if not Game.CharacterSheet or type(Game.CharacterSheet.convert_selected_nodes_to_selected_talents) ~= "function" or type(Game.CharacterSheet.class_loadout) ~= "function" then
+		return
+	end
+
+	local ok, selected_talents = Settings.safe_call("convert selected talents", Game.CharacterSheet.convert_selected_nodes_to_selected_talents, archetype, talents)
 
 	if not ok or not selected_talents then
 		return
@@ -2111,18 +2317,24 @@ function Stats.apply_talents(stats, profile, profile_preset)
 		pocketable = {},
 		special_rules = {},
 	}
-	local loaded = pcall(Game.CharacterSheet.class_loadout, profile, class_loadout, nil, selected_talents, true)
+	local loaded = Settings.safe_call("build class loadout", Game.CharacterSheet.class_loadout, profile, class_loadout, nil, selected_talents, true)
 
 	if not loaded then
 		return
 	end
 
 	local function apply_loadout_buffs(loadout_buffs)
-		for _, buff_template_names in pairs(loadout_buffs) do
-			for i = 1, #buff_template_names do
-				local buff_template_name = buff_template_names[i]
+		if type(loadout_buffs) ~= "table" then
+			return
+		end
 
-				Stats.apply_buff_template(stats, buff_template_name, class_loadout.buff_template_tiers[buff_template_name], false)
+		for _, buff_template_names in pairs(loadout_buffs) do
+			if type(buff_template_names) == "table" then
+				for i = 1, #buff_template_names do
+					local buff_template_name = buff_template_names[i]
+
+					Stats.apply_buff_template(stats, buff_template_name, class_loadout.buff_template_tiers[buff_template_name], false)
+				end
 			end
 		end
 	end
@@ -2132,7 +2344,7 @@ function Stats.apply_talents(stats, profile, profile_preset)
 end
 
 function Stats.weapon_tweak_template(weapon_tweak_templates, template_type, template_name)
-	local template_types = Game.WeaponTweakTemplateSettings.template_types
+	local template_types = Game.WeaponTweakTemplateSettings and Game.WeaponTweakTemplateSettings.template_types
 	local typed_templates = template_types and weapon_tweak_templates and weapon_tweak_templates[template_types[template_type]]
 
 	if not typed_templates then
@@ -2229,7 +2441,7 @@ function Stats.collect_weapon_context(item, base_stats)
 		return nil
 	end
 
-	local ok_template, weapon_template = pcall(Game.WeaponTemplate.weapon_template_from_item, item)
+	local ok_template, weapon_template = Settings.safe_call("resolve weapon template", Game.WeaponTemplate and Game.WeaponTemplate.weapon_template_from_item, item)
 
 	if not ok_template or not weapon_template then
 		return nil
@@ -2239,7 +2451,7 @@ function Stats.collect_weapon_context(item, base_stats)
 
 	Stats.apply_item_modifiers(stats, item, false)
 
-	local ok_tweaks, weapon_tweak_templates = pcall(Game.Weapon._init_traits, nil, weapon_template, item, nil, nil)
+	local ok_tweaks, weapon_tweak_templates = Settings.safe_call("initialize weapon trait tweaks", Game.Weapon and Game.Weapon._init_traits, nil, weapon_template, item, nil, nil)
 	local stamina_template
 	local dodge_template
 	local sprint_template
@@ -2256,10 +2468,13 @@ function Stats.collect_weapon_context(item, base_stats)
 		weapon_handling_template = override_tweak.weapon_handling
 	end
 
+	local ok_melee, is_melee = Settings.safe_call("check melee weapon template", Game.WeaponTemplate and Game.WeaponTemplate.is_melee, weapon_template)
+	local ok_ranged, is_ranged = Settings.safe_call("check ranged weapon template", Game.WeaponTemplate and Game.WeaponTemplate.is_ranged, weapon_template)
+
 	return {
 		dodge_template = dodge_template,
-		is_melee = Game.WeaponTemplate.is_melee(weapon_template),
-		is_ranged = Game.WeaponTemplate.is_ranged(weapon_template),
+		is_melee = ok_melee and is_melee == true,
+		is_ranged = ok_ranged and is_ranged == true,
 		sprint_template = sprint_template,
 		stats = stats,
 		stamina_template = stamina_template,
@@ -2296,7 +2511,7 @@ function Stats.preferred_context(contexts, ranged)
 end
 
 function Stats.archetype_key(archetype)
-	local wounds_by_archetype = Game.PlayerDifficultySettings.archetype_wounds
+	local wounds_by_archetype = Game.PlayerDifficultySettings and Game.PlayerDifficultySettings.archetype_wounds or {}
 	local direct_name = archetype and (archetype.name or archetype.archetype)
 
 	if direct_name and wounds_by_archetype[direct_name] then
@@ -2316,7 +2531,8 @@ end
 
 function Stats.highest_difficulty_wounds(archetype)
 	local archetype_name = Stats.archetype_key(archetype)
-	local wound_table = archetype_name and Game.PlayerDifficultySettings.archetype_wounds[archetype_name]
+	local archetype_wounds = Game.PlayerDifficultySettings and Game.PlayerDifficultySettings.archetype_wounds or {}
+	local wound_table = archetype_name and archetype_wounds[archetype_name]
 
 	if wound_table and #wound_table > 0 then
 		return wound_table[#wound_table]
@@ -2383,7 +2599,7 @@ function Stats.context_stamina(archetype, context)
 	local archetype_stamina = archetype and archetype.stamina or {}
 	local weapon_stamina = context and context.stamina_template and Stats.number(context.stamina_template.stamina_modifier) or 0
 
-	return (archetype_stamina.base_stamina or 0) + weapon_stamina + Stats.value(context.stats, "stamina_modifier")
+	return (archetype_stamina.base_stamina or 0) + weapon_stamina + Stats.value(context and context.stats or {}, "stamina_modifier")
 end
 
 function Stats.context_weapon_crit_modifier(context)
@@ -2394,12 +2610,12 @@ function Stats.context_weapon_crit_modifier(context)
 end
 
 function Stats.context_crit_chance(archetype, context)
-	local stats = context.stats
+	local stats = context and context.stats or {}
 	local chance = (archetype and archetype.base_critical_strike_chance or 0) + Stats.value(stats, "critical_strike_chance") + Stats.context_weapon_crit_modifier(context)
 
-	if context.is_melee then
+	if context and context.is_melee then
 		chance = chance + Stats.value(stats, "melee_critical_strike_chance")
-	elseif context.is_ranged then
+	elseif context and context.is_ranged then
 		chance = chance + Stats.value(stats, "ranged_critical_strike_chance")
 	end
 
@@ -2407,12 +2623,12 @@ function Stats.context_crit_chance(archetype, context)
 end
 
 function Stats.context_crit_damage(context)
-	local stats = context.stats
+	local stats = context and context.stats or {}
 	local damage = Stats.value(stats, "critical_strike_damage") - 1
 
-	if context.is_melee then
+	if context and context.is_melee then
 		damage = damage + Stats.value(stats, "melee_critical_strike_damage") - 1
-	elseif context.is_ranged then
+	elseif context and context.is_ranged then
 		damage = damage + Stats.value(stats, "ranged_critical_strike_damage") - 1
 	end
 
@@ -2440,7 +2656,7 @@ function Stats.context_sprint_speed(archetype, context)
 	local weapon_sprint_template = context and context.sprint_template
 	local weapon_speed_mod = Stats.number(weapon_sprint_template and weapon_sprint_template.sprint_speed_mod) or 1
 	local base_speed = (sprint_template.sprint_move_speed or 0) + weapon_speed_mod
-	local stats = context.stats
+	local stats = context and context.stats or {}
 
 	return base_speed * Stats.value(stats, "sprint_movement_speed") * Stats.value(stats, "movement_speed")
 end
@@ -2448,7 +2664,7 @@ end
 function Stats.context_sprint_time(archetype, context)
 	local max_stamina = Stats.context_stamina(archetype, context)
 	local sprint_cost = Stats.number(context and context.stamina_template and context.stamina_template.sprint_cost_per_second)
-	local cost_multiplier = Stats.value(context.stats, "sprinting_cost_multiplier")
+	local cost_multiplier = Stats.value(context and context.stats or {}, "sprinting_cost_multiplier")
 
 	if not sprint_cost or sprint_cost <= 0 or cost_multiplier <= 0 then
 		return nil
@@ -2464,7 +2680,7 @@ function Stats.context_toughness_regen(archetype, context, standing_still)
 	local weapon_regeneration_speed = weapon_toughness_template and weapon_toughness_template.regeneration_speed_modifier or {}
 	local base_rate = standing_still and regeneration_speed.moving or regeneration_speed.still
 	local weapon_rate_modifier = standing_still and weapon_regeneration_speed.moving or weapon_regeneration_speed.still
-	local stats = context.stats
+	local stats = context and context.stats or {}
 
 	return (Stats.number(base_rate) or 0) * (Stats.number(weapon_rate_modifier) or 1) * Stats.value(stats, "toughness_regen_rate_modifier") * Stats.value(stats, "toughness_regen_rate_multiplier")
 end
@@ -2473,7 +2689,7 @@ function Stats.context_toughness_regen_delay(archetype, context)
 	local toughness_template = archetype and archetype.toughness or {}
 	local weapon_toughness_template = context and context.toughness_template
 	local weapon_modifier = Stats.number(weapon_toughness_template and weapon_toughness_template.regeneration_delay_modifier) or 1
-	local stats = context.stats
+	local stats = context and context.stats or {}
 
 	return (toughness_template.regeneration_delay or 0) * weapon_modifier * Stats.value(stats, "toughness_regen_delay_modifier") * Stats.value(stats, "toughness_regen_delay_multiplier")
 end
@@ -2483,7 +2699,7 @@ function Stats.context_toughness_melee_kill(archetype, context, max_toughness)
 		return 0
 	end
 
-	local replenish_types = Game.ToughnessSettings.replenish_types or {}
+	local replenish_types = Game.ToughnessSettings and Game.ToughnessSettings.replenish_types or {}
 	local recovery_type = replenish_types.melee_kill or "melee_kill"
 	local toughness_template = archetype and archetype.toughness or {}
 	local recovery_percentages = toughness_template.recovery_percentages or {}
@@ -2570,7 +2786,7 @@ function Stats.collect_preview_data(view, profile_preset, profile)
 		local row = STAT_LAYOUT.stat_rows[i]
 
 		rows[#rows + 1] = {
-			label = mod:localize(row.label),
+			label = Settings.localize(row.label),
 			value = rows_by_key[row.key] or "",
 		}
 	end
@@ -2585,7 +2801,7 @@ local function selected_talents_for_layout(profile_preset, layout)
 	local selected = {}
 	local total_points = 0
 
-	if not talents or not layout or not layout.nodes then
+	if type(talents) ~= "table" or not layout or type(layout.nodes) ~= "table" then
 		return selected, total_points
 	end
 
@@ -2593,10 +2809,10 @@ local function selected_talents_for_layout(profile_preset, layout)
 
 	for i = 1, #nodes do
 		local node = nodes[i]
-		local node_name = node.widget_name
+		local node_name = node and node.widget_name
 		local tier = node_name and talents[node_name]
 
-		if tier and tier > 0 then
+		if tier and tier > 0 and node then
 			selected[node_name] = tier
 			total_points = total_points + tier * (node.cost or 0)
 		end
@@ -2605,8 +2821,8 @@ local function selected_talents_for_layout(profile_preset, layout)
 	return selected, total_points
 end
 
-local function collect_stimm_preview_data(profile_preset, profile)
-	if not Settings.show_stimm_lab_preview() then
+local function collect_stimm_preview_data(profile_preset, profile, force_visible)
+	if force_visible ~= true then
 		return nil
 	end
 
@@ -2675,11 +2891,11 @@ local function is_stat_node(node_type, icon)
 end
 
 local function valid_material_path(value)
-	return type(value) == "string" and value ~= ""
+	return type(value) == "string" and string.sub(value, 1, 8) == "content/"
 end
 
 local function source_node_size(node_type)
-	local settings_by_node_type = TalentBuilderViewSettings.settings_by_node_type
+	local settings_by_node_type = TalentBuilderViewSettings and TalentBuilderViewSettings.settings_by_node_type or {}
 	local settings = settings_by_node_type[node_type]
 	local size = settings and settings.size
 
@@ -2687,14 +2903,18 @@ local function source_node_size(node_type)
 end
 
 local function source_node_center(node)
+	if not node then
+		return 0, 0
+	end
+
 	local width, height = source_node_size(node.type)
 
-	return node.x + width * 0.5, node.y + height * 0.5
+	return (node.x or 0) + width * 0.5, (node.y or 0) + height * 0.5
 end
 
 local function source_node_connector(node)
 	local center_x, center_y = source_node_center(node)
-	local connector_offset = node.connector_offset
+	local connector_offset = node and node.connector_offset
 
 	if connector_offset then
 		center_x = center_x + (connector_offset[1] or 0)
@@ -2715,7 +2935,7 @@ end
 local function talent_layout_source_bounds(layout)
 	local nodes = layout and layout.nodes
 
-	if not nodes then
+	if type(nodes) ~= "table" then
 		return nil
 	end
 
@@ -2723,20 +2943,23 @@ local function talent_layout_source_bounds(layout)
 
 	for i = 1, #nodes do
 		local node = nodes[i]
-		local center_x, center_y = source_node_center(node)
-		local connector_x, connector_y = source_node_connector(node)
-		local source_width, source_height = source_node_size(node.type)
-		local half_width = source_width * 0.5
-		local half_height = source_height * 0.5
-		local node_min_x = center_x - half_width
-		local node_max_x = center_x + half_width
-		local node_min_y = center_y - half_height
-		local node_max_y = center_y + half_height
 
-		min_x = min_x and math.min(min_x, node_min_x, connector_x) or math.min(node_min_x, connector_x)
-		max_x = max_x and math.max(max_x, node_max_x, connector_x) or math.max(node_max_x, connector_x)
-		min_y = min_y and math.min(min_y, node_min_y, connector_y) or math.min(node_min_y, connector_y)
-		max_y = max_y and math.max(max_y, node_max_y, connector_y) or math.max(node_max_y, connector_y)
+		if node then
+			local center_x, center_y = source_node_center(node)
+			local connector_x, connector_y = source_node_connector(node)
+			local source_width, source_height = source_node_size(node.type)
+			local half_width = source_width * 0.5
+			local half_height = source_height * 0.5
+			local node_min_x = center_x - half_width
+			local node_max_x = center_x + half_width
+			local node_min_y = center_y - half_height
+			local node_max_y = center_y + half_height
+
+			min_x = min_x and math.min(min_x, node_min_x, connector_x) or math.min(node_min_x, connector_x)
+			max_x = max_x and math.max(max_x, node_max_x, connector_x) or math.max(node_max_x, connector_x)
+			min_y = min_y and math.min(min_y, node_min_y, connector_y) or math.min(node_min_y, connector_y)
+			max_y = max_y and math.max(max_y, node_max_y, connector_y) or math.max(node_max_y, connector_y)
+		end
 	end
 
 	if not min_x then
@@ -2854,8 +3077,8 @@ local function add_line_pass(pass_template, index, from_x, from_y, to_x, to_y, s
 end
 
 local function node_icon_material_values(node_type, icon, selected)
-	local settings_by_node_type = TalentBuilderViewSettings.settings_by_node_type
-	local settings = settings_by_node_type[node_type] or settings_by_node_type.default
+	local settings_by_node_type = TalentBuilderViewSettings and TalentBuilderViewSettings.settings_by_node_type or {}
+	local settings = settings_by_node_type[node_type] or settings_by_node_type.default or {}
 	local frame = valid_material_path(settings.frame) and settings.frame or "content/ui/textures/frames/talents/circular_frame"
 	local gradient_map = valid_material_path(settings.gradient_map) and settings.gradient_map or nil
 	local icon_mask = valid_material_path(settings.icon_mask) and settings.icon_mask or "content/ui/textures/frames/talents/circular_frame_mask"
@@ -2893,7 +3116,7 @@ local function add_start_node_pass(pass_template, index, node, x, y, use_materia
 		color = Color.white(255, true),
 	}
 
-	if use_material_values then
+	if use_material_values and ColorUtilities and ColorUtilities.format_color_to_material then
 		style.material_values = {
 			fill_color = ColorUtilities.format_color_to_material({
 				255,
@@ -2923,8 +3146,8 @@ end
 
 local function add_direct_icon_passes(pass_template, index, node_type, icon, x, y, size, selected)
 	local half_size = size * 0.5
-	local settings_by_node_type = TalentBuilderViewSettings.settings_by_node_type
-	local settings = settings_by_node_type[node_type] or settings_by_node_type.default
+	local settings_by_node_type = TalentBuilderViewSettings and TalentBuilderViewSettings.settings_by_node_type or {}
+	local settings = settings_by_node_type[node_type] or settings_by_node_type.default or {}
 	local frame = valid_material_path(settings.frame) and settings.frame or nil
 	local frame_alpha = selected and 220 or 75
 	local icon_size = size * 0.62
@@ -3095,7 +3318,9 @@ local function add_node_passes(pass_template, index, node, x, y, selected, use_m
 end
 
 local function line_is_selected(parent, child, selected)
-	return selected[child.widget_name] and (parent.type == "start" or selected[parent.widget_name])
+	selected = selected or {}
+
+	return parent and child and selected[child.widget_name] and (parent.type == "start" or selected[parent.widget_name])
 end
 
 local function compact_selected_nodes(talent_layout, selected)
@@ -3103,14 +3328,14 @@ local function compact_selected_nodes(talent_layout, selected)
 	local nodes_by_type = {}
 	local ordered_nodes = {}
 
-	if not nodes then
+	if type(nodes) ~= "table" then
 		return ordered_nodes
 	end
 
 	for i = 1, #nodes do
 		local node = nodes[i]
 
-		if selected[node.widget_name] and not nodes_by_type[node.type] then
+		if node and selected[node.widget_name] and not nodes_by_type[node.type] then
 			for j = 1, #PREVIEW_LAYOUTS.compact_talent.node_order do
 				if node.type == PREVIEW_LAYOUTS.compact_talent.node_order[j] then
 					nodes_by_type[node.type] = node
@@ -3133,6 +3358,9 @@ local function compact_selected_nodes(talent_layout, selected)
 end
 
 local function build_compact_talents_pass_template(nodes, preview_layout)
+	nodes = type(nodes) == "table" and nodes or {}
+	preview_layout = preview_layout or PREVIEW_LAYOUTS.compact
+
 	local pass_template = {}
 	local icon_count = #nodes
 
@@ -3143,7 +3371,11 @@ local function build_compact_talents_pass_template(nodes, preview_layout)
 	local total_width = PREVIEW_LAYOUTS.compact_talent.icon_gap * (icon_count - 1)
 
 	for i = 1, icon_count do
-		total_width = total_width + node_type_size(nodes[i].type, true)
+		local node = nodes[i]
+
+		if node then
+			total_width = total_width + node_type_size(node.type, true)
+		end
 	end
 
 	local x = (preview_layout.map_width - total_width) * 0.5
@@ -3152,10 +3384,13 @@ local function build_compact_talents_pass_template(nodes, preview_layout)
 
 	for i = 1, icon_count do
 		local node = nodes[i]
-		local size = node_type_size(node.type, true)
 
-		pass_index = add_node_passes(pass_template, pass_index, node, x + size * 0.5, y, true, true)
-		x = x + size + PREVIEW_LAYOUTS.compact_talent.icon_gap
+		if node then
+			local size = node_type_size(node.type, true)
+
+			pass_index = add_node_passes(pass_template, pass_index, node, x + size * 0.5, y, true, true)
+			x = x + size + PREVIEW_LAYOUTS.compact_talent.icon_gap
+		end
 	end
 
 	return pass_template
@@ -3165,9 +3400,12 @@ local function build_talent_map_pass_template(layout, selected, preview_layout)
 	local nodes = layout and layout.nodes
 	local pass_template = {}
 
-	if not nodes then
+	if type(nodes) ~= "table" then
 		return pass_template
 	end
+
+	selected = selected or {}
+	preview_layout = preview_layout or PREVIEW_LAYOUTS.default
 
 	local min_x, max_x, min_y, max_y
 	local max_node_radius = 0
@@ -3175,27 +3413,30 @@ local function build_talent_map_pass_template(layout, selected, preview_layout)
 
 	for i = 1, #nodes do
 		local node = nodes[i]
-		local center_x, center_y = source_node_center(node)
-		local connector_x, connector_y = source_node_connector(node)
-		local node_radius = node_type_size(node.type, selected[node.widget_name], node_size_scale) * 0.5
 
-		max_node_radius = math.max(max_node_radius, node_radius)
-		min_x = min_x and math.min(min_x, center_x, connector_x) or math.min(center_x, connector_x)
-		max_x = max_x and math.max(max_x, center_x, connector_x) or math.max(center_x, connector_x)
-		min_y = min_y and math.min(min_y, center_y, connector_y) or math.min(center_y, connector_y)
-		max_y = max_y and math.max(max_y, center_y, connector_y) or math.max(center_y, connector_y)
+		if node then
+			local center_x, center_y = source_node_center(node)
+			local connector_x, connector_y = source_node_connector(node)
+			local node_radius = node_type_size(node.type, selected[node.widget_name], node_size_scale) * 0.5
+
+			max_node_radius = math.max(max_node_radius, node_radius)
+			min_x = min_x and math.min(min_x, center_x, connector_x) or math.min(center_x, connector_x)
+			max_x = max_x and math.max(max_x, center_x, connector_x) or math.max(center_x, connector_x)
+			min_y = min_y and math.min(min_y, center_y, connector_y) or math.min(center_y, connector_y)
+			max_y = max_y and math.max(max_y, center_y, connector_y) or math.max(center_y, connector_y)
+		end
 	end
 
 	if not min_x then
 		return pass_template
 	end
 
-	local map_width = preview_layout.map_width
-	local map_height = preview_layout.map_height
-	local map_padding = preview_layout.map_padding
-	local node_edge_padding = preview_layout.node_edge_padding
-	local tree_vertical_stretch = preview_layout.tree_vertical_stretch
-	local tree_vertical_offset = preview_layout.tree_vertical_offset
+	local map_width = preview_layout.map_width or PREVIEW_LAYOUTS.default.map_width
+	local map_height = preview_layout.map_height or PREVIEW_LAYOUTS.default.map_height
+	local map_padding = preview_layout.map_padding or 0
+	local node_edge_padding = preview_layout.node_edge_padding or 0
+	local tree_vertical_stretch = preview_layout.tree_vertical_stretch or 1
+	local tree_vertical_offset = preview_layout.tree_vertical_offset or 0
 	local edge_radius = max_node_radius + node_edge_padding
 	local width = math.max(max_x - min_x, 1)
 	local height = math.max(max_y - min_y, 1)
@@ -3226,32 +3467,35 @@ local function build_talent_map_pass_template(layout, selected, preview_layout)
 
 	for i = 1, #nodes do
 		local node = nodes[i]
-		local center_x, center_y = source_node_center(node)
-		local connector_x, connector_y = source_node_connector(node)
-		local x = left + (center_x - min_x) * scale
-		local y = top + (center_y - min_y) * scale * tree_vertical_stretch
-		local line_x = left + (connector_x - min_x) * scale
-		local line_y = top + (connector_y - min_y) * scale * tree_vertical_stretch
 
-		positions[node.widget_name] = {
-			x,
-			y,
-		}
-		connector_positions[node.widget_name] = {
-			line_x,
-			line_y,
-		}
-		nodes_by_name[node.widget_name] = node
+		if node and node.widget_name then
+			local center_x, center_y = source_node_center(node)
+			local connector_x, connector_y = source_node_connector(node)
+			local x = left + (center_x - min_x) * scale
+			local y = top + (center_y - min_y) * scale * tree_vertical_stretch
+			local line_x = left + (connector_x - min_x) * scale
+			local line_y = top + (connector_y - min_y) * scale * tree_vertical_stretch
+
+			positions[node.widget_name] = {
+				x,
+				y,
+			}
+			connector_positions[node.widget_name] = {
+				line_x,
+				line_y,
+			}
+			nodes_by_name[node.widget_name] = node
+		end
 	end
 
 	local pass_index = 0
 
 	for i = 1, #nodes do
 		local node = nodes[i]
-		local from = connector_positions[node.widget_name]
-		local children = node.children
+		local from = node and connector_positions[node.widget_name]
+		local children = node and node.children
 
-		if children and from then
+		if type(children) == "table" and from then
 			for j = 1, #children do
 				local child_name = children[j]
 					local child = nodes_by_name[child_name]
@@ -3270,7 +3514,7 @@ local function build_talent_map_pass_template(layout, selected, preview_layout)
 
 	for i = 1, #nodes do
 		local node = nodes[i]
-		local position = positions[node.widget_name]
+		local position = node and positions[node.widget_name]
 
 		if position then
 			pass_index = add_node_passes(pass_template, pass_index, node, position[1], position[2], selected[node.widget_name], true, node_size_scale)
@@ -3356,8 +3600,8 @@ end
 
 local function weapon_row_layout(weapon, text_mode, panel_width, weapon_icons_visible)
 	local inner_width = (panel_width or GEAR_LAYOUT.panel_width) - GEAR_LAYOUT.panel_padding * 2
-	local blessings = weapon and weapon.blessings or {}
-	local perks = weapon and weapon.perks or {}
+	local blessings = weapon and type(weapon.blessings) == "table" and weapon.blessings or {}
+	local perks = weapon and type(weapon.perks) == "table" and weapon.perks or {}
 	local blessing_descriptions_visible = weapon and weapon.blessing_descriptions_visible == true
 	local blessing_count = preview_detail_line_count(blessings)
 	local perk_count = preview_detail_line_count(perks)
@@ -3427,7 +3671,7 @@ local function gear_weapon_row_height(gear_data, weapon, compact, panel_width)
 end
 
 local function gear_curio_row_height(curio)
-	local perks = curio and curio.perks
+	local perks = curio and type(curio.perks) == "table" and curio.perks or nil
 
 	if perks and #perks > 0 then
 		return CURIO_LAYOUT.row_height_perks
@@ -3438,8 +3682,8 @@ end
 
 local function gear_content_height(gear_data, compact, panel_width)
 	local height = 0
-	local weapons = gear_data.weapons
-	local curios = gear_data.curios
+	local weapons = gear_data and type(gear_data.weapons) == "table" and gear_data.weapons or nil
+	local curios = gear_data and type(gear_data.curios) == "table" and gear_data.curios or nil
 
 	if weapons and #weapons > 0 then
 		height = height + GEAR_LAYOUT.section_header_height
@@ -3856,8 +4100,8 @@ local function add_curio_row_passes(pass_template, curio_index, curio, x, y, pan
 end
 
 local function add_gear_content_passes(pass_template, gear_data, content_x, cursor_y, panel_width, compact)
-	local weapons = gear_data.weapons
-	local curios = gear_data.curios
+	local weapons = gear_data and type(gear_data.weapons) == "table" and gear_data.weapons or nil
+	local curios = gear_data and type(gear_data.curios) == "table" and gear_data.curios or nil
 
 	if weapons and #weapons > 0 then
 		add_gear_section_header(pass_template, "preview_weapons_title", content_x, cursor_y, panel_width)
@@ -4149,15 +4393,41 @@ local function add_talent_only_preview(layout, talent_pass_template, preview_lay
 	}
 end
 
-local function build_preview_layout(view, profile_preset, mode, profile)
+local function build_preview_layout(view, profile_preset, mode, profile, options)
+	options = options or {}
+
 	local layout = {}
-	local stats_visible = preview_mode_has_stats(mode) and Settings.show_stats_preview()
+	local stats_visible = not options.hide_stats and preview_mode_has_stats(mode) and Settings.show_stats_preview()
 	local stats_only = preview_mode_stats_only(mode)
 	local talents_visible = mode ~= PREVIEW_MODE.disabled and not stats_only
 	local base_preview_layout = preview_layout_settings(mode)
-	local gear_data = collect_gear_preview_data(view, profile_preset)
-	local stats_data = stats_visible and Stats.collect_preview_data(view, profile_preset, profile) or nil
-	local stimm_data = talents_visible and collect_stimm_preview_data(profile_preset, profile) or nil
+	local gear_data
+	local stats_data
+	local stimm_data
+
+	if not options.hide_gear then
+		local _
+
+		_, gear_data = Settings.safe_call("collect gear preview data", collect_gear_preview_data, view, profile_preset)
+	end
+
+	if stats_visible then
+		local _
+
+		_, stats_data = Settings.safe_call("collect stats preview data", Stats.collect_preview_data, view, profile_preset, profile)
+	end
+
+	local stimm_visible = options.show_stimm
+
+	if stimm_visible == nil then
+		stimm_visible = not options.hide_stimm and Settings.show_stimm_lab_preview()
+	end
+
+	if stimm_visible and talents_visible then
+		local _
+
+		_, stimm_data = Settings.safe_call("collect Stimm Lab preview data", collect_stimm_preview_data, profile_preset, profile, true)
+	end
 	local talent_preview_layout = base_preview_layout
 	local talent_pass_template
 	local compact_with_gear
@@ -4183,12 +4453,27 @@ local function build_preview_layout(view, profile_preset, mode, profile)
 	end
 
 	if talents_visible then
-		local selected_nodes = sorted_selected_nodes(profile_preset, profile)
-		local talent_layout, map_selected = primary_preview_layout(profile_preset, profile)
+		local _, selected_nodes = Settings.safe_call("collect selected talent nodes", sorted_selected_nodes, profile_preset, profile)
+		local _, talent_result = Settings.safe_call("collect primary talent layout", function ()
+			local talent_layout, map_selected = primary_preview_layout(profile_preset, profile)
+
+			return {
+				layout = talent_layout,
+				selected = map_selected,
+			}
+		end)
+		local talent_layout = talent_result and talent_result.layout
+		local map_selected = talent_result and talent_result.selected or {}
+
+		selected_nodes = selected_nodes or {}
 
 		if talent_layout and preview_mode_is_tree(mode) then
 			base_preview_layout = dynamic_tree_preview_layout(talent_layout)
-			base_preview_layout = tree_preview_layout_for_gear(base_preview_layout, gear_data, stimm_preview_extra_height(stimm_data))
+
+			if mode ~= PREVIEW_MODE.tree_gear then
+				base_preview_layout = tree_preview_layout_for_gear(base_preview_layout, gear_data, stimm_preview_extra_height(stimm_data))
+			end
+
 			talent_preview_layout = base_preview_layout
 		end
 
@@ -4201,7 +4486,7 @@ local function build_preview_layout(view, profile_preset, mode, profile)
 		if #selected_nodes == 0 then
 			if not gear_data and not stimm_data and not stats_data then
 				add_spacing(layout, 10, talent_preview_layout)
-				add_header(layout, mod:localize("preview_no_talents"))
+				add_header(layout, Settings.localize("preview_no_talents"))
 				add_spacing(layout, 10, talent_preview_layout)
 
 				return layout
@@ -4310,10 +4595,6 @@ function TeamPreview.inject_overlay_scenegraph(definitions)
 end
 
 function TeamPreview.enabled(context)
-	if not Settings.loadout_preview_enabled() then
-		return false
-	end
-
 	if context == "lobby" then
 		return Settings.show_lobby_team_previews()
 	elseif context == "mission_intro" then
@@ -4362,13 +4643,21 @@ function TeamPreview.is_human_player(player)
 end
 
 function TeamPreview.is_local_player(player)
-	local player_manager = Managers.player
+	local player_manager = Managers and Managers.player
 
-	if not player or not player_manager or not player_manager.local_player then
+	if not player or not player_manager then
 		return false
 	end
 
-	local ok, local_player = pcall(player_manager.local_player, player_manager, 1)
+	local method_ok, local_player_method = pcall(function ()
+		return player_manager.local_player
+	end)
+
+	if not method_ok or type(local_player_method) ~= "function" then
+		return false
+	end
+
+	local ok, local_player = Settings.safe_call("get local player for team preview", local_player_method, player_manager, 1)
 
 	return ok and player == local_player
 end
@@ -4378,7 +4667,13 @@ function TeamPreview.should_show_lobby_slot(slot)
 		return false
 	end
 
-	if TeamPreview.is_local_player(slot.player) and not Settings.show_own_lobby_team_preview() then
+	local player = slot.player
+
+	if not TeamPreview.is_human_player(player) then
+		return false
+	end
+
+	if TeamPreview.is_local_player(player) and not Settings.show_own_lobby_team_preview() then
 		return false
 	end
 
@@ -4410,8 +4705,8 @@ function TeamPreview.player_name(player)
 end
 
 function TeamPreview.profile_title(player, profile)
-	local name = TeamPreview.player_name(player) or mod:localize("team_preview_unknown_player")
-	local ok, archetype_title = pcall(ProfileUtils.character_archetype_title, profile)
+	local name = tostring(TeamPreview.player_name(player) or Settings.localize("team_preview_unknown_player"))
+	local ok, archetype_title = Settings.safe_call("team preview archetype title", ProfileUtils and ProfileUtils.character_archetype_title, profile)
 
 	if ok and archetype_title and archetype_title ~= "" then
 		return string.format("%s - %s", name, archetype_title)
@@ -4420,25 +4715,58 @@ function TeamPreview.profile_title(player, profile)
 	return name
 end
 
+function TeamPreview.slot_key(slot)
+	local player = slot and slot.player
+	local unique_id = TeamPreview.player_method(player, "unique_id")
+
+	if unique_id then
+		local ok, value = pcall(unique_id, player)
+
+		if ok and value ~= nil then
+			return tostring(value)
+		end
+	end
+
+	local name = TeamPreview.player_name(player)
+
+	return tostring(name or slot and slot.index or "")
+end
+
 function TeamPreview.profile_preset(profile)
 	if not profile then
 		return nil
 	end
 
-	return {
-		loadout = profile.loadout,
-		talents = profile.selected_nodes or {},
-	}
+	local ok, data = pcall(function ()
+		return {
+			loadout = profile.loadout,
+			talents = profile.selected_nodes or {},
+		}
+	end)
+
+	if not ok then
+		Settings.report_guarded_error("read player profile preset", data)
+
+		return nil
+	end
+
+	return data
 end
 
 function TeamPreview.profile_key(player, profile, title)
+	return TeamPreview.profile_key_for_mode(player, profile, title, PREVIEW_MODE.compact, false)
+end
+
+function TeamPreview.profile_key_for_mode(player, profile, title, mode, tree_only)
+	local settings_key = Settings.with_team_preview_settings(function ()
+		return Settings.preview_key(mode or PREVIEW_MODE.compact)
+	end) or ""
 	local pieces = {
-		Settings.with_team_preview_settings(function ()
-			return Settings.preview_key(PREVIEW_MODE.compact)
-		end),
+		tostring(settings_key),
+		"team_stimm=" .. tostring(Settings.show_team_stimm_lab_preview()),
+		tree_only and "tree_only" or "standard",
 		tostring(title or ""),
 	}
-	local unique_id
 
 	local unique_id = TeamPreview.player_method(player, "unique_id")
 
@@ -4462,7 +4790,7 @@ function TeamPreview.profile_key(player, profile, title)
 
 	local selected_nodes = profile and profile.selected_nodes
 
-	if selected_nodes then
+	if type(selected_nodes) == "table" then
 		local names = {}
 
 		for name, _ in pairs(selected_nodes) do
@@ -4482,7 +4810,7 @@ function TeamPreview.profile_key(player, profile, title)
 end
 
 function TeamPreview.preview_element(layout)
-	if not layout then
+	if type(layout) ~= "table" then
 		return nil
 	end
 
@@ -4496,7 +4824,7 @@ function TeamPreview.preview_element(layout)
 	end
 end
 
-function TeamPreview.add_panel_passes(pass_template, width, height, has_title)
+function TeamPreview.add_panel_passes(pass_template, width, height, has_title, has_hotspot, title_text_y)
 	pass_template[#pass_template + 1] = {
 		pass_type = "rect",
 		style_id = "team_preview_tooltip_icon_bg",
@@ -4546,7 +4874,7 @@ function TeamPreview.add_panel_passes(pass_template, width, height, has_title)
 				text_color = Color.terminal_text_header(255, true),
 				offset = {
 					0,
-					TEAM_PREVIEW_LAYOUT.title_text_y,
+					title_text_y or TEAM_PREVIEW_LAYOUT.title_text_y,
 					6,
 				},
 				size = {
@@ -4554,6 +4882,27 @@ function TeamPreview.add_panel_passes(pass_template, width, height, has_title)
 					TEAM_PREVIEW_LAYOUT.title_text_height,
 				},
 			},
+		}
+	end
+
+	if has_hotspot then
+		pass_template[#pass_template + 1] = {
+			content_id = "team_preview_hotspot",
+			pass_type = "hotspot",
+			style = {
+				horizontal_alignment = "left",
+				vertical_alignment = "top",
+				offset = {
+					0,
+					0,
+					8,
+				},
+				size = {
+					width,
+					height,
+				},
+			},
+			content = {},
 		}
 	end
 end
@@ -4569,6 +4918,10 @@ function TeamPreview.min_frame_size(context)
 end
 
 function TeamPreview.wrap_element(element, title, context)
+	if not element or type(element.size) ~= "table" then
+		return nil
+	end
+
 	local has_title = title ~= nil and title ~= ""
 	local content_width = element.size[1]
 	local content_height = element.size[2]
@@ -4591,9 +4944,11 @@ function TeamPreview.wrap_element(element, title, context)
 
 	local content_x = math.max((width - content_width) * 0.5, 0)
 	local content_y = title_height + content_padding_top + math.max((content_area_height - content_height) * 0.5, 0)
+	local has_hotspot = context == "lobby"
+	local title_text_y = context == "mission_intro" and TEAM_PREVIEW_LAYOUT.loading_title_text_y or TEAM_PREVIEW_LAYOUT.title_text_y
 	local pass_template = {}
 
-	TeamPreview.add_panel_passes(pass_template, width, height, has_title)
+	TeamPreview.add_panel_passes(pass_template, width, height, has_title, has_hotspot, title_text_y)
 	append_passes_with_offset(pass_template, element.pass_template, content_x, content_y, "team_preview_")
 
 	return {
@@ -4677,10 +5032,95 @@ function TeamPreview.scale_element(element, scale)
 	}
 end
 
-function TeamPreview.context_scale(context)
+function TeamPreview.mission_brief_mod()
+	local ok, mission_brief = pcall(get_mod, "MissionBrief")
+
+	return ok and mission_brief or nil
+end
+
+function TeamPreview.mission_brief_show_mission(mission_brief)
+	if not mission_brief then
+		return false
+	end
+
+	if type(mission_brief.get) ~= "function" then
+		return true
+	end
+
+	local ok, show_mission = pcall(mission_brief.get, mission_brief, "show_mission")
+
+	return not ok or show_mission ~= false
+end
+
+function TeamPreview.mission_brief_show_fluff(mission_brief)
+	if not mission_brief then
+		return false
+	end
+
+	if type(mission_brief.get) ~= "function" then
+		return true
+	end
+
+	local ok, show_fluff = pcall(mission_brief.get, mission_brief, "show_fluff")
+
+	return not ok or show_fluff ~= false
+end
+
+function TeamPreview.mission_brief_panel_height(view, widget_name)
+	local widgets_by_name = view and view._widgets_by_name
+	local widget = widgets_by_name and widgets_by_name[widget_name]
+
+	if not widget or widget.visible == false then
+		return 0
+	end
+
+	local style = widget.style and widget.style.fade
+	local size = style and style.size
+	local height = type(size) == "table" and tonumber(size[2]) or nil
+
+	return height or 0
+end
+
+function TeamPreview.mission_brief_clear_y(view)
+	local mission_brief = TeamPreview.mission_brief_mod()
+
+	if not mission_brief then
+		return nil
+	end
+
+	local clear_y = 0
+
+	if TeamPreview.mission_brief_show_mission(mission_brief) then
+		clear_y = math.max(clear_y, TeamPreview.mission_brief_panel_height(view, "mb_left_background"))
+	end
+
+	if TeamPreview.mission_brief_show_fluff(mission_brief) then
+		clear_y = math.max(clear_y, TeamPreview.mission_brief_panel_height(view, "mb_right_background"))
+	end
+
+	if clear_y <= 0 then
+		clear_y = TEAM_PREVIEW_LAYOUT.mission_brief_default_clear_y
+	end
+
+	return clear_y + TEAM_PREVIEW_LAYOUT.mission_brief_gap
+end
+
+function TeamPreview.context_scale(context, mode, tree_only)
 	if context == "lobby" then
+		if tree_only then
+			return TEAM_PREVIEW_LAYOUT.lobby_tree_hover_scale
+		end
+
 		return TEAM_PREVIEW_LAYOUT.lobby_scale
 	elseif context == "mission_intro" then
+		if mode == PREVIEW_MODE.tree_gear then
+			return TeamPreview._mission_intro_tree_gear_scale or TEAM_PREVIEW_LAYOUT.loading_tree_scale
+		end
+
+		if tree_only or mode == PREVIEW_MODE.tree then
+			return TEAM_PREVIEW_LAYOUT.loading_tree_scale
+		end
+
 		return TEAM_PREVIEW_LAYOUT.loading_scale
 	elseif context == "applicant" then
 		return TEAM_PREVIEW_LAYOUT.applicant_scale
@@ -4689,10 +5129,21 @@ function TeamPreview.context_scale(context)
 	return 1
 end
 
-function TeamPreview.build_element(view, player, profile, include_title, context)
+function TeamPreview.build_element(view, player, profile, include_title, context, mode, tree_only)
 	local profile_preset = TeamPreview.profile_preset(profile)
+	local preview_mode = mode or PREVIEW_MODE.compact
+	local team_stimm_visible = Settings.show_team_stimm_lab_preview()
 	local layout = profile_preset and Settings.with_team_preview_settings(function ()
-		return build_preview_layout(view, profile_preset, PREVIEW_MODE.compact, profile)
+		local options = {
+			show_stimm = tree_only ~= true and team_stimm_visible,
+		}
+
+		if tree_only then
+			options.hide_gear = true
+			options.hide_stats = true
+		end
+
+		return build_preview_layout(view, profile_preset, preview_mode, profile, options)
 	end)
 	local element = TeamPreview.preview_element(layout)
 
@@ -4702,14 +5153,16 @@ function TeamPreview.build_element(view, player, profile, include_title, context
 
 	local title = include_title and TeamPreview.profile_title(player, profile) or nil
 
-	return TeamPreview.scale_element(TeamPreview.wrap_element(element, title, context), TeamPreview.context_scale(context))
+	local wrapped = TeamPreview.wrap_element(element, title, context)
+
+	return wrapped and TeamPreview.scale_element(wrapped, TeamPreview.context_scale(context, preview_mode, tree_only)) or nil
 end
 
 function TeamPreview.destroy_slot_widget(view, slot)
 	local widget = slot and slot._loadout_previews_widget
 
 	if widget and view and view._unregister_widget_name then
-		view:_unregister_widget_name(widget.name)
+		Settings.safe_method("unregister team preview widget", view, "_unregister_widget_name", widget.name)
 	end
 
 	if slot then
@@ -4718,7 +5171,56 @@ function TeamPreview.destroy_slot_widget(view, slot)
 	end
 end
 
-function TeamPreview.refresh_slot_widget(view, slot, context, include_title)
+function TeamPreview.lobby_tree_slot_keys(view)
+	if not view then
+		return nil
+	end
+
+	local keys = view._loadout_previews_lobby_tree_slot_keys
+
+	if type(keys) ~= "table" then
+		keys = {}
+		view._loadout_previews_lobby_tree_slot_keys = keys
+	end
+
+	return keys
+end
+
+function TeamPreview.toggle_lobby_tree(view, slot_key)
+	if not view or not slot_key or slot_key == "" then
+		return
+	end
+
+	local keys = TeamPreview.lobby_tree_slot_keys(view)
+
+	if not keys then
+		return
+	end
+
+	view._loadout_previews_lobby_tree_slot_key = nil
+
+	if keys[slot_key] then
+		keys[slot_key] = nil
+	else
+		keys[slot_key] = true
+	end
+end
+
+function TeamPreview.bind_lobby_toggle(view, slot, widget)
+	local hotspot = widget and widget.content and widget.content.team_preview_hotspot
+
+	if not hotspot then
+		return
+	end
+
+	local slot_key = TeamPreview.slot_key(slot)
+
+	hotspot.pressed_callback = function ()
+		TeamPreview.toggle_lobby_tree(view, slot_key)
+	end
+end
+
+function TeamPreview.refresh_slot_widget(view, slot, context, include_title, mode, tree_only)
 	if not TeamPreview.enabled(context) or not slot or not slot.occupied then
 		TeamPreview.destroy_slot_widget(view, slot)
 
@@ -4735,7 +5237,7 @@ function TeamPreview.refresh_slot_widget(view, slot, context, include_title)
 
 	local profile = TeamPreview.player_profile(player)
 	local title = include_title and TeamPreview.profile_title(player, profile) or nil
-	local key = profile and TeamPreview.profile_key(player, profile, title)
+	local key = profile and TeamPreview.profile_key_for_mode(player, profile, title, mode or PREVIEW_MODE.compact, tree_only == true)
 
 	if not key then
 		TeamPreview.destroy_slot_widget(view, slot)
@@ -4743,28 +5245,50 @@ function TeamPreview.refresh_slot_widget(view, slot, context, include_title)
 		return nil
 	end
 
+	key = table.concat({
+		key,
+		tostring(context or ""),
+		tostring(TeamPreview.context_scale(context, mode or PREVIEW_MODE.compact, tree_only == true)),
+	}, "|")
+
 	if slot._loadout_previews_widget and slot._loadout_previews_widget_key == key then
 		return slot._loadout_previews_widget
 	end
 
 	TeamPreview.destroy_slot_widget(view, slot)
 
-	local element = TeamPreview.build_element(view, player, profile, include_title, context)
+	local element = TeamPreview.build_element(view, player, profile, include_title, context, mode, tree_only)
 
 	if not element then
 		return nil
 	end
 
-	local widget_definition = UIWidget.create_definition(element.pass_template, TEAM_PREVIEW_LAYOUT.scenegraph_id, nil, element.size)
+	local ok_definition, widget_definition = Settings.safe_call("create team preview widget definition", UIWidget and UIWidget.create_definition, element.pass_template, TEAM_PREVIEW_LAYOUT.scenegraph_id, nil, element.size)
+
+	if not ok_definition or not widget_definition then
+		return nil
+	end
+
 	local widget_name = string.format("loadout_previews_%s_%s", context, tostring(slot.index or 0))
-	local widget = view:_create_widget(widget_name, widget_definition)
+	local ok_widget, widget = Settings.safe_method("create team preview widget", view, "_create_widget", widget_name, widget_definition)
+
+	if not ok_widget or not widget then
+		return nil
+	end
 
 	init_gear_preview_widget(view, widget, element)
 
-	widget.content.team_preview_title = element.team_preview_title or ""
+	if widget.content then
+		widget.content.team_preview_title = element.team_preview_title or ""
+	end
+
 	widget._loadout_previews_size = element.size
 	slot._loadout_previews_widget = widget
 	slot._loadout_previews_widget_key = key
+
+	if context == "lobby" then
+		TeamPreview.bind_lobby_toggle(view, slot, widget)
+	end
 
 	return widget
 end
@@ -4774,6 +5298,11 @@ function TeamPreview.set_widget_offset(widget, x, y)
 		return
 	end
 
+	widget.offset = widget.offset or {
+		0,
+		0,
+		0,
+	}
 	widget.offset[1] = math.floor(x + 0.5)
 	widget.offset[2] = math.floor(y + 0.5)
 	widget.offset[3] = TEAM_PREVIEW_LAYOUT.z
@@ -4785,10 +5314,20 @@ function TeamPreview.widget_size(widget)
 	return size and size[1] or 0, size and size[2] or 0
 end
 
+function TeamPreview.draw_widget(widget, ui_renderer, context)
+	if not widget or not ui_renderer then
+		return false
+	end
+
+	local ok = Settings.safe_call(context or "draw loadout preview widget", UIWidget and UIWidget.draw, widget, ui_renderer)
+
+	return ok
+end
+
 function TeamPreview.clear_view_widgets(view)
 	local spawn_slots = view and view._spawn_slots
 
-	if not spawn_slots then
+	if type(spawn_slots) ~= "table" then
 		return
 	end
 
@@ -4806,9 +5345,10 @@ function TeamPreview.lobby_slot_hovered(slot)
 
 	local weapon_widgets = slot and slot.weapon_widgets
 
-	if weapon_widgets then
+	if type(weapon_widgets) == "table" then
 		for i = 1, #weapon_widgets do
-			local hotspot = weapon_widgets[i].content and weapon_widgets[i].content.hotspot
+			local widget = weapon_widgets[i]
+			local hotspot = widget and widget.content and widget.content.hotspot
 
 			if hotspot and (hotspot.is_hover or hotspot.is_selected) then
 				return true
@@ -4818,14 +5358,22 @@ function TeamPreview.lobby_slot_hovered(slot)
 
 	local talent_widgets = slot and slot.talent_widgets
 
-	if talent_widgets then
+	if type(talent_widgets) == "table" then
 		for i = 1, #talent_widgets do
-			local hotspot = talent_widgets[i].content and talent_widgets[i].content.hotspot
+			local widget = talent_widgets[i]
+			local hotspot = widget and widget.content and widget.content.hotspot
 
 			if hotspot and (hotspot.is_hover or hotspot.is_selected) then
 				return true
 			end
 		end
+	end
+
+	local preview_widget = slot and slot._loadout_previews_widget
+	local preview_hotspot = preview_widget and preview_widget.content and preview_widget.content.team_preview_hotspot
+
+	if preview_hotspot and (preview_hotspot.is_hover or preview_hotspot.is_selected) then
+		return true
 	end
 
 	return false
@@ -4834,14 +5382,14 @@ end
 function TeamPreview.hovered_lobby_slot(view)
 	local spawn_slots = view and view._spawn_slots
 
-	if not spawn_slots then
+	if type(spawn_slots) ~= "table" then
 		return nil
 	end
 
 	for i = 1, #spawn_slots do
 		local slot = spawn_slots[i]
 
-		if slot.occupied and TeamPreview.lobby_slot_hovered(slot) then
+		if slot and slot.occupied and TeamPreview.lobby_slot_hovered(slot) then
 			return slot
 		end
 	end
@@ -4860,7 +5408,68 @@ function TeamPreview.position_lobby_widget(widget, slot)
 	TeamPreview.set_widget_offset(widget, x, y)
 end
 
+function TeamPreview.position_lobby_hover_widgets(entries)
+	entries = type(entries) == "table" and entries or {}
+
+	if #entries <= 0 then
+		return
+	end
+
+	local margin = TEAM_PREVIEW_LAYOUT.margin
+	local gap = TEAM_PREVIEW_LAYOUT.loading_gap
+	local total_width = 0
+
+	for i = 1, #entries do
+		local entry = entries[i]
+		local width, height = TeamPreview.widget_size(entry and entry.widget)
+		local panel_x = entry and entry.slot and entry.slot.panel_widget and entry.slot.panel_widget.offset and entry.slot.panel_widget.offset[1] or TEAM_PREVIEW_LAYOUT.canvas_width * 0.5
+
+		entry.width = width
+		entry.height = height
+		entry.desired_x = panel_x - width * 0.5
+		total_width = total_width + width
+	end
+
+	gap = total_width + math.max(#entries - 1, 0) * gap > TEAM_PREVIEW_LAYOUT.canvas_width - margin * 2
+		and math.max((TEAM_PREVIEW_LAYOUT.canvas_width - margin * 2 - total_width) / math.max(#entries - 1, 1), 6)
+		or gap
+
+	table.sort(entries, function (a, b)
+		return (a.desired_x or 0) < (b.desired_x or 0)
+	end)
+
+	local x = margin
+
+	for i = 1, #entries do
+		local entry = entries[i]
+
+		entry.x = math.max(entry.desired_x or margin, x)
+		x = entry.x + (entry.width or 0) + gap
+	end
+
+	local overflow = x - gap - (TEAM_PREVIEW_LAYOUT.canvas_width - margin)
+
+	if overflow > 0 then
+		local shift = math.min(overflow, (entries[1].x or margin) - margin)
+
+		for i = 1, #entries do
+			entries[i].x = (entries[i].x or margin) - shift
+		end
+	end
+
+	for i = 1, #entries do
+		local entry = entries[i]
+		local height = entry.height or 0
+		local max_y = TEAM_PREVIEW_LAYOUT.canvas_height - height - margin
+		local y = max_y >= margin and clamp(TEAM_PREVIEW_LAYOUT.lobby_bottom_y - height, margin, max_y) or margin
+
+		TeamPreview.set_widget_offset(entry.widget, entry.x or margin, y)
+	end
+end
+
 function TeamPreview.position_lobby_widgets(widgets)
+	widgets = type(widgets) == "table" and widgets or {}
+
 	local total_width = 0
 	local max_height = 0
 	local gap = TEAM_PREVIEW_LAYOUT.loading_gap
@@ -4891,42 +5500,160 @@ end
 function TeamPreview.draw_lobby(view, ui_renderer)
 	local spawn_slots = view and view._spawn_slots
 
-	if not spawn_slots or not TeamPreview.enabled("lobby") then
+	if type(spawn_slots) ~= "table" or not TeamPreview.enabled("lobby") then
 		TeamPreview.clear_view_widgets(view)
 
 		return
+	end
+
+	local tree_toggle_enabled = Settings.show_lobby_tree_on_hover()
+	local legacy_slot_key = tree_toggle_enabled and view._loadout_previews_lobby_tree_slot_key or nil
+	local toggled_slot_keys = tree_toggle_enabled and view._loadout_previews_lobby_tree_slot_keys or nil
+	local entries = {}
+	local tree_active = false
+	local active_tree_keys = {}
+
+	if not tree_toggle_enabled then
+		view._loadout_previews_lobby_tree_slot_keys = nil
+		view._loadout_previews_lobby_tree_slot_key = nil
+	elseif legacy_slot_key and legacy_slot_key ~= "" then
+		toggled_slot_keys = TeamPreview.lobby_tree_slot_keys(view)
+		toggled_slot_keys[legacy_slot_key] = true
+		view._loadout_previews_lobby_tree_slot_key = nil
 	end
 
 	for i = 1, #spawn_slots do
 		local slot = spawn_slots[i]
 
 		if TeamPreview.should_show_lobby_slot(slot) then
-			local widget = TeamPreview.refresh_slot_widget(view, slot, "lobby", false)
+			local slot_key = TeamPreview.slot_key(slot)
+			local tree_only = type(toggled_slot_keys) == "table" and toggled_slot_keys[slot_key] == true
+			local mode = tree_only and PREVIEW_MODE.tree or PREVIEW_MODE.compact
+			local widget = TeamPreview.refresh_slot_widget(view, slot, "lobby", false, mode, tree_only)
 
 			if widget then
-				TeamPreview.position_lobby_widget(widget, slot)
-				UIWidget.draw(widget, ui_renderer)
+				local hotspot = widget.content and widget.content.team_preview_hotspot
+
+				if hotspot then
+					hotspot.is_selected = tree_only
+				end
+
+				entries[#entries + 1] = {
+					slot = slot,
+					widget = widget,
+				}
+				tree_active = tree_active or tree_only
+
+				if tree_only then
+					active_tree_keys[slot_key] = true
+				end
 			end
 		else
 			TeamPreview.destroy_slot_widget(view, slot)
 		end
 	end
+
+	if type(toggled_slot_keys) == "table" then
+		local has_tree_keys = false
+
+		for key, _ in pairs(toggled_slot_keys) do
+			if active_tree_keys[key] then
+				has_tree_keys = true
+			else
+				toggled_slot_keys[key] = nil
+			end
+		end
+
+		if not has_tree_keys then
+			view._loadout_previews_lobby_tree_slot_keys = nil
+		end
+	end
+
+	if tree_active then
+		TeamPreview.position_lobby_hover_widgets(entries)
+	else
+		for i = 1, #entries do
+			local entry = entries[i]
+
+			TeamPreview.position_lobby_widget(entry.widget, entry.slot)
+		end
+	end
+
+	for i = 1, #entries do
+		TeamPreview.draw_widget(entries[i].widget, ui_renderer, "draw lobby team preview widget")
+	end
 end
 
-function TeamPreview.position_mission_widgets(widgets)
-	local total_width = 0
-	local gap = TEAM_PREVIEW_LAYOUT.loading_gap
+function TeamPreview.lobby_tree_on_hover(slot)
+	if not Settings.show_lobby_tree_on_hover() then
+		return false
+	end
+
+	local widget = slot and slot._loadout_previews_widget
+	local hotspot = widget and widget.content and widget.content.team_preview_hotspot
+
+	return hotspot and (hotspot.is_hover or hotspot.is_selected) == true
+end
+
+function TeamPreview.fit_mission_intro_tree_gear_scale(widgets)
+	if type(widgets) ~= "table" or #widgets <= 0 then
+		return false
+	end
+
+	local width_sum = 0
 
 	for i = 1, #widgets do
 		local width = TeamPreview.widget_size(widgets[i])
 
+		width_sum = width_sum + width
+	end
+
+	if width_sum <= 0 then
+		return false
+	end
+
+	local gap = TEAM_PREVIEW_LAYOUT.loading_gap
+	local available_width = TEAM_PREVIEW_LAYOUT.canvas_width - TEAM_PREVIEW_LAYOUT.margin * 2 - math.max(#widgets - 1, 0) * gap
+	local current_scale = TeamPreview._mission_intro_tree_gear_scale or TEAM_PREVIEW_LAYOUT.loading_tree_scale
+	local fitted_scale = current_scale * available_width / width_sum
+
+	fitted_scale = clamp(fitted_scale, TEAM_PREVIEW_LAYOUT.loading_tree_gear_min_scale, TEAM_PREVIEW_LAYOUT.loading_tree_scale)
+	fitted_scale = math.floor(fitted_scale * 100 + 0.5) / 100
+
+	if math.abs(fitted_scale - current_scale) <= 0.005 then
+		return false
+	end
+
+	TeamPreview._mission_intro_tree_gear_scale = fitted_scale
+
+	return true
+end
+
+function TeamPreview.position_mission_widgets(view, widgets)
+	widgets = type(widgets) == "table" and widgets or {}
+
+	local total_width = 0
+	local max_height = 0
+	local gap = TEAM_PREVIEW_LAYOUT.loading_gap
+
+	for i = 1, #widgets do
+		local width, height = TeamPreview.widget_size(widgets[i])
+
 		total_width = total_width + width
+		max_height = math.max(max_height, height)
 	end
 
 	total_width = total_width + math.max(#widgets - 1, 0) * gap
 
-	local x = math.max((TEAM_PREVIEW_LAYOUT.canvas_width - total_width) * 0.5, TEAM_PREVIEW_LAYOUT.margin)
-	local y = TEAM_PREVIEW_LAYOUT.loading_top_y
+	local margin = TEAM_PREVIEW_LAYOUT.margin
+	local x = math.max((TEAM_PREVIEW_LAYOUT.canvas_width - total_width) * 0.5, margin)
+	local mission_brief_y = TeamPreview.mission_brief_clear_y(view)
+	local y = mission_brief_y or TEAM_PREVIEW_LAYOUT.loading_top_y
+	local max_y = TEAM_PREVIEW_LAYOUT.canvas_height - max_height - margin
+
+	if max_y >= margin then
+		y = clamp(y, margin, max_y)
+	end
 
 	for i = 1, #widgets do
 		local widget = widgets[i]
@@ -4938,31 +5665,84 @@ function TeamPreview.position_mission_widgets(widgets)
 	end
 end
 
-function TeamPreview.draw_mission_intro(view, ui_renderer)
-	local spawn_slots = view and view._spawn_slots
-
-	if not spawn_slots or not TeamPreview.enabled("mission_intro") then
-		TeamPreview.clear_view_widgets(view)
-
-		return
-	end
-
+function TeamPreview.refresh_mission_intro_widgets(view, spawn_slots, mode, tree_only)
 	local widgets = {}
 
 	for i = 1, #spawn_slots do
 		local slot = spawn_slots[i]
-		local widget = TeamPreview.refresh_slot_widget(view, slot, "mission_intro", true)
+		local widget = TeamPreview.refresh_slot_widget(view, slot, "mission_intro", true, mode, tree_only)
 
 		if widget then
 			widgets[#widgets + 1] = widget
 		end
 	end
 
-	TeamPreview.position_mission_widgets(widgets)
+	return widgets
+end
+
+function TeamPreview.draw_mission_intro(view, ui_renderer)
+	local spawn_slots = view and view._spawn_slots
+
+	if type(spawn_slots) ~= "table" or not TeamPreview.enabled("mission_intro") then
+		TeamPreview.clear_view_widgets(view)
+
+		return
+	end
+
+	local mode = Settings.valkyrie_team_preview_mode()
+	local tree_only = mode == PREVIEW_MODE.tree
+
+	if mode ~= PREVIEW_MODE.tree_gear then
+		TeamPreview._mission_intro_tree_gear_scale = nil
+	end
+
+	local widgets = TeamPreview.refresh_mission_intro_widgets(view, spawn_slots, mode, tree_only)
+
+	if mode == PREVIEW_MODE.tree_gear and TeamPreview.fit_mission_intro_tree_gear_scale(widgets) then
+		widgets = TeamPreview.refresh_mission_intro_widgets(view, spawn_slots, mode, tree_only)
+	end
+
+	TeamPreview.position_mission_widgets(view, widgets)
 
 	for i = 1, #widgets do
-		UIWidget.draw(widgets[i], ui_renderer)
+		TeamPreview.draw_widget(widgets[i], ui_renderer, "draw mission intro team preview widget")
 	end
+end
+
+function TeamPreview.render_pass(context, ui_renderer, ui_scenegraph, input_service, dt, render_settings, start_layer, render_scale, draw_callback)
+	if not ui_renderer or not ui_scenegraph or not render_settings or type(draw_callback) ~= "function" then
+		return
+	end
+
+	local alpha_multiplier = render_settings.alpha_multiplier
+	local previous_layer = render_settings.start_layer
+	local previous_scale = render_settings.scale
+	local previous_inverse_scale = render_settings.inverse_scale
+	local pass_started = false
+	local ok, error_message = pcall(function ()
+		render_settings.start_layer = start_layer or 0
+		render_settings.scale = render_scale
+		render_settings.inverse_scale = render_scale and 1 / render_scale
+
+		UIRenderer.begin_pass(ui_renderer, ui_scenegraph, input_service, dt, render_settings)
+		pass_started = true
+		draw_callback(ui_renderer)
+		UIRenderer.end_pass(ui_renderer)
+		pass_started = false
+	end)
+
+	if not ok then
+		if pass_started then
+			Settings.safe_call("end failed " .. tostring(context), UIRenderer and UIRenderer.end_pass, ui_renderer)
+		end
+
+		Settings.report_guarded_error(context, error_message)
+	end
+
+	render_settings.alpha_multiplier = alpha_multiplier
+	render_settings.start_layer = previous_layer
+	render_settings.scale = previous_scale
+	render_settings.inverse_scale = previous_inverse_scale
 end
 
 function TeamPreview.draw_mission_intro_pass(view, dt, t, input_service, layer)
@@ -4975,24 +5755,17 @@ function TeamPreview.draw_mission_intro_pass(view, dt, t, input_service, layer)
 	end
 
 	local render_scale = view._render_scale
-	local alpha_multiplier = render_settings.alpha_multiplier
 
-	render_settings.start_layer = layer or 0
-	render_settings.scale = render_scale
-	render_settings.inverse_scale = render_scale and 1 / render_scale
-
-	UIRenderer.begin_pass(ui_renderer, ui_scenegraph, input_service, dt, render_settings)
-	TeamPreview.draw_mission_intro(view, ui_renderer)
-	UIRenderer.end_pass(ui_renderer)
-
-	render_settings.alpha_multiplier = alpha_multiplier
+	TeamPreview.render_pass("draw mission intro team previews", ui_renderer, ui_scenegraph, input_service, dt, render_settings, layer or 0, render_scale, function (renderer)
+		TeamPreview.draw_mission_intro(view, renderer)
+	end)
 end
 
 function ApplicantPreview.destroy_widget(view)
 	local widget = view and view._loadout_previews_applicant_widget
 
 	if widget and view._unregister_widget_name then
-		view:_unregister_widget_name(widget.name)
+		Settings.safe_method("unregister party finder applicant preview widget", view, "_unregister_widget_name", widget.name)
 	end
 
 	if view then
@@ -5012,6 +5785,7 @@ function ApplicantPreview.profile_key(profile)
 		local mode = Settings.preview_mode()
 		local pieces = {
 			Settings.preview_key(mode),
+			"party_stimm=" .. tostring(Settings.show_party_finder_stimm_lab_preview()),
 		}
 		local loadout = profile and profile.loadout
 
@@ -5025,7 +5799,7 @@ function ApplicantPreview.profile_key(profile)
 
 		local selected_nodes = profile and profile.selected_nodes
 
-		if selected_nodes then
+		if type(selected_nodes) == "table" then
 			local names = {}
 
 			for name, _ in pairs(selected_nodes) do
@@ -5046,6 +5820,10 @@ function ApplicantPreview.profile_key(profile)
 end
 
 function ApplicantPreview.wrap_tooltip_element(element)
+	if not element or type(element.size) ~= "table" then
+		return nil
+	end
+
 	local content_width = element.size[1]
 	local content_height = element.size[2]
 	local preview_layout = element.loadout_organizer_preview_layout or {
@@ -5111,7 +5889,10 @@ function ApplicantPreview.build_element(view, profile)
 	local profile_preset = TeamPreview.profile_preset(profile)
 
 	return Settings.with_party_finder_preview_settings(function ()
-		local layout = profile_preset and build_preview_layout(view, profile_preset, Settings.preview_mode(), profile)
+		local options = {
+			show_stimm = Settings.show_party_finder_stimm_lab_preview(),
+		}
+		local layout = profile_preset and build_preview_layout(view, profile_preset, Settings.preview_mode(), profile, options)
 		local element = TeamPreview.preview_element(layout)
 
 		return element and ApplicantPreview.wrap_tooltip_element(element) or nil
@@ -5140,9 +5921,9 @@ end
 
 function ApplicantPreview.hovered_entry(view)
 	local grid = view and view._player_request_grid
-	local widgets = grid and grid.widgets and grid:widgets()
+	local _, widgets = Settings.safe_method("party finder request grid widgets", grid, "widgets")
 
-	if not widgets then
+	if type(widgets) ~= "table" then
 		return nil, nil
 	end
 
@@ -5190,12 +5971,23 @@ function ApplicantPreview.refresh_widget(view, element, cached_key)
 		return nil
 	end
 
-	local widget_definition = UIWidget.create_definition(element_preview.pass_template, TEAM_PREVIEW_LAYOUT.applicant_scenegraph_id, nil, element_preview.size)
-	local widget = view:_create_widget("loadout_previews_group_finder_applicant", widget_definition)
+	local ok_definition, widget_definition = Settings.safe_call("create party finder applicant preview definition", UIWidget and UIWidget.create_definition, element_preview.pass_template, TEAM_PREVIEW_LAYOUT.applicant_scenegraph_id, nil, element_preview.size)
+
+	if not ok_definition or not widget_definition then
+		return nil
+	end
+
+	local ok_widget, widget = Settings.safe_method("create party finder applicant preview widget", view, "_create_widget", "loadout_previews_group_finder_applicant", widget_definition)
+
+	if not ok_widget or not widget then
+		return nil
+	end
 
 	init_gear_preview_widget(view, widget, element_preview)
 
-	widget.content.team_preview_title = ""
+	if widget.content then
+		widget.content.team_preview_title = ""
+	end
 	widget._loadout_previews_size = element_preview.size
 	view._loadout_previews_applicant_widget = widget
 	view._loadout_previews_applicant_widget_key = key
@@ -5249,7 +6041,7 @@ end
 function ApplicantPreview.delay_elapsed(view, key, t)
 	local delay = Settings.with_party_finder_preview_settings(function ()
 		return Settings.preview_delay()
-	end)
+	end) or 0
 
 	if delay <= 0 then
 		return true
@@ -5304,7 +6096,7 @@ function ApplicantPreview.draw(view, ui_renderer, t)
 
 	if widget then
 		ApplicantPreview.position_widget(view, widget)
-		UIWidget.draw(widget, ui_renderer)
+		TeamPreview.draw_widget(widget, ui_renderer, "draw party finder applicant preview widget")
 	end
 end
 
@@ -5329,19 +6121,13 @@ function ApplicantPreview.draw_pass(view, dt, t, input_service, layer)
 	end
 
 	local render_scale = view._render_scale
-	local alpha_multiplier = render_settings.alpha_multiplier
 	local start_layer = render_settings.start_layer
 
-	render_settings.start_layer = (layer or 0) + TEAM_PREVIEW_LAYOUT.applicant_draw_layer
-	render_settings.scale = render_scale
-	render_settings.inverse_scale = render_scale and 1 / render_scale
-
-	UIRenderer.begin_pass(ui_renderer, ui_scenegraph, input_service, dt, render_settings)
-	ApplicantPreview.draw(view, ui_renderer, t)
-	UIRenderer.end_pass(ui_renderer)
+	TeamPreview.render_pass("draw party finder applicant preview", ui_renderer, ui_scenegraph, input_service, dt, render_settings, (layer or 0) + TEAM_PREVIEW_LAYOUT.applicant_draw_layer, render_scale, function (renderer)
+		ApplicantPreview.draw(view, renderer, t)
+	end)
 
 	render_settings.start_layer = start_layer
-	render_settings.alpha_multiplier = alpha_multiplier
 end
 
 mod:hook_require("scripts/ui/views/lobby_view/lobby_view_definitions", TeamPreview.inject_overlay_scenegraph)
@@ -5374,7 +6160,7 @@ end
 
 local function present_preview_layout(view, layout)
 	if not view then
-		return
+		return false
 	end
 
 	local has_preview_layout = layout_contains_preview(layout)
@@ -5398,10 +6184,13 @@ local function present_preview_layout(view, layout)
 	local grid = view._profile_preset_tooltip_grid
 
 	if not grid or not blueprints then
-		return
+		return false
 	end
 
-	grid:present_grid_layout(
+	local ok = Settings.safe_method(
+		"present profile preset preview grid",
+		grid,
+		"present_grid_layout",
 		layout,
 		blueprints,
 		callback(view, "cb_on_profile_preset_icon_grid_left_pressed"),
@@ -5412,20 +6201,28 @@ local function present_preview_layout(view, layout)
 		nil
 	)
 
+	if not ok then
+		apply_preview_grid_rendering(view, false)
+
+		return false
+	end
+
 	apply_preview_grid_rendering(view, has_preview_layout)
 	refresh_active_preview_geometry(view)
+
+	return true
 end
 
 local function hovered_preset_id(view)
 	local widgets = view and view._profile_buttons_widgets
 
-	if not widgets then
+	if type(widgets) ~= "table" then
 		return nil
 	end
 
 	for i = 1, #widgets do
 		local widget = widgets[i]
-		local content = widget.content
+		local content = widget and widget.content
 		local hotspot = content and content.hotspot
 
 		if hotspot and hotspot.is_hover then
@@ -5439,7 +6236,7 @@ local function current_preview_time(view, dt, t)
 		return t
 	end
 
-	local time_manager = Managers.time
+	local time_manager = Managers and Managers.time
 
 	if time_manager then
 		local ok, current_time = pcall(function ()
@@ -5521,7 +6318,7 @@ local function update_hover_preview(view, dt, t)
 
 	clear_preview_delay(view)
 
-	local profile_preset = ProfileUtils.get_profile_preset(preset_id)
+	local _, profile_preset = Settings.safe_call("get hovered profile preset", ProfileUtils and ProfileUtils.get_profile_preset, preset_id)
 
 	if not profile_preset then
 		hide_preview(view, true)
@@ -5529,9 +6326,9 @@ local function update_hover_preview(view, dt, t)
 		return
 	end
 
-	local layout = build_preview_layout(view, profile_preset, mode)
+	local _, layout = Settings.safe_call("build self profile preset preview", build_preview_layout, view, profile_preset, mode)
 
-	if #layout == 0 then
+	if type(layout) ~= "table" or #layout == 0 then
 		hide_preview(view, true)
 
 		return
@@ -5542,13 +6339,18 @@ local function update_hover_preview(view, dt, t)
 	view._loadout_organizer_preview_mode = mode
 	view._loadout_organizer_preview_key = key
 
-	present_preview_layout(view, layout)
-	view:_set_tooltip_visibility(true, false)
+	if not present_preview_layout(view, layout) then
+		hide_preview(view, true)
+
+		return
+	end
+
+	Settings.safe_method("show profile preset tooltip", view, "_set_tooltip_visibility", true, false)
 end
 
 function mod.move_active_preset(view, direction)
 	local index = view and view._active_customize_preset_index
-	local presets = ProfileUtils.get_profile_presets()
+	local _, presets = Settings.safe_call("get profile presets for moving", ProfileUtils and ProfileUtils.get_profile_presets)
 	local new_index = index and index + direction
 
 	if not presets or not index or not new_index or not presets[index] or new_index < 1 or new_index > #presets then
@@ -5557,11 +6359,11 @@ function mod.move_active_preset(view, direction)
 
 	presets[index], presets[new_index] = presets[new_index], presets[index]
 
-	Managers.save:queue_save()
+	Settings.safe_method("save moved profile preset order", Managers and Managers.save, "queue_save")
 
 	view._active_customize_preset_index = nil
-	view:_setup_preset_buttons()
-	view:on_profile_preset_index_customize(new_index)
+	Settings.safe_method("rebuild profile preset buttons after move", view, "_setup_preset_buttons")
+	Settings.safe_method("reopen moved profile preset customize menu", view, "on_profile_preset_index_customize", new_index)
 	set_reorder_button_states(view)
 end
 
@@ -5643,7 +6445,7 @@ mod:hook("ViewElementProfilePresets", "cb_on_profile_preset_icon_grid_layout_cha
 	end
 
 	local grid = self._profile_preset_tooltip_grid
-	local menu_settings = grid and grid:menu_settings()
+	local _, menu_settings = Settings.safe_method("layout changed tooltip menu settings", grid, "menu_settings")
 
 	if not menu_settings then
 		return
@@ -5656,9 +6458,9 @@ mod:hook("ViewElementProfilePresets", "cb_on_profile_preset_icon_grid_layout_cha
 	menu_settings.grid_size[2] = grid_height
 	menu_settings.mask_size[2] = grid_height
 
-	self:_set_scenegraph_size("profile_preset_tooltip_grid", nil, grid_height)
-	self:_set_scenegraph_size("profile_preset_tooltip", nil, tooltip_height)
-	self:_update_profile_preset_tooltip_grid_position()
+	Settings.safe_method("layout changed tooltip grid size", self, "_set_scenegraph_size", "profile_preset_tooltip_grid", nil, grid_height)
+	Settings.safe_method("layout changed tooltip size", self, "_set_scenegraph_size", "profile_preset_tooltip", nil, tooltip_height)
+	Settings.safe_method("layout changed tooltip grid position", self, "_update_profile_preset_tooltip_grid_position")
 	refresh_active_preview_geometry(self)
 end)
 

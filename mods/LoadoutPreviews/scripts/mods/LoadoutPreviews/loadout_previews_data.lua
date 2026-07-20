@@ -50,6 +50,32 @@ local function preview_mode_dropdown(setting_id, tooltip)
 	}
 end
 
+local function valkyrie_preview_mode_dropdown()
+	return {
+		setting_id = "valkyrie_team_preview_mode",
+		type = "dropdown",
+		default_value = "compact",
+		tooltip = "valkyrie_team_preview_mode_tooltip",
+		options = {
+			{
+				text = "valkyrie_team_preview_mode_compact",
+				tooltip = "valkyrie_team_preview_mode_compact_tooltip",
+				value = "compact",
+			},
+			{
+				text = "valkyrie_team_preview_mode_tree",
+				tooltip = "valkyrie_team_preview_mode_tree_tooltip",
+				value = "tree",
+			},
+			{
+				text = "valkyrie_team_preview_mode_tree_gear",
+				tooltip = "valkyrie_team_preview_mode_tree_gear_tooltip",
+				value = "tree_gear",
+			},
+		},
+	}
+end
+
 local function preview_delay_slider(setting_id, tooltip)
 	return {
 		setting_id = setting_id,
@@ -183,6 +209,8 @@ return {
 				sub_widgets = {
 					checkbox("show_lobby_team_previews", true, "show_lobby_team_previews_tooltip"),
 					checkbox("show_own_lobby_team_preview", false, "show_own_lobby_team_preview_tooltip"),
+					checkbox("show_lobby_tree_on_hover", false, "show_lobby_tree_on_hover_tooltip"),
+					valkyrie_preview_mode_dropdown(),
 					checkbox("show_team_stimm_lab_preview", true, "show_team_stimm_lab_preview_tooltip"),
 					weapon_settings_group("team_weapon_settings", "team_weapon_settings_tooltip", team_weapon_ids, true),
 					curio_settings_group("team_curio_settings", "team_curio_settings_tooltip", team_curio_ids),

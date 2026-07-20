@@ -146,6 +146,46 @@ local localization = {
 		en = "Include your own loadout preview with teammate previews in the mission lobby.",
 		["zh-cn"] = "在任务大厅的队友预览中同时显示自己的配置预览。",
 	},
+	show_lobby_tree_on_hover = {
+		en = "Lobby Tree Toggle",
+		["zh-cn"] = "大厅悬停显示天赋树",
+	},
+	show_lobby_tree_on_hover_tooltip = {
+		en = "In the mission lobby, click a team preview to switch that preview between compact loadout details and the full talent tree.",
+		["zh-cn"] = "在任务大厅中，悬停队伍预览时仅显示完整天赋树。",
+	},
+	valkyrie_team_preview_mode = {
+		en = "Valkyrie Preview Mode",
+		["zh-cn"] = "女武神预览模式",
+	},
+	valkyrie_team_preview_mode_tooltip = {
+		en = "Choose how team previews are shown on the Valkyrie loading screen.",
+		["zh-cn"] = "选择女武神载入界面中的队伍预览显示方式。",
+	},
+	valkyrie_team_preview_mode_compact = {
+		en = "Compact",
+		["zh-cn"] = "紧凑",
+	},
+	valkyrie_team_preview_mode_compact_tooltip = {
+		en = "Show compact talents with the enabled team weapons and curios.",
+		["zh-cn"] = "显示紧凑天赋以及已启用的队伍武器和饰品。",
+	},
+	valkyrie_team_preview_mode_tree = {
+		en = "Tree",
+		["zh-cn"] = "树形",
+	},
+	valkyrie_team_preview_mode_tree_tooltip = {
+		en = "Show only the full talent tree for each player.",
+		["zh-cn"] = "仅显示每位玩家的完整天赋树。",
+	},
+	valkyrie_team_preview_mode_tree_gear = {
+		en = "Tree + Loadout",
+		["zh-cn"] = "Tree + Loadout",
+	},
+	valkyrie_team_preview_mode_tree_gear_tooltip = {
+		en = "Show the full talent tree beside enabled team weapons and curios.",
+		["zh-cn"] = "Show the full talent tree beside enabled team weapons and curios.",
+	},
 	show_mission_intro_team_previews = {
 		en = "Valkyrie Teammate Previews",
 		["zh-cn"] = "女武神队友预览",
