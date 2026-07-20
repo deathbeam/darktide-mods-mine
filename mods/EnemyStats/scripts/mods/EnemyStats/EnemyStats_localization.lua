@@ -70,11 +70,13 @@ return {
         ['zh-cn'] = '硬直',
     },
 
-    -- View
+    -- Window
     search_placeholder = {
         en = 'Search enemies...',
         ['zh-cn'] = '搜索敌人...',
     },
+
+    -- Enemy categories
     kind_regular = {
         en = 'Infantry',
         ['zh-cn'] = '普通步兵',
