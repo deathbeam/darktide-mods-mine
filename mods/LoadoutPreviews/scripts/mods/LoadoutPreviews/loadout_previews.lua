@@ -1,5 +1,6 @@
 local mod = get_mod("LoadoutPreviews")
 local lobby_team_previews_keybind_hidden = false
+local mission_intro_team_previews_keybind_hidden = false
 
 mod.lobby_team_preview_keybind_pressed = function (is_pressed)
 	if is_pressed ~= false then
@@ -7,9 +8,17 @@ mod.lobby_team_preview_keybind_pressed = function (is_pressed)
 	end
 end
 
+mod.mission_intro_team_preview_keybind_pressed = function (is_pressed)
+	if is_pressed ~= false then
+		mission_intro_team_previews_keybind_hidden = not mission_intro_team_previews_keybind_hidden
+	end
+end
+
 mod.on_setting_changed = function (setting_id)
 	if setting_id == "show_lobby_team_previews" then
 		lobby_team_previews_keybind_hidden = false
+	elseif setting_id == "show_mission_intro_team_previews" then
+		mission_intro_team_previews_keybind_hidden = false
 	end
 end
 
@@ -33,6 +42,9 @@ local Game = {
 	WeaponTemplate = require("scripts/utilities/weapon/weapon_template"),
 	WeaponTweakTemplateSettings = require("scripts/settings/equipment/weapon_templates/weapon_tweak_template_settings"),
 }
+
+local valid_material_path
+local safe_material_path
 
 local PREVIEW_MODE = {
 	disabled = "disabled",
@@ -75,6 +87,7 @@ local BETTER_LOADOUTS_LAYOUT = {
 	screen_margin_bottom = 24,
 }
 local PREVIEW_LAYOUTS = {
+	fallback_texture = "content/ui/materials/base/ui_default_base",
 	default = {
 		map_width = 420,
 		map_height = 752,
@@ -188,6 +201,7 @@ local TEAM_PREVIEW_LAYOUT = {
 	scenegraph_id = "loadout_previews_overlay",
 }
 local WEAPON_LAYOUT = {
+	fallback_icon = "content/ui/materials/icons/weapons/hud/combat_blade_01",
 	row_height = 58,
 	row_height_text = 76,
 	row_height_details = 104,
@@ -433,6 +447,17 @@ local PREVIEW_SETTING_SCOPES = {
 		weapon_perks = "show_team_weapon_perks_preview",
 		curios = "show_team_curio_preview",
 		curio_perks = "show_team_curio_perks_preview",
+	},
+	valkyrie = {
+		stimm = "show_valkyrie_stimm_lab_preview",
+		weapons = "show_valkyrie_weapon_preview",
+		weapon_icons = "show_valkyrie_weapon_icons_preview",
+		weapon_text = "valkyrie_weapon_preview_text_mode",
+		weapon_blessings = "show_valkyrie_weapon_blessings_preview",
+		weapon_blessing_descriptions = "show_valkyrie_weapon_blessing_descriptions_preview",
+		weapon_perks = "show_valkyrie_weapon_perks_preview",
+		curios = "show_valkyrie_curio_preview",
+		curio_perks = "show_valkyrie_curio_perks_preview",
 	},
 	party_finder = {
 		enabled = "show_group_finder_applicant_previews",
@@ -716,12 +741,16 @@ function Settings.with_party_finder_preview_settings(callback)
 	return Settings.with_preview_settings("party_finder", callback)
 end
 
+function Settings.with_valkyrie_preview_settings(callback)
+	return Settings.with_preview_settings("valkyrie", callback)
+end
+
 function Settings.show_lobby_team_previews()
 	return not Settings.value_is_false(Settings.get("show_lobby_team_previews"))
 end
 
 function Settings.show_mission_intro_team_previews()
-	return Settings.show_lobby_team_previews()
+	return not Settings.value_is_false(Settings.get("show_mission_intro_team_previews"))
 end
 
 function Settings.show_group_finder_applicant_previews()
@@ -782,6 +811,16 @@ function Settings.show_team_stimm_lab_preview()
 
 	if value == nil then
 		value = Settings.get("show_stimm_lab_preview")
+	end
+
+	return not Settings.value_is_false(value)
+end
+
+function Settings.show_valkyrie_stimm_lab_preview()
+	local value = Settings.get("show_valkyrie_stimm_lab_preview")
+
+	if value == nil then
+		value = Settings.get("show_team_stimm_lab_preview")
 	end
 
 	return not Settings.value_is_false(value)
@@ -1470,6 +1509,18 @@ local function estimated_wrapped_line_count(text, width, average_char_width)
 	return count
 end
 
+function valid_material_path(value)
+	return type(value) == "string" and string.sub(value, 1, 8) == "content/"
+end
+
+function safe_material_path(value, fallback)
+	if valid_material_path(value) then
+		return value
+	end
+
+	return fallback or PREVIEW_LAYOUTS.fallback_texture
+end
+
 local function init_gear_preview_widget(parent, widget, element)
 	local content = widget and widget.content
 
@@ -1506,7 +1557,7 @@ local function init_gear_preview_widget(parent, widget, element)
 			local perks = weapon.perks
 
 			content["weapon_text_" .. i] = weapon.text or ""
-			content["weapon_icon_" .. i] = weapon.icon
+			content["weapon_icon_" .. i] = safe_material_path(weapon.icon, WEAPON_LAYOUT.fallback_icon)
 
 			if preview_detail_line_count(perks) > 0 then
 				content["weapon_perk_text_" .. i] = format_preview_detail_text(perks)
@@ -1881,15 +1932,19 @@ local function safe_item_display_name(item)
 end
 
 local function weapon_preview_icon(item)
-	local ok, icon = pcall(function ()
-		return item and item.hud_icon
-	end)
-
-	if not ok or type(icon) ~= "string" or string.sub(icon, 1, 8) ~= "content/" then
+	if not item then
 		return nil
 	end
 
-	return icon
+	local ok, icon = pcall(function ()
+		return item.hud_icon
+	end)
+
+	if not ok then
+		return WEAPON_LAYOUT.fallback_icon
+	end
+
+	return safe_material_path(icon, WEAPON_LAYOUT.fallback_icon)
 end
 
 local function modifier_item(modifier)
@@ -2903,8 +2958,26 @@ local function is_stat_node(node_type, icon)
 	return node_type == "stat" or node_type == "iconic" or icon == "content/ui/textures/frames/talents/circular_small_frame" or icon == "content/ui/materials/frames/talents/circular_small_bg"
 end
 
-local function valid_material_path(value)
-	return type(value) == "string" and string.sub(value, 1, 8) == "content/"
+local function sanitize_widget_texture_content(widget)
+	local content = widget and widget.content
+	local passes = widget and widget.passes
+
+	if type(content) ~= "table" or type(passes) ~= "table" then
+		return
+	end
+
+	for i = 1, #passes do
+		local pass = passes[i]
+		local pass_type = pass and pass.pass_type
+
+		if pass_type == "texture" or pass_type == "rotated_texture" then
+			local value_id = pass.value_id
+
+			if value_id and not valid_material_path(content[value_id]) then
+				content[value_id] = string.sub(value_id, 1, 12) == "weapon_icon_" and WEAPON_LAYOUT.fallback_icon or PREVIEW_LAYOUTS.fallback_texture
+			end
+		end
+	end
 end
 
 local function source_node_size(node_type)
@@ -3621,7 +3694,7 @@ local function weapon_row_layout(weapon, text_mode, panel_width, weapon_icons_vi
 	local detail_count = blessing_count + perk_count
 	local show_icon = false
 
-	if weapon_icons_visible ~= false and weapon and weapon.icon ~= nil then
+	if weapon_icons_visible ~= false and weapon and valid_material_path(weapon.icon) then
 		show_icon = true
 	end
 
@@ -3908,6 +3981,7 @@ local function add_weapon_row_passes(pass_template, weapon_index, weapon, x, y, 
 	local blessing_y = detail_y + (perk_count > 0 and perk_height + layout.detail_group_gap or 0)
 	local icon_value_id = "weapon_icon_" .. weapon_index
 	local name_y = show_icon and icon_y + WEAPON_LAYOUT.icon_height + WEAPON_LAYOUT.icon_name_gap or header_y
+	local icon = show_icon and safe_material_path(weapon.icon, WEAPON_LAYOUT.fallback_icon) or nil
 
 	pass_template[#pass_template + 1] = {
 		pass_type = "rect",
@@ -3931,7 +4005,7 @@ local function add_weapon_row_passes(pass_template, weapon_index, weapon, x, y, 
 		pass_template[#pass_template + 1] = {
 			pass_type = "texture",
 			style_id = icon_value_id,
-			value = weapon.icon,
+			value = icon,
 			value_id = icon_value_id,
 			style = {
 				horizontal_alignment = "left",
@@ -4611,7 +4685,7 @@ function TeamPreview.enabled(context)
 	if context == "lobby" then
 		return Settings.show_lobby_team_previews() and not lobby_team_previews_keybind_hidden
 	elseif context == "mission_intro" then
-		return Settings.show_mission_intro_team_previews()
+		return Settings.show_mission_intro_team_previews() and not mission_intro_team_previews_keybind_hidden
 	elseif context == "applicant" then
 		return Settings.show_group_finder_applicant_previews()
 	end
@@ -4770,13 +4844,24 @@ function TeamPreview.profile_key(player, profile, title)
 	return TeamPreview.profile_key_for_mode(player, profile, title, PREVIEW_MODE.compact, false)
 end
 
-function TeamPreview.profile_key_for_mode(player, profile, title, mode, tree_only)
-	local settings_key = Settings.with_team_preview_settings(function ()
+function TeamPreview.setting_scope(context)
+	return context == "mission_intro" and "valkyrie" or "team"
+end
+
+function TeamPreview.with_context_settings(context, callback)
+	return Settings.with_preview_settings(TeamPreview.setting_scope(context), callback)
+end
+
+function TeamPreview.profile_key_for_mode(player, profile, title, mode, tree_only, context)
+	local settings_key = TeamPreview.with_context_settings(context, function ()
 		return Settings.preview_key(mode or PREVIEW_MODE.compact)
 	end) or ""
+	local stimm_visible = TeamPreview.with_context_settings(context, function ()
+		return Settings.show_stimm_lab_preview()
+	end)
 	local pieces = {
 		tostring(settings_key),
-		"team_stimm=" .. tostring(Settings.show_team_stimm_lab_preview()),
+		"stimm=" .. tostring(stimm_visible),
 		tree_only and "tree_only" or "standard",
 		tostring(title or ""),
 	}
@@ -5145,10 +5230,9 @@ end
 function TeamPreview.build_element(view, player, profile, include_title, context, mode, tree_only)
 	local profile_preset = TeamPreview.profile_preset(profile)
 	local preview_mode = mode or PREVIEW_MODE.compact
-	local team_stimm_visible = Settings.show_team_stimm_lab_preview()
-	local layout = profile_preset and Settings.with_team_preview_settings(function ()
+	local layout = profile_preset and TeamPreview.with_context_settings(context, function ()
 		local options = {
-			show_stimm = tree_only ~= true and team_stimm_visible,
+			show_stimm = tree_only ~= true and Settings.show_stimm_lab_preview(),
 		}
 
 		if tree_only then
@@ -5171,8 +5255,28 @@ function TeamPreview.build_element(view, player, profile, include_title, context
 	return wrapped and TeamPreview.scale_element(wrapped, TeamPreview.context_scale(context, preview_mode, tree_only)) or nil
 end
 
+function TeamPreview.destroy_widget_resources(view, widget, context, optional_renderer)
+	if not widget or widget._loadout_previews_destroyed then
+		return
+	end
+
+	widget._loadout_previews_destroyed = true
+
+	local ui_renderer = optional_renderer or widget._loadout_previews_ui_renderer or view and view._ui_renderer
+
+	if ui_renderer then
+		Settings.safe_call(context or "destroy loadout preview widget resources", UIWidget and UIWidget.destroy, ui_renderer, widget)
+	end
+
+	widget._loadout_previews_ui_renderer = nil
+end
+
 function TeamPreview.destroy_slot_widget(view, slot)
 	local widget = slot and slot._loadout_previews_widget
+
+	if widget then
+		TeamPreview.destroy_widget_resources(view, widget, "destroy team preview widget resources")
+	end
 
 	if widget and view and view._unregister_widget_name then
 		Settings.safe_method("unregister team preview widget", view, "_unregister_widget_name", widget.name)
@@ -5250,7 +5354,7 @@ function TeamPreview.refresh_slot_widget(view, slot, context, include_title, mod
 
 	local profile = TeamPreview.player_profile(player)
 	local title = include_title and TeamPreview.profile_title(player, profile) or nil
-	local key = profile and TeamPreview.profile_key_for_mode(player, profile, title, mode or PREVIEW_MODE.compact, tree_only == true)
+	local key = profile and TeamPreview.profile_key_for_mode(player, profile, title, mode or PREVIEW_MODE.compact, tree_only == true, context)
 
 	if not key then
 		TeamPreview.destroy_slot_widget(view, slot)
@@ -5331,6 +5435,10 @@ function TeamPreview.draw_widget(widget, ui_renderer, context)
 	if not widget or not ui_renderer then
 		return false
 	end
+
+	sanitize_widget_texture_content(widget)
+
+	widget._loadout_previews_ui_renderer = ui_renderer
 
 	local ok = Settings.safe_call(context or "draw loadout preview widget", UIWidget and UIWidget.draw, widget, ui_renderer)
 
@@ -5776,6 +5884,10 @@ end
 
 function ApplicantPreview.destroy_widget(view)
 	local widget = view and view._loadout_previews_applicant_widget
+
+	if widget then
+		TeamPreview.destroy_widget_resources(view, widget, "destroy party finder applicant preview widget resources")
+	end
 
 	if widget and view._unregister_widget_name then
 		Settings.safe_method("unregister party finder applicant preview widget", view, "_unregister_widget_name", widget.name)
@@ -6512,8 +6624,14 @@ mod:hook_safe("LobbyView", "_draw_widgets", function (self, dt, t, input_service
 	TeamPreview.draw_lobby(self, ui_renderer)
 end)
 
-mod:hook_safe("GroupFinderView", "on_exit", function (self)
+mod:hook_safe("LobbyView", "on_enter", function (self)
+	lobby_team_previews_keybind_hidden = false
+end)
+
+mod:hook("GroupFinderView", "on_exit", function (func, self, ...)
 	ApplicantPreview.destroy_widget(self)
+
+	return func(self, ...)
 end)
 
 mod:hook_safe("LobbyView", "_reset_spawn_slot", function (self, slot)
@@ -6524,6 +6642,17 @@ mod:hook("LobbyView", "_destroy_spawn_slots", function (func, self, ...)
 	TeamPreview.clear_view_widgets(self)
 
 	return func(self, ...)
+end)
+
+mod:hook("MissionIntroView", "on_exit", function (func, self, ...)
+	TeamPreview.clear_view_widgets(self)
+	TeamPreview._mission_intro_tree_gear_scale = nil
+
+	return func(self, ...)
+end)
+
+mod:hook_safe("MissionIntroView", "on_enter", function (self)
+	mission_intro_team_previews_keybind_hidden = false
 end)
 
 mod:hook("MissionIntroView", "draw", function (func, self, dt, t, input_service, layer, ...)

@@ -173,6 +173,28 @@ local team_curio_ids = {
 	perks_tooltip = "show_team_curio_perks_preview_tooltip",
 }
 
+local valkyrie_weapon_ids = {
+	show = "show_valkyrie_weapon_preview",
+	show_tooltip = "show_valkyrie_weapon_preview_tooltip",
+	icons = "show_valkyrie_weapon_icons_preview",
+	icons_tooltip = "show_valkyrie_weapon_icons_preview_tooltip",
+	text_mode = "valkyrie_weapon_preview_text_mode",
+	text_mode_tooltip = "valkyrie_weapon_preview_text_mode_tooltip",
+	blessings = "show_valkyrie_weapon_blessings_preview",
+	blessings_tooltip = "show_valkyrie_weapon_blessings_preview_tooltip",
+	blessing_descriptions = "show_valkyrie_weapon_blessing_descriptions_preview",
+	blessing_descriptions_tooltip = "show_valkyrie_weapon_blessing_descriptions_preview_tooltip",
+	perks = "show_valkyrie_weapon_perks_preview",
+	perks_tooltip = "show_valkyrie_weapon_perks_preview_tooltip",
+}
+
+local valkyrie_curio_ids = {
+	show = "show_valkyrie_curio_preview",
+	show_tooltip = "show_valkyrie_curio_preview_tooltip",
+	perks = "show_valkyrie_curio_perks_preview",
+	perks_tooltip = "show_valkyrie_curio_perks_preview_tooltip",
+}
+
 local party_finder_weapon_ids = {
 	show = "show_party_finder_weapon_preview",
 	show_tooltip = "show_party_finder_weapon_preview_tooltip",
@@ -224,10 +246,22 @@ return {
 					keybind("lobby_team_preview_keybind", "lobby_team_preview_keybind_tooltip", "lobby_team_preview_keybind_pressed"),
 					checkbox("show_own_lobby_team_preview", false, "show_own_lobby_team_preview_tooltip"),
 					checkbox("show_lobby_tree_on_hover", false, "show_lobby_tree_on_hover_tooltip"),
-					valkyrie_preview_mode_dropdown(),
 					checkbox("show_team_stimm_lab_preview", true, "show_team_stimm_lab_preview_tooltip"),
 					weapon_settings_group("team_weapon_settings", "team_weapon_settings_tooltip", team_weapon_ids, true),
 					curio_settings_group("team_curio_settings", "team_curio_settings_tooltip", team_curio_ids),
+				},
+			},
+			{
+				setting_id = "valkyrie_settings",
+				type = "group",
+				tooltip = "valkyrie_settings_tooltip",
+				sub_widgets = {
+					checkbox("show_mission_intro_team_previews", true, "show_mission_intro_team_previews_tooltip"),
+					keybind("mission_intro_team_preview_keybind", "mission_intro_team_preview_keybind_tooltip", "mission_intro_team_preview_keybind_pressed"),
+					valkyrie_preview_mode_dropdown(),
+					checkbox("show_valkyrie_stimm_lab_preview", true, "show_valkyrie_stimm_lab_preview_tooltip"),
+					weapon_settings_group("valkyrie_weapon_settings", "valkyrie_weapon_settings_tooltip", valkyrie_weapon_ids, true),
+					curio_settings_group("valkyrie_curio_settings", "valkyrie_curio_settings_tooltip", valkyrie_curio_ids),
 				},
 			},
 			{

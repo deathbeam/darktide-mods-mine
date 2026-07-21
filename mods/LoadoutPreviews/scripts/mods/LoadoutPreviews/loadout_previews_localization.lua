@@ -95,7 +95,7 @@ local localization = {
 		["zh-cn"] = "大厅队友预览",
 	},
 	show_lobby_team_previews_tooltip = {
-		en = "Show teammate loadout previews in the mission lobby and Valkyrie loading screen.",
+		en = "Show teammate loadout previews in the mission lobby.",
 		["zh-cn"] = "在任务大厅中悬停人类玩家时显示紧凑配置预览。",
 	},
 	lobby_team_preview_mode = {
@@ -138,6 +138,12 @@ local localization = {
 		en = "Press to show or hide team loadout previews while in the mission lobby.",
 		["zh-cn"] = "用于按住和切换大厅预览模式的按键。",
 	},
+	mission_intro_team_preview_keybind = {
+		en = "Valkyrie Preview Keybind",
+	},
+	mission_intro_team_preview_keybind_tooltip = {
+		en = "Press to show or hide team loadout previews while on the Valkyrie loading screen.",
+	},
 	show_own_lobby_team_preview = {
 		en = "Show Your Lobby Preview",
 		["zh-cn"] = "显示自己的大厅预览",
@@ -167,7 +173,7 @@ local localization = {
 		["zh-cn"] = "紧凑",
 	},
 	valkyrie_team_preview_mode_compact_tooltip = {
-		en = "Show compact talents with the enabled team weapons and curios.",
+		en = "Show compact talents with the enabled Valkyrie weapon and curio details.",
 		["zh-cn"] = "显示紧凑天赋以及已启用的队伍武器和饰品。",
 	},
 	valkyrie_team_preview_mode_tree = {
@@ -183,7 +189,7 @@ local localization = {
 		["zh-cn"] = "Tree + Loadout",
 	},
 	valkyrie_team_preview_mode_tree_gear_tooltip = {
-		en = "Show the full talent tree beside enabled team weapons and curios.",
+		en = "Show the full talent tree beside enabled Valkyrie weapon and curio details.",
 		["zh-cn"] = "Show the full talent tree beside enabled team weapons and curios.",
 	},
 	show_mission_intro_team_previews = {
@@ -191,8 +197,80 @@ local localization = {
 		["zh-cn"] = "女武神队友预览",
 	},
 	show_mission_intro_team_previews_tooltip = {
-		en = "Show compact loadout previews for human players during the Valkyrie mission intro. Bots are skipped.",
+		en = "Show loadout previews for human players during the Valkyrie loading screen. Bots are skipped.",
 		["zh-cn"] = "在女武神任务简报画面显示人类玩家的紧凑配置预览。机器人会被跳过。",
+	},
+	valkyrie_settings = {
+		en = "Valkyrie",
+	},
+	valkyrie_settings_tooltip = {
+		en = "Options for team loadout previews on the Valkyrie loading screen.",
+	},
+	show_valkyrie_stimm_lab_preview = {
+		en = "Show Stimm Lab",
+	},
+	show_valkyrie_stimm_lab_preview_tooltip = {
+		en = "Include Hive Scum stimm lab selections in Valkyrie loading screen previews.",
+	},
+	valkyrie_weapon_settings = {
+		en = "Weapons",
+	},
+	valkyrie_weapon_settings_tooltip = {
+		en = "Weapon options for Valkyrie loading screen previews.",
+	},
+	show_valkyrie_weapon_preview = {
+		en = "Show Weapons",
+	},
+	show_valkyrie_weapon_preview_tooltip = {
+		en = "Show equipped melee and ranged weapons in Valkyrie loading screen previews.",
+	},
+	show_valkyrie_weapon_icons_preview = {
+		en = "Weapon Icons",
+	},
+	show_valkyrie_weapon_icons_preview_tooltip = {
+		en = "Show weapon icons in Valkyrie loading screen previews.",
+	},
+	valkyrie_weapon_preview_text_mode = {
+		en = "Weapon Names",
+	},
+	valkyrie_weapon_preview_text_mode_tooltip = {
+		en = "Show weapon names in Valkyrie loading screen previews, even when weapon details are hidden.",
+	},
+	show_valkyrie_weapon_blessings_preview = {
+		en = "Weapon Blessings",
+	},
+	show_valkyrie_weapon_blessings_preview_tooltip = {
+		en = "Show weapon blessing names in Valkyrie loading screen previews.",
+	},
+	show_valkyrie_weapon_blessing_descriptions_preview = {
+		en = "Blessing Descriptions",
+	},
+	show_valkyrie_weapon_blessing_descriptions_preview_tooltip = {
+		en = "Append short blessing descriptions in Valkyrie loading screen previews.",
+	},
+	show_valkyrie_weapon_perks_preview = {
+		en = "Weapon Perks",
+	},
+	show_valkyrie_weapon_perks_preview_tooltip = {
+		en = "Show weapon perk lines in Valkyrie loading screen previews.",
+	},
+	valkyrie_curio_settings = {
+		en = "Curios",
+	},
+	valkyrie_curio_settings_tooltip = {
+		en = "Curio options for Valkyrie loading screen previews.",
+	},
+	show_valkyrie_curio_preview = {
+		en = "Show Curios",
+	},
+	show_valkyrie_curio_preview_tooltip = {
+		en = "Show curio main stats in Valkyrie loading screen previews.",
+	},
+	show_valkyrie_curio_perks_preview = {
+		en = "Curio Perks",
+	},
+	show_valkyrie_curio_perks_preview_tooltip = {
+		en = "Show curio perk lines in Valkyrie loading screen previews.",
 	},
 	show_group_finder_applicant_previews = {
 		en = "Enable Party Finder Previews",
@@ -267,7 +345,7 @@ local localization = {
 		["zh-cn"] = "队伍",
 	},
 	team_settings_tooltip = {
-		en = "Options for team loadout previews in the lobby and Valkyrie loading screen.",
+		en = "Options for team loadout previews in the mission lobby.",
 		["zh-cn"] = "任务大厅和女武神载入画面中的队友配置预览选项。",
 	},
 	team_weapon_settings = {
