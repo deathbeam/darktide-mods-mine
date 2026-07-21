@@ -6,11 +6,12 @@ master_item_community_patch
 visual_loadout_customization_community_patch
 MoreGraphicsOptions
 LocalizationExport
+IconBrowser
 
 -- Gameplay
-SimpleAbilities
-AutoMark
 Skitarius
+AutoMark
+SimpleAbilities
 SimpleMovement
 guarantee_weapon_swap
 guarantee_special_action
@@ -21,8 +22,8 @@ controlled_chaos
 ImprovedMeatGrinder
 show_crit_chance
 CombatStats
-WeaponStats
 EnemyStats
+WeaponStats
 
 -- EWC
 extended_weapon_customization
@@ -35,16 +36,18 @@ Enhanced_descriptions
 modular_menu_buttons
 true_level
 DumpStatFinder
-ItemSorting
 LoadoutPreviews
 
 -- In Game HUD
-crosshair_hud
-enemies_improved
-markers_aio
-stamina_dodge_bars
-DynamicCrosshair
 machine_gods_beacon
-danger_zone
 DisableScreenEffects
 vfx_swapper
+DynamicCrosshair
+markers_aio
+stamina_dodge_bars
+RecolorBossHealthBars
+RemoveTagSkulls
+
+crosshair_hud
+enemies_improved
+danger_zone
