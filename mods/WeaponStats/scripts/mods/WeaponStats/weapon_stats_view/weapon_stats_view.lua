@@ -7,8 +7,6 @@ local Builder = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats
 local SharedUtils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/shared/shared_utils')
 local Utils = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_utils')
 local make_view = mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/shared/shared_view_base')
-local make_list_blueprints =
-    mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/weapon_stats_view_blueprints')
 local make_detail_blueprints =
     mod:io_dofile('WeaponStats/scripts/mods/WeaponStats/weapon_stats_view/weapon_stats_detail_blueprints')
 
@@ -164,21 +162,14 @@ function WeaponStatsView:_present_detail(entry)
 
     local layout = {}
     if entry then
-        local header_icon = entry.icon
         layout[#layout + 1] = {
-            widget_type = header_icon and 'header_icon' or 'header',
+            widget_type = 'header_icon',
             text = entry.name,
             color = Color.terminal_text_header(255, true),
-            icon = header_icon,
-            subtext = header_icon and entry.subtext or nil,
+            icon = entry.icon,
+            subtext = entry.subtext,
+            subtext_color = entry.subtext_color,
         }
-        if entry.subtext and not header_icon then
-            layout[#layout + 1] = {
-                widget_type = 'subtext',
-                text = entry.subtext,
-                color = entry.subtext_color,
-            }
-        end
         layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
 
         local weapon = entry.weapon

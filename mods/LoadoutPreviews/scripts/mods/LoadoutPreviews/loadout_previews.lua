@@ -1,4 +1,17 @@
 local mod = get_mod("LoadoutPreviews")
+local lobby_team_previews_keybind_hidden = false
+
+mod.lobby_team_preview_keybind_pressed = function (is_pressed)
+	if is_pressed ~= false then
+		lobby_team_previews_keybind_hidden = not lobby_team_previews_keybind_hidden
+	end
+end
+
+mod.on_setting_changed = function (setting_id)
+	if setting_id == "show_lobby_team_previews" then
+		lobby_team_previews_keybind_hidden = false
+	end
+end
 
 local ButtonPassTemplates = require("scripts/ui/pass_templates/button_pass_templates")
 local ColorUtilities = require("scripts/utilities/ui/colors")
@@ -4596,7 +4609,7 @@ end
 
 function TeamPreview.enabled(context)
 	if context == "lobby" then
-		return Settings.show_lobby_team_previews()
+		return Settings.show_lobby_team_previews() and not lobby_team_previews_keybind_hidden
 	elseif context == "mission_intro" then
 		return Settings.show_mission_intro_team_previews()
 	elseif context == "applicant" then

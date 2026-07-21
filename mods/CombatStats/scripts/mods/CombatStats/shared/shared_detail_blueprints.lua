@@ -218,9 +218,25 @@ local function make_blueprints(width)
         },
     }
 
-    blueprints.header = {
-        size = { width, 42 },
+    blueprints.header_icon = {
+        size = { width, 96 },
         pass_template = {
+            {
+                pass_type = 'texture',
+                style_id = 'icon',
+                value_id = 'icon',
+                value = 'content/ui/materials/base/ui_default_base',
+                style = {
+                    horizontal_alignment = 'left',
+                    vertical_alignment = 'center',
+                    size = { 192, 96 },
+                    color = Color.terminal_text_body(255, true),
+                    offset = { 10, 0, 2 },
+                },
+                visibility_function = function(content)
+                    return content.icon ~= nil
+                end,
+            },
             {
                 pass_type = 'text',
                 style_id = 'text',
@@ -229,47 +245,59 @@ local function make_blueprints(width)
                 style = {
                     font_type = 'proxima_nova_bold',
                     font_size = 26,
-                    text_vertical_alignment = 'top',
+                    text_vertical_alignment = 'bottom',
                     text_horizontal_alignment = 'left',
                     text_color = colors.header,
-                    offset = { 0, 0, 2 },
-                    size = { width, 38 },
+                    offset = { 200, 0, 2 },
+                    size = { width - 200, 60 },
                     text_overflow_mode = 'truncate',
                 },
             },
-        },
-        init = function(_, widget, element)
-            widget.content.text = element.text or ''
-            if element.color then
-                widget.style.text.text_color = element.color
-            end
-        end,
-    }
-
-    blueprints.subtext = {
-        size = { width, 22 },
-        pass_template = {
             {
                 pass_type = 'text',
-                style_id = 'text',
-                value_id = 'text',
+                style_id = 'subtext',
+                value_id = 'subtext',
                 value = '',
                 style = {
                     font_type = 'proxima_nova_bold',
-                    font_size = 16,
+                    font_size = 18,
                     text_vertical_alignment = 'top',
                     text_horizontal_alignment = 'left',
                     text_color = colors.subtext,
-                    offset = { 0, 0, 2 },
-                    size = { width, 22 },
+                    offset = { 200, 58, 3 },
+                    size = { width - 200, 30 },
                     text_overflow_mode = 'truncate',
                 },
             },
         },
         init = function(_, widget, element)
             widget.content.text = element.text or ''
+            widget.content.icon = element.icon
+            widget.content.subtext = element.subtext or ''
+
+            local icon_size = element.icon_size or { 192, 96 }
+            local icon_margin = 10
+
+            widget.style.icon.size = icon_size
+
+            if element.icon then
+                local text_x = icon_size[1] + icon_margin
+                widget.style.text.offset[1] = text_x
+                widget.style.text.size[1] = width - text_x
+                widget.style.subtext.offset[1] = text_x
+                widget.style.subtext.size[1] = width - text_x
+            else
+                widget.style.text.offset[1] = icon_margin
+                widget.style.text.size[1] = width - icon_margin
+                widget.style.subtext.offset[1] = icon_margin
+                widget.style.subtext.size[1] = width - icon_margin
+            end
+
             if element.color then
                 widget.style.text.text_color = element.color
+            end
+            if element.subtext_color then
+                widget.style.subtext.text_color = element.subtext_color
             end
         end,
     }

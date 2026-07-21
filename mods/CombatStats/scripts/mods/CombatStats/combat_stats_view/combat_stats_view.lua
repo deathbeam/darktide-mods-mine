@@ -3,8 +3,6 @@ local mod = get_mod('CombatStats')
 local SharedUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/shared/shared_utils')
 local CombatStatsTracker = mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_tracker')
 local make_view = mod:io_dofile('CombatStats/scripts/mods/CombatStats/shared/shared_view_base')
-local make_list_blueprints =
-    mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view_blueprints')
 local make_detail_blueprints =
     mod:io_dofile('CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_detail_blueprints')
 
@@ -183,6 +181,7 @@ function CombatStatsView:_setup_entries()
                         widget_type = 'stats_entry',
                         name = display_name,
                         type = engagement.type,
+                        icon = SharedUtils.category_icon(engagement.type),
                         start_time = engagement.start_time,
                         end_time = engagement.end_time,
                         duration = duration,
@@ -241,14 +240,13 @@ function CombatStatsView:_present_detail(entry)
     if entry and not entry.disabled then
         layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
         layout[#layout + 1] = {
-            widget_type = 'header',
+            widget_type = 'header_icon',
             text = entry.name,
+            icon = entry.icon,
+            icon_size = { 80, 80 },
+            subtext = entry.subtext,
+            subtext_color = entry.subtext_color,
             color = Color.terminal_text_header(255, true),
-        }
-        layout[#layout + 1] = {
-            widget_type = 'subtext',
-            text = entry.subtext,
-            color = entry.subtext_color,
         }
 
         local stats = entry.stats
@@ -426,6 +424,36 @@ function CombatStatsView:_present_detail(entry)
                     { key = 'crit', value = stats.ranged_crit_hits },
                     { key = 'weakspot', value = stats.ranged_weakspot_hits },
                 })
+            end
+
+            if stats.explosion_hits and stats.explosion_hits > 0 then
+                layout[#layout + 1] = {
+                    widget_type = 'progress_bar',
+                    label = string.format('%s: %d', mod:localize('explosion'), stats.explosion_hits),
+                    value = stats.explosion_hits,
+                    max_value = stats.total_hits,
+                    color = COLOR_EXPLOSION,
+                }
+            end
+
+            if stats.companion_hits and stats.companion_hits > 0 then
+                layout[#layout + 1] = {
+                    widget_type = 'progress_bar',
+                    label = string.format('%s: %d', mod:localize('companion'), stats.companion_hits),
+                    value = stats.companion_hits,
+                    max_value = stats.total_hits,
+                    color = COLOR_COMPANION,
+                }
+            end
+
+            if stats.arc_hits and stats.arc_hits > 0 then
+                layout[#layout + 1] = {
+                    widget_type = 'progress_bar',
+                    label = string.format('%s: %d', mod:localize('arc'), stats.arc_hits),
+                    value = stats.arc_hits,
+                    max_value = stats.total_hits,
+                    color = COLOR_ARC,
+                }
             end
         end
 

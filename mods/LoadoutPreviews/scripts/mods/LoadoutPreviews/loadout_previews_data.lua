@@ -9,6 +9,19 @@ local function checkbox(setting_id, default_value, tooltip)
 	}
 end
 
+local function keybind(setting_id, tooltip, function_name)
+	return {
+		setting_id = setting_id,
+		type = "keybind",
+		default_value = {},
+		tooltip = tooltip,
+		keybind_global = true,
+		keybind_trigger = "pressed",
+		keybind_type = "function_call",
+		function_name = function_name,
+	}
+end
+
 local function preview_mode_dropdown(setting_id, tooltip)
 	return {
 		setting_id = setting_id,
@@ -208,6 +221,7 @@ return {
 				tooltip = "team_settings_tooltip",
 				sub_widgets = {
 					checkbox("show_lobby_team_previews", true, "show_lobby_team_previews_tooltip"),
+					keybind("lobby_team_preview_keybind", "lobby_team_preview_keybind_tooltip", "lobby_team_preview_keybind_pressed"),
 					checkbox("show_own_lobby_team_preview", false, "show_own_lobby_team_preview_tooltip"),
 					checkbox("show_lobby_tree_on_hover", false, "show_lobby_tree_on_hover_tooltip"),
 					valkyrie_preview_mode_dropdown(),

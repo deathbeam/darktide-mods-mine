@@ -135,7 +135,7 @@ local localization = {
 		["zh-cn"] = "大厅预览按键",
 	},
 	lobby_team_preview_keybind_tooltip = {
-		en = "Key used by Hold and Toggle lobby preview modes.",
+		en = "Press to show or hide team loadout previews while in the mission lobby.",
 		["zh-cn"] = "用于按住和切换大厅预览模式的按键。",
 	},
 	show_own_lobby_team_preview = {

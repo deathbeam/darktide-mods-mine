@@ -3,8 +3,6 @@ local mod = get_mod('EnemyStats')
 local SharedUtils = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_utils')
 local Data = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_utils')
 local make_view = mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/shared/shared_view_base')
-local make_list_blueprints =
-    mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_view_blueprints')
 local make_detail_blueprints =
     mod:io_dofile('EnemyStats/scripts/mods/EnemyStats/enemy_stats_view/enemy_stats_detail_blueprints')
 
@@ -40,6 +38,7 @@ function EnemyStatsView:_setup_entries()
                 name = label,
                 subtext = self:_format_list_subtext(entry),
                 subtext_color = Color.terminal_text_body_sub_header(255, true),
+                icon = entry.icon,
                 breed_name = entry.breed_name,
                 category = entry.category,
                 size = entry.size,
@@ -71,18 +70,17 @@ function EnemyStatsView:_present_detail(entry)
 
     local layout = {}
     if entry then
+        local info = Data.breed_info(entry.breed_name)
+        local category_icon = info and info.category_icon or nil
         layout[#layout + 1] = {
-            widget_type = 'header',
+            widget_type = 'header_icon',
             text = entry.name,
+            icon = category_icon,
+            icon_size = { 80, 80 },
+            subtext = entry.subtext,
+            subtext_color = entry.subtext_color,
             color = Color.terminal_text_header(255, true),
         }
-        if entry.subtext then
-            layout[#layout + 1] = {
-                widget_type = 'subtext',
-                text = entry.subtext,
-                color = entry.subtext_color,
-            }
-        end
         layout[#layout + 1] = { widget_type = 'spacer', size = 'group' }
 
         local info = Data.breed_info(entry.breed_name)

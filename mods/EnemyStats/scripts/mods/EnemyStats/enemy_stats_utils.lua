@@ -242,6 +242,8 @@ function EnemyStatsData.build_enemy_list()
                 breed_name = breed_name,
                 label = SharedUtils.breed_display_name(breed_name),
                 category = breed_category(breed),
+                category_icon = SharedUtils.category_icon(breed_category(breed)),
+                icon = SharedUtils.category_icon(breed_category(breed)),
                 size = breed_size(breed),
                 is_ranged = breed_is_ranged(breed),
                 faction = breed_faction(breed),
@@ -459,6 +461,7 @@ function EnemyStatsData.breed_info(breed_name)
     return {
         breed_name = breed_name,
         category = breed_category(breed),
+        category_icon = SharedUtils.category_icon(breed_category(breed)),
         size = size,
         is_ranged = breed_is_ranged(breed),
         faction = breed_faction(breed),
