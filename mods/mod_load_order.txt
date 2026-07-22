@@ -21,6 +21,7 @@ guarantee_ability_activation
 controlled_chaos
 ImprovedMeatGrinder
 show_crit_chance
+CharacterStats
 CombatStats
 EnemyStats
 WeaponStats
@@ -47,6 +48,8 @@ markers_aio
 stamina_dodge_bars
 RecolorBossHealthBars
 RemoveTagSkulls
+SpawnFeed
+KillfeedImprovements
 
 crosshair_hud
 enemies_improved
