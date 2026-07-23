@@ -40,6 +40,7 @@ DynamicCrosshair
 markers_aio
 stamina_dodge_bars
 RemoveTagSkulls
+ForTheEmperor
 crosshair_hud
 enemies_improved
 danger_zone
