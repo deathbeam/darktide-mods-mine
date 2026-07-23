@@ -2,7 +2,7 @@ return {
     global_loc = {
         loc_character_stats_menu_button = {
             en = 'Character Stats',
-            ['zh-cn'] = '角色属性',
+            ['zh-cn'] = '玩家数据统计',
         },
         loc_character_stats_copy = {
             en = 'Copy to Clipboard',
@@ -11,14 +11,19 @@ return {
     },
     game_loc = {
         stat_toughness_regen = 'loc_player_buff_coherency_toughness_regen',
-        coherency_source = 'loc_player_buff_coherency_toughness_regen',
         stat_toughness_regen_percent = 'loc_toughness_tutorial',
         stat_dodge_dist = 'loc_weapon_stats_display_dodge_distance',
         stat_dodge_speed = 'loc_weapon_stats_display_dodge_speed',
+        stat_dodge_count = 'loc_weapon_stats_display_effective_dodges',
+        stat_stamina = 'loc_stats_display_stamina_title',
         stat_sprint_speed = 'loc_weapon_stats_display_sprint_speed',
         stat_attack_speed = 'loc_weapon_stats_display_attack_speed',
         stat_reload_speed = 'loc_stats_display_reload_speed_stat',
         stat_spread = 'loc_weapon_stats_display_spread',
+        stat_power_level = 'loc_weapon_stats_display_power',
+        stat_weakspot = 'loc_weapon_details_weakspot',
+        melee = 'loc_setting_melee',
+        ranged = 'loc_setting_ranged',
         bio_origin = 'loc_character_create_title_bio_origin',
         bio_home_planet = 'loc_character_create_title_home_planet',
         bio_early_life = 'loc_character_create_title_early_life',
@@ -54,25 +59,17 @@ return {
     },
     coherency_allies = {
         en = 'Coherency allies',
-        ['zh-cn'] = '共鸣队友数',
+        ['zh-cn'] = '连携队友数',
     },
     havoc_rank = {
         en = 'Havoc rank',
         ['zh-cn'] = '浩劫等级',
-    },
-    havoc_source = {
-        en = 'Havoc',
-        ['zh-cn'] = '浩劫',
     },
 
     -- List
     current_character = {
         en = 'Current Character',
         ['zh-cn'] = '当前角色',
-    },
-    header_bio = {
-        en = 'CHARACTER BACKGROUND',
-        ['zh-cn'] = '角色背景',
     },
     no_character = {
         en = 'No active character (enter a mission or the hub)',
@@ -84,6 +81,10 @@ return {
     },
 
     -- Section headers
+    header_bio = {
+        en = 'CHARACTER BACKGROUND',
+        ['zh-cn'] = '角色背景',
+    },
     header_vitals = {
         en = 'VITALS',
         ['zh-cn'] = '生命',
@@ -105,6 +106,16 @@ return {
         ['zh-cn'] = '机动性',
     },
 
+    -- Sources
+    havoc_source = {
+        en = 'Havoc',
+        ['zh-cn'] = '浩劫',
+    },
+    coherency_source = {
+        en = 'Coherency',
+        ['zh-cn'] = '连携',
+    },
+
     -- Stat labels: vitals
     stat_health = {
         en = 'Max Health',
@@ -118,89 +129,61 @@ return {
         en = 'Max Toughness',
         ['zh-cn'] = '最大韧性',
     },
-    stat_archetype = {
-        en = 'Archetype',
-        ['zh-cn'] = '职业',
-    },
 
     -- Stat labels: recovery
-    stat_toughness_regen = {
-        en = 'Coherency Toughness Regeneration',
-        ['zh-cn'] = '共鸣韧性恢复',
-    },
-    stat_toughness_regen_percent = {
-        en = 'Toughness Regeneration',
-        ['zh-cn'] = '韧性恢复',
-    },
     stat_tough_bonus_regen = {
         en = 'Toughness Replenishment',
-        ['zh-cn'] = '韧性补充',
+        ['zh-cn'] = '天赋韧性补充',
     },
     stat_tough_regen_delay = {
         en = 'Toughness Regeneration Speed',
-        ['zh-cn'] = '韧性恢复速度',
+        ['zh-cn'] = '韧性恢复延迟',
     },
     stat_tough_bounty = {
         en = 'Toughness Replenishment on Melee Kill',
-        ['zh-cn'] = '近战击杀补充韧性',
-    },
-    coherency_source = {
-        en = 'Coherency Toughness Regeneration',
-        ['zh-cn'] = '共鸣韧性恢复',
+        ['zh-cn'] = '近战击杀韧性补充',
     },
 
     -- Stat labels: defense
     stat_damage_reduction = {
         en = 'Damage Reduction',
-        ['zh-cn'] = '伤害减免',
+        ['zh-cn'] = '伤害抗性',
     },
-    stat_reduction_melee = {
-        en = 'Melee Reduction',
-        ['zh-cn'] = '近战减免',
-    },
-    stat_reduction_ranged = {
-        en = 'Ranged Reduction',
-        ['zh-cn'] = '远程减免',
-    },
-    stat_tough_reduction_melee = {
-        en = 'Toughness Reduction (Melee)',
-        ['zh-cn'] = '近战韧性减免',
-    },
-    stat_tough_reduction_ranged = {
-        en = 'Toughness Reduction (Ranged)',
-        ['zh-cn'] = '远程韧性减免',
+    stat_tough_reduction = {
+        en = 'Toughness Damage Reduction',
+        ['zh-cn'] = '韧性伤害减免',
     },
     stat_taken_from_explosions = {
         en = 'Reduction vs Explosions',
-        ['zh-cn'] = '爆炸伤害减免',
+        ['zh-cn'] = '爆炸伤害抗性',
     },
     stat_taken_from_prop_explosions = {
-        en = 'Reduction vs Prop Explosions',
-        ['zh-cn'] = '物块爆炸减免',
+        en = 'Reduction vs Prop Explosions (Barrels, etc.)',
+        ['zh-cn'] = '环境爆炸伤害抗性（油桶等）',
     },
     stat_taken_from_toxin = {
         en = 'Reduction vs Toxin',
-        ['zh-cn'] = '毒素减免',
+        ['zh-cn'] = '毒素伤害抗性',
     },
     stat_taken_from_burning = {
         en = 'Reduction vs Burning',
-        ['zh-cn'] = '燃烧减免',
+        ['zh-cn'] = '燃烧伤害抗性',
     },
     stat_taken_from_bleeding = {
         en = 'Reduction vs Bleeding',
-        ['zh-cn'] = '流血减免',
+        ['zh-cn'] = '流血伤害抗性',
     },
     stat_taken_from_electrocution = {
         en = 'Reduction vs Electrocution',
-        ['zh-cn'] = '触电减免',
+        ['zh-cn'] = '触电伤害抗性',
     },
     stat_taken_from_kinetic = {
         en = 'Reduction vs Kinetic',
-        ['zh-cn'] = '动能减免',
+        ['zh-cn'] = '物理伤害抗性',
     },
     stat_taken_from_toxic_gas = {
         en = 'Reduction vs Toxic Gas',
-        ['zh-cn'] = '毒气减免',
+        ['zh-cn'] = '毒气伤害抗性',
     },
     stat_taken_from_corruption = {
         en = 'Damage Resistance (Corruption)',
@@ -208,27 +191,27 @@ return {
     },
     stat_taken_from_grimoire = {
         en = 'Damage Resistance (Grimoires)',
-        ['zh-cn'] = '典籍伤害抗性',
+        ['zh-cn'] = '魔法书伤害抗性',
     },
     stat_taken_from_bombers = {
         en = 'Damage Resistance (Bombers)',
-        ['zh-cn'] = '轰炸者伤害抗性',
+        ['zh-cn'] = '血痂、渣滓轰炸者伤害抗性',
     },
     stat_taken_from_flamers = {
         en = 'Damage Resistance (Tox Flamers)',
-        ['zh-cn'] = '喷火兵伤害抗性',
+        ['zh-cn'] = '血痂、渣滓火焰兵伤害抗性',
     },
     stat_taken_from_gunners = {
         en = 'Damage Resistance (Gunners)',
-        ['zh-cn'] = '枪手伤害抗性',
+        ['zh-cn'] = '血痂渣滓炮手、收割者伤害抗性',
     },
     stat_taken_from_mutants = {
         en = 'Damage Resistance (Mutants)',
-        ['zh-cn'] = '变异者伤害抗性',
+        ['zh-cn'] = '变种人伤害抗性',
     },
     stat_taken_from_pox_hounds = {
         en = 'Damage Resistance (Pox Hounds)',
-        ['zh-cn'] = '疫犬伤害抗性',
+        ['zh-cn'] = '瘟疫猎犬伤害抗性',
     },
     stat_taken_from_snipers = {
         en = 'Damage Resistance (Snipers)',
@@ -254,7 +237,7 @@ return {
     },
     stat_rending = {
         en = 'Rending Bonus',
-        ['zh-cn'] = '破甲加成',
+        ['zh-cn'] = '撕裂加成',
     },
 
     -- Offense breakdown terms
@@ -265,18 +248,6 @@ return {
     stat_ranged_damage = {
         en = 'Ranged Damage Bonus',
         ['zh-cn'] = '远程伤害加成',
-    },
-    stat_power_level = {
-        en = 'Power Level',
-        ['zh-cn'] = '威力等级',
-    },
-    stat_reload_speed = {
-        en = 'Reload Speed',
-        ['zh-cn'] = '换弹速度',
-    },
-    stat_spread = {
-        en = 'Spread',
-        ['zh-cn'] = '散射',
     },
     stat_impact = {
         en = 'Impact',
@@ -346,35 +317,35 @@ return {
     -- Rending breakdown terms
     stat_backstab_rending = {
         en = 'Backstab Rending',
-        ['zh-cn'] = '背刺破甲',
+        ['zh-cn'] = '背刺撕裂',
     },
     stat_flanking_rending = {
         en = 'Flanking Rending',
-        ['zh-cn'] = '侧袭破甲',
+        ['zh-cn'] = '侧袭撕裂',
     },
     stat_crit_rending = {
         en = 'Crit Rending',
-        ['zh-cn'] = '暴击破甲',
+        ['zh-cn'] = '暴击撕裂',
     },
     stat_rending_vs_staggered = {
         en = 'Rending vs Staggered',
-        ['zh-cn'] = '对踉跄破甲',
+        ['zh-cn'] = '对踉跄撕裂',
     },
     stat_rending_vs_electrocuted = {
         en = 'Rending vs Electrocuted',
-        ['zh-cn'] = '对触电破甲',
+        ['zh-cn'] = '对触电撕裂',
     },
     stat_close_range_rending = {
         en = 'Close Range Rending',
-        ['zh-cn'] = '近距离破甲',
+        ['zh-cn'] = '近距离撕裂',
     },
     stat_warp_rending = {
         en = 'Warp Rending',
-        ['zh-cn'] = '灵能破甲',
+        ['zh-cn'] = '灵能撕裂',
     },
     stat_melee_rending = {
         en = 'Melee Rending',
-        ['zh-cn'] = '近战破甲',
+        ['zh-cn'] = '近战撕裂',
     },
     stat_melee_heavy_rending = {
         en = 'Melee Heavy Rending',
@@ -382,44 +353,14 @@ return {
     },
     stat_ranged_rending = {
         en = 'Ranged Rending',
-        ['zh-cn'] = '远程破甲',
+        ['zh-cn'] = '远程撕裂',
     },
     stat_ranged_crit_rending = {
         en = 'Ranged Crit Rending',
-        ['zh-cn'] = '远程暴击破甲',
-    },
-
-    -- Damage taken breakdown terms
-    stat_damage_taken_mult = {
-        en = 'Damage Taken (Mult)',
-        ['zh-cn'] = '受到伤害（乘算）',
-    },
-    stat_damage_taken_mod = {
-        en = 'Damage Taken (Add)',
-        ['zh-cn'] = '受到伤害（加算）',
-    },
-    stat_melee_damage_taken_mult = {
-        en = 'Melee Taken (Mult)',
-        ['zh-cn'] = '近战承受（乘算）',
-    },
-    stat_melee_damage_taken_mod = {
-        en = 'Melee Taken (Add)',
-        ['zh-cn'] = '近战承受（加算）',
-    },
-    stat_ranged_damage_taken_mult = {
-        en = 'Ranged Taken (Mult)',
-        ['zh-cn'] = '远程承受（乘算）',
-    },
-    stat_ranged_damage_taken_mod = {
-        en = 'Ranged Taken (Add)',
-        ['zh-cn'] = '远程承受（加算）',
+        ['zh-cn'] = '远程暴击撕裂',
     },
 
     -- Stat labels: mobility
-    stat_stamina = {
-        en = 'Max Stamina',
-        ['zh-cn'] = '最大体力',
-    },
     stat_stamina_regen = {
         en = 'Stamina Regen',
         ['zh-cn'] = '体力恢复',
@@ -428,24 +369,8 @@ return {
         en = 'Stamina Regen Delay',
         ['zh-cn'] = '体力恢复延迟',
     },
-    stat_sprint_speed = {
-        en = 'Sprint Speed (m/s)',
-        ['zh-cn'] = '冲刺速度（米/秒）',
-    },
     stat_sprint_time = {
-        en = 'Sprint Duration (sec)',
+        en = 'Sprint Duration',
         ['zh-cn'] = '冲刺持续时间（秒）',
-    },
-    stat_dodge_count = {
-        en = 'Dodge Count',
-        ['zh-cn'] = '闪避次数',
-    },
-    stat_dodge_dist = {
-        en = 'Dodge Distance',
-        ['zh-cn'] = '闪避距离',
-    },
-    stat_dodge_speed = {
-        en = 'Dodge Speed',
-        ['zh-cn'] = '闪避速度',
     },
 }

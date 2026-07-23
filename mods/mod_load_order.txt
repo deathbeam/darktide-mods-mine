@@ -2,8 +2,8 @@
 
 -- Base
 Alfs_DMF_Extensions
-master_item_community_patch
-visual_loadout_customization_community_patch
+-- master_item_community_patch
+-- visual_loadout_customization_community_patch
 MoreGraphicsOptions
 LocalizationExport
 IconBrowser
@@ -26,11 +26,6 @@ CombatStats
 EnemyStats
 WeaponStats
 
--- EWC
-extended_weapon_customization
-extended_weapon_customization_base_additions
-extended_weapon_customization_syn_edits
-
 -- General HUD
 custom_hud
 Enhanced_descriptions
@@ -46,10 +41,7 @@ vfx_swapper
 DynamicCrosshair
 markers_aio
 stamina_dodge_bars
-RecolorBossHealthBars
 RemoveTagSkulls
-SpawnFeed
-KillfeedImprovements
 
 crosshair_hud
 enemies_improved
