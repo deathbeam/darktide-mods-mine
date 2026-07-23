@@ -107,6 +107,16 @@ mod_data.options = {
 			default_value = false,
 		},
 		{
+			setting_id    = "ps_bot_mode",
+			type          = "dropdown",
+			default_value = "active",
+			options       = {
+				{ text = "bot_mode_active",  value = "active" },
+				{ text = "bot_mode_passive", value = "passive" },
+				{ text = "bot_mode_frozen",  value = "frozen" },
+			},
+		},
+		{
 			setting_id    = "ps_select_mode",
 			type          = "checkbox",
 			default_value = false,
@@ -163,6 +173,14 @@ mod_data.options = {
 			keybind_type    = "function_call",
 			default_value   = {},
 			function_name   = "toggle_no_stagger",
+		},
+		{
+			setting_id      = "ps_key_bot_mode",
+			type            = "keybind",
+			keybind_trigger = "pressed",
+			keybind_type    = "function_call",
+			default_value   = {},
+			function_name   = "cycle_bot_mode",
 		},
 		{
 			setting_id      = "ps_key_enemy_ai",

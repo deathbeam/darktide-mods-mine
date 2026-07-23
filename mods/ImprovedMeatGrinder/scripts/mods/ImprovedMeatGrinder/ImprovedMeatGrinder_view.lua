@@ -480,6 +480,13 @@ PsykhaniumSpawnerView._refresh_allies = function (self)
     opts[#opts + 1] = { kind = "remove_one", label = V(self, "ally_remove_one") }
     opts[#opts + 1] = { kind = "remove_all", label = V(self, "ally_remove_all") }
 
+    local bmode = (mod and mod.bot_mode and mod.bot_mode()) or "active"
+    opts[#opts + 1] = {
+        kind = "mode",
+        label = Vf(self, "ally_mode_fmt", V(self, "bot_mode_" .. bmode)),
+        active = (bmode ~= "active"),
+    }
+
     for i = 1, PER_PAGE do
         local slot = w["slot_" .. i]
         if slot then
@@ -490,6 +497,7 @@ PsykhaniumSpawnerView._refresh_allies = function (self)
             if o then
                 slot.visible = true
                 slot.content.hotspot.disabled = false
+                slot.content.hotspot.is_selected = o.active and true or false
                 slot.content.original_text = o.label
                 if text then
                     text.text_horizontal_alignment = "center"
@@ -784,7 +792,8 @@ PsykhaniumSpawnerView.cb_slot = function (self, i)
             if o.kind == "spawn" and mod.spawn_bot then mod.spawn_bot(o.profile)
             elseif o.kind == "random" and mod.spawn_bot_random then mod.spawn_bot_random()
             elseif o.kind == "remove_one" and mod.despawn_one_bot then mod.despawn_one_bot()
-            elseif o.kind == "remove_all" and mod.despawn_all_bots then mod.despawn_all_bots() end
+            elseif o.kind == "remove_all" and mod.despawn_all_bots then mod.despawn_all_bots()
+            elseif o.kind == "mode" and mod.cycle_bot_mode then mod:cycle_bot_mode() end
             self:_refresh()
         end
         return

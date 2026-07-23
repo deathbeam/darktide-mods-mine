@@ -1680,6 +1680,59 @@ if not mod._stagger_hooked then
 	end)
 end
 
+local BOT_MODES = { "active", "passive", "frozen" }
+
+function mod.bot_mode()
+	local m = mod:get("ps_bot_mode")
+	if m ~= "passive" and m ~= "frozen" then return "active" end
+	return m
+end
+
+function mod.cycle_bot_mode(self)
+	if not is_shooting_range() then mod:notify(mod:localize("notify_bot_mode_range_only")) return end
+	local cur = mod.bot_mode()
+	local idx = 1
+	for i = 1, #BOT_MODES do
+		if BOT_MODES[i] == cur then idx = i break end
+	end
+	local nxt = BOT_MODES[(idx % #BOT_MODES) + 1]
+	mod:set("ps_bot_mode", nxt, false)
+	mod:notify(LF("notify_bot_mode_fmt", mod:localize("bot_mode_" .. nxt)))
+end
+
+if not mod._bot_mode_hooked then
+	mod._bot_mode_hooked = true
+	pcall(function()
+		local BotBehaviorExtension = require("scripts/extension_systems/behavior/bot_behavior_extension")
+		local Blackboard = require("scripts/extension_systems/blackboard/utilities/blackboard")
+
+		local function clear_bot_targets(unit)
+			local bbs = rawget(_G, "BLACKBOARDS")
+			local blackboard = bbs and bbs[unit]
+			if not blackboard then return end
+			local pc = Blackboard.write_component(blackboard, "perception")
+			if not pc then return end
+			pc.target_enemy = nil
+			pc.target_enemy_distance = math.huge
+			pc.target_enemy_type = "none"
+			pc.aggro_target_enemy = nil
+			pc.aggro_target_enemy_distance = 0
+			pc.opportunity_target_enemy = nil
+			pc.priority_target_enemy = nil
+			pc.urgent_target_enemy = nil
+		end
+
+		mod:hook(BotBehaviorExtension, "update", function(func, self, unit, dt, t, ...)
+			if is_shooting_range() then
+				local mode = mod.bot_mode()
+				if mode == "frozen" then return end
+				if mode == "passive" then pcall(function() clear_bot_targets(unit) end) end
+			end
+			return func(self, unit, dt, t, ...)
+		end)
+	end)
+end
+
 function mod.continuous_refill()
 	if not mod._continuous then return end
 	if not is_server() or not is_shooting_range() then return end
@@ -2151,6 +2204,27 @@ mod:hook_require("scripts/extension_systems/training_grounds/shooting_range_step
 					scenario_system:add_scenario_buff(player_unit, "tg_player_unperceivable", t)
 				end
 			end
+			pcall(function()
+				local ai_on = mod:get("ps_enemy_ai") and true or false
+				local players = Managers.player and Managers.player:players()
+				if players then
+					for _, p in pairs(players) do
+						if p ~= player and p.player_unit and Unit.alive(p.player_unit)
+							and not (p.is_human_controlled and p:is_human_controlled()) then
+							local bu = p.player_unit
+							if ai_on then
+								if scenario_system:has_scenario_buff(bu, "tg_player_unperceivable") then
+									scenario_system:remove_scenario_buff(bu, "tg_player_unperceivable")
+								end
+							else
+								if not scenario_system:has_scenario_buff(bu, "tg_player_unperceivable") then
+									scenario_system:add_scenario_buff(bu, "tg_player_unperceivable", t)
+								end
+							end
+						end
+					end
+				end
+			end)
 			return false
 		end
 	end

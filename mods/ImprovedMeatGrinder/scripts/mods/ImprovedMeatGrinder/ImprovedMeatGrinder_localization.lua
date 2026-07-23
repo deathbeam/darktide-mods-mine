@@ -781,6 +781,46 @@ return {
 		en = "No-stagger only works in the Meat Grinder.",
 		["zh-cn"] = "无硬直仅在灵能训练场可用。"
 	},
+	bot_mode_active = {
+		en = "Active",
+		["zh-cn"] = "主动"
+	},
+	bot_mode_passive = {
+		en = "Passive",
+		["zh-cn"] = "被动"
+	},
+	bot_mode_frozen = {
+		en = "Frozen",
+		["zh-cn"] = "静止"
+	},
+	ally_mode_fmt = {
+		en = "Behaviour: %%s",
+		["zh-cn"] = "行为: %%s"
+	},
+	ps_bot_mode = {
+		en = "Ally behaviour",
+		["zh-cn"] = "友军行为"
+	},
+	ps_bot_mode_description = {
+		en = "Active: allies fight normally. Passive: allies follow you but never attack, so they cannot steal kills. Frozen: allies stand still and do nothing. Useful for testing coherency and enemy damage. Meat Grinder only.",
+		["zh-cn"] = "主动：友军正常战斗。被动：友军跟随你但从不攻击，不会抢人头。静止：友军原地不动。适合测试凝聚力与敌人伤害。仅灵能训练场。"
+	},
+	ps_key_bot_mode = {
+		en = "Cycle ally behaviour",
+		["zh-cn"] = "切换友军行为"
+	},
+	ps_key_bot_mode_description = {
+		en = "Cycle allies between Active, Passive (follow but never attack) and Frozen (stand still). Meat Grinder only.",
+		["zh-cn"] = "在主动、被动（跟随但不攻击）与静止（原地不动）之间循环切换友军行为。仅灵能训练场。"
+	},
+	notify_bot_mode_fmt = {
+		en = "Allies: %%s",
+		["zh-cn"] = "友军：%%s"
+	},
+	notify_bot_mode_range_only = {
+		en = "Ally behaviour only works in the Meat Grinder.",
+		["zh-cn"] = "友军行为仅在灵能训练场可用。"
+	},
 	ally_slot_fmt = {
 		en = "Ally %%d",
 		["zh-cn"] = "友军 %%d"
