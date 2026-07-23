@@ -2,8 +2,6 @@
 
 -- Base
 Alfs_DMF_Extensions
--- master_item_community_patch
--- visual_loadout_customization_community_patch
 MoreGraphicsOptions
 LocalizationExport
 IconBrowser
@@ -42,7 +40,6 @@ DynamicCrosshair
 markers_aio
 stamina_dodge_bars
 RemoveTagSkulls
-
 crosshair_hud
 enemies_improved
 danger_zone
