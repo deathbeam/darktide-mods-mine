@@ -86,9 +86,11 @@ local localization = {
 	},
 	show_stats_preview = {
 		en = "Show Stats",
+		["zh-cn"] = "显示属性",
 	},
 	show_stats_preview_tooltip = {
 		en = "Show calculated stats when the selected preview mode includes stats. Wounds assume the highest difficulty.",
+		["zh-cn"] = "当预览模式支持属性展示时，显示计算后的属性。伤口数值按照最高难度标准计算。",
 	},
 	show_lobby_team_previews = {
 		en = "Enable Team Previews",
@@ -140,9 +142,11 @@ local localization = {
 	},
 	mission_intro_team_preview_keybind = {
 		en = "Valkyrie Preview Keybind",
+		["zh-cn"] = "女武神预览快捷键",
 	},
 	mission_intro_team_preview_keybind_tooltip = {
 		en = "Press to show or hide team loadout previews while on the Valkyrie loading screen.",
+		["zh-cn"] = "在女武神载入界面按下此键，显示或隐藏队伍配装预览。",
 	},
 	show_own_lobby_team_preview = {
 		en = "Show Your Lobby Preview",
@@ -186,11 +190,11 @@ local localization = {
 	},
 	valkyrie_team_preview_mode_tree_gear = {
 		en = "Tree + Loadout",
-		["zh-cn"] = "Tree + Loadout",
+		["zh-cn"] = "树形+配装",
 	},
 	valkyrie_team_preview_mode_tree_gear_tooltip = {
 		en = "Show the full talent tree beside enabled Valkyrie weapon and curio details.",
-		["zh-cn"] = "Show the full talent tree beside enabled team weapons and curios.",
+		["zh-cn"] = "完整天赋树 + 武器、饰品详情一并展示。",
 	},
 	show_mission_intro_team_previews = {
 		en = "Valkyrie Teammate Previews",
@@ -198,83 +202,107 @@ local localization = {
 	},
 	show_mission_intro_team_previews_tooltip = {
 		en = "Show loadout previews for human players during the Valkyrie loading screen. Bots are skipped.",
-		["zh-cn"] = "在女武神任务简报画面显示人类玩家的紧凑配置预览。机器人会被跳过。",
+		["zh-cn"] = "女武神载入界面显示人类玩家配装预览，机器人不会显示。",
 	},
 	valkyrie_settings = {
 		en = "Valkyrie",
+		["zh-cn"] = "女武神界面",
 	},
 	valkyrie_settings_tooltip = {
 		en = "Options for team loadout previews on the Valkyrie loading screen.",
+		["zh-cn"] = "女武神载入界面队伍配装预览相关设置。",
 	},
 	show_valkyrie_stimm_lab_preview = {
 		en = "Show Stimm Lab",
+		["zh-cn"] = "显示兴奋剂实验室",
 	},
 	show_valkyrie_stimm_lab_preview_tooltip = {
 		en = "Include Hive Scum stimm lab selections in Valkyrie loading screen previews.",
+		["zh-cn"] = "在女武神预览中显示巢都渣滓兴奋剂实验室加点。",
 	},
 	valkyrie_weapon_settings = {
 		en = "Weapons",
+		["zh-cn"] = "武器设置",
 	},
 	valkyrie_weapon_settings_tooltip = {
 		en = "Weapon options for Valkyrie loading screen previews.",
+		["zh-cn"] = "女武神预览内武器相关选项。",
 	},
 	show_valkyrie_weapon_preview = {
 		en = "Show Weapons",
+		["zh-cn"] = "显示武器",
 	},
 	show_valkyrie_weapon_preview_tooltip = {
 		en = "Show equipped melee and ranged weapons in Valkyrie loading screen previews.",
+		["zh-cn"] = "在女武神预览中展示近战、远程武器。",
 	},
 	show_valkyrie_weapon_icons_preview = {
 		en = "Weapon Icons",
+		["zh-cn"] = "武器图标",
 	},
 	show_valkyrie_weapon_icons_preview_tooltip = {
 		en = "Show weapon icons in Valkyrie loading screen previews.",
+		["zh-cn"] = "女武神预览内显示武器图标。",
 	},
 	valkyrie_weapon_preview_text_mode = {
 		en = "Weapon Names",
+		["zh-cn"] = "武器名称",
 	},
 	valkyrie_weapon_preview_text_mode_tooltip = {
 		en = "Show weapon names in Valkyrie loading screen previews, even when weapon details are hidden.",
+		["zh-cn"] = "即使关闭武器详情，依然在女武神预览中显示武器名称。",
 	},
 	show_valkyrie_weapon_blessings_preview = {
 		en = "Weapon Blessings",
+		["zh-cn"] = "武器祝福",
 	},
 	show_valkyrie_weapon_blessings_preview_tooltip = {
 		en = "Show weapon blessing names in Valkyrie loading screen previews.",
+		["zh-cn"] = "女武神预览内展示武器祝福名称。",
 	},
 	show_valkyrie_weapon_blessing_descriptions_preview = {
 		en = "Blessing Descriptions",
+		["zh-cn"] = "祝福描述",
 	},
 	show_valkyrie_weapon_blessing_descriptions_preview_tooltip = {
 		en = "Append short blessing descriptions in Valkyrie loading screen previews.",
+		["zh-cn"] = "在女武神预览中附加祝福简短说明。",
 	},
 	show_valkyrie_weapon_perks_preview = {
 		en = "Weapon Perks",
+		["zh-cn"] = "武器专长",
 	},
 	show_valkyrie_weapon_perks_preview_tooltip = {
 		en = "Show weapon perk lines in Valkyrie loading screen previews.",
+		["zh-cn"] = "女武神预览内展示武器专长条目。",
 	},
 	valkyrie_curio_settings = {
 		en = "Curios",
+		["zh-cn"] = "饰品设置",
 	},
 	valkyrie_curio_settings_tooltip = {
 		en = "Curio options for Valkyrie loading screen previews.",
+		["zh-cn"] = "女武神预览内饰品相关选项。",
 	},
 	show_valkyrie_curio_preview = {
 		en = "Show Curios",
+		["zh-cn"] = "显示饰品",
 	},
 	show_valkyrie_curio_preview_tooltip = {
 		en = "Show curio main stats in Valkyrie loading screen previews.",
+		["zh-cn"] = "女武神预览内展示饰品主属性。",
 	},
 	show_valkyrie_curio_perks_preview = {
 		en = "Curio Perks",
+		["zh-cn"] = "饰品专长",
 	},
 	show_valkyrie_curio_perks_preview_tooltip = {
 		en = "Show curio perk lines in Valkyrie loading screen previews.",
+		["zh-cn"] = "女武神预览内展示饰品专长条目。",		  
 	},
 	show_group_finder_applicant_previews = {
 		en = "Enable Party Finder Previews",
-		["zh-cn"] = "申请者预览",
+		["zh-cn"] = "启用组队大厅申请者预览",
 	},
 	show_group_finder_applicant_previews_tooltip = {
 		en = "Show loadout previews when hovering players applying to your party finder listing.",
@@ -282,11 +310,11 @@ local localization = {
 	},
 	show_team_stimm_lab_preview = {
 		en = "Show Stimm Lab",
-		["zh-cn"] = "队友兴奋剂实验室",
+		["zh-cn"] = "显示兴奋剂实验室",
 	},
 	show_team_stimm_lab_preview_tooltip = {
 		en = "Include Hive Scum stimm lab selections in team previews.",
-		["zh-cn"] = "在队友预览中显示 Hive Scum 兴奋剂实验室选择。",
+		["zh-cn"] = "队友预览中显示巢都渣滓兴奋剂实验室加点。",
 	},
 	team_preview_unknown_player = {
 		en = "Unknown Player",
@@ -350,15 +378,19 @@ local localization = {
 	},
 	team_weapon_settings = {
 		en = "Weapons",
+		["zh-cn"] = "武器设置",
 	},
 	team_weapon_settings_tooltip = {
 		en = "Weapon options for team previews.",
+		["zh-cn"] = "队友预览武器相关选项。",
 	},
 	team_curio_settings = {
 		en = "Curios",
+		["zh-cn"] = "饰品设置",
 	},
 	team_curio_settings_tooltip = {
 		en = "Curio options for team previews.",
+		["zh-cn"] = "队友预览饰品相关选项。",
 	},
 	show_team_weapon_preview = {
 		en = "Show Weapons",
@@ -414,7 +446,7 @@ local localization = {
 	},
 	show_team_curio_preview_tooltip = {
 		en = "Show curio main stats in team previews.",
-		["zh-cn"] = "显示队友饰品的主要属性。",
+		["zh-cn"] = "队友预览展示饰品主属性。",
 	},
 	show_team_curio_perks_preview = {
 		en = "Curio Perks",
@@ -422,97 +454,127 @@ local localization = {
 	},
 	show_team_curio_perks_preview_tooltip = {
 		en = "Show curio perk lines in team previews.",
-		["zh-cn"] = "显示队友饰品的专长条目。",
+		["zh-cn"] = "队友预览展示饰品专长条目。",
 	},
 	party_finder_settings = {
 		en = "Party Finder",
+		["zh-cn"] = "组队大厅",
 	},
 	party_finder_settings_tooltip = {
 		en = "Options for applicant previews in Party Finder.",
+		["zh-cn"] = "组队大厅申请者配装预览相关设置。",
 	},
 	party_finder_preview_mode = {
 		en = "Preview Mode",
+		["zh-cn"] = "预览模式",
 	},
 	party_finder_preview_mode_tooltip = {
 		en = "Choose the preview style for Party Finder applicant hover previews.",
+		["zh-cn"] = "选择组队大厅申请者悬停预览样式。",
 	},
 	party_finder_preview_delay = {
 		en = "Preview Delay",
+		["zh-cn"] = "预览延迟",
 	},
 	party_finder_preview_delay_tooltip = {
 		en = "Seconds to wait before showing a Party Finder applicant preview.",
+		["zh-cn"] = "悬停申请者后弹出预览的等待秒数。",
 	},
 	show_party_finder_stats_preview = {
 		en = "Show Stats",
+		["zh-cn"] = "显示属性",
 	},
 	show_party_finder_stats_preview_tooltip = {
 		en = "Show calculated stats when the selected Party Finder preview mode includes stats. Wounds assume the highest difficulty.",
+		["zh-cn"] = "预览模式支持属性时展示计算属性，伤口数值按最高难度计算。",
 	},
 	show_party_finder_stimm_lab_preview = {
 		en = "Show Stimm Lab",
+		["zh-cn"] = "显示兴奋剂实验室",
 	},
 	show_party_finder_stimm_lab_preview_tooltip = {
 		en = "Include Hive Scum stimm lab selections in Party Finder applicant previews.",
+		["zh-cn"] = "组队大厅预览中显示巢都渣滓兴奋剂实验室加点。",
 	},
 	party_finder_weapon_settings = {
 		en = "Weapons",
+		["zh-cn"] = "武器设置",
 	},
 	party_finder_weapon_settings_tooltip = {
 		en = "Weapon options for Party Finder applicant previews.",
+		["zh-cn"] = "组队大厅预览武器相关选项。",
 	},
 	show_party_finder_weapon_preview = {
 		en = "Show Weapons",
+		["zh-cn"] = "显示武器",
 	},
 	show_party_finder_weapon_preview_tooltip = {
 		en = "Show equipped melee and ranged weapons in Party Finder applicant previews.",
+		["zh-cn"] = "组队大厅预览展示近战、远程武器。",
 	},
 	show_party_finder_weapon_icons_preview = {
 		en = "Weapon Icons",
+		["zh-cn"] = "武器图标",
 	},
 	show_party_finder_weapon_icons_preview_tooltip = {
 		en = "Show weapon icons in Party Finder applicant previews.",
+		["zh-cn"] = "组队大厅预览内显示武器图标。",
 	},
 	party_finder_weapon_preview_text_mode = {
 		en = "Weapon Names",
+		["zh-cn"] = "武器名称",
 	},
 	party_finder_weapon_preview_text_mode_tooltip = {
 		en = "Show weapon names in Party Finder applicant previews, even when weapon details are hidden.",
+		["zh-cn"] = "即使关闭武器详情，组队大厅预览依然显示武器名称。",
 	},
 	show_party_finder_weapon_blessings_preview = {
 		en = "Weapon Blessings",
+		["zh-cn"] = "武器祝福",
 	},
 	show_party_finder_weapon_blessings_preview_tooltip = {
 		en = "Show weapon blessing names in Party Finder applicant previews.",
+		["zh-cn"] = "组队大厅预览展示武器祝福名称。",
 	},
 	show_party_finder_weapon_blessing_descriptions_preview = {
 		en = "Blessing Descriptions",
+		["zh-cn"] = "祝福描述",
 	},
 	show_party_finder_weapon_blessing_descriptions_preview_tooltip = {
 		en = "Append short blessing descriptions in Party Finder applicant previews.",
+		["zh-cn"] = "组队大厅预览附加祝福简短说明。",
 	},
 	show_party_finder_weapon_perks_preview = {
 		en = "Weapon Perks",
+		["zh-cn"] = "武器专长",
 	},
 	show_party_finder_weapon_perks_preview_tooltip = {
 		en = "Show weapon perk lines in Party Finder applicant previews.",
+		["zh-cn"] = "组队大厅预览展示武器专长条目。",
 	},
 	party_finder_curio_settings = {
 		en = "Curios",
+		["zh-cn"] = "饰品设置",
 	},
 	party_finder_curio_settings_tooltip = {
 		en = "Curio options for Party Finder applicant previews.",
+		["zh-cn"] = "组队大厅预览饰品相关选项。",
 	},
 	show_party_finder_curio_preview = {
 		en = "Show Curios",
+		["zh-cn"] = "显示饰品",
 	},
 	show_party_finder_curio_preview_tooltip = {
 		en = "Show curio main stats in Party Finder applicant previews.",
+		["zh-cn"] = "组队大厅预览展示饰品主属性。",
 	},
 	show_party_finder_curio_perks_preview = {
 		en = "Curio Perks",
+		["zh-cn"] = "饰品专长",
 	},
 	show_party_finder_curio_perks_preview_tooltip = {
 		en = "Show curio perk lines in Party Finder applicant previews.",
+		["zh-cn"] = "组队大厅预览展示饰品专长条目。",  
 	},
 	other_settings = {
 		en = "Other",
@@ -532,7 +594,7 @@ local localization = {
 	},
 	use_cn_localization = {
 		en = "Chinese Localization",
-		["zh-cn"] = "中文本地化",
+		["zh-cn"] = "启用中文本地化",
 	},
 	use_cn_localization_tooltip = {
 		en = "Force this mod's text to use the Chinese translation. Changing this requires a reload to update the mod menu.",
@@ -700,7 +762,7 @@ local localization = {
 	},
 	preview_ability = {
 		en = "Ability: %s",
-		["zh-cn"] = "能力：%s",
+		["zh-cn"] = "大招：%s",
 	},
 	preview_aura_label = {
 		en = "Aura:",
@@ -712,11 +774,11 @@ local localization = {
 	},
 	preview_blitz_label = {
 		en = "Blitz:",
-		["zh-cn"] = "战斗技能：",
+		["zh-cn"] = "闪击：",
 	},
 	preview_blitz = {
 		en = "Blitz: %s",
-		["zh-cn"] = "战斗技能：%s",
+		["zh-cn"] = "闪击：%s",
 	},
 	preview_keystone_label = {
 		en = "Keystone:",
