@@ -23,7 +23,6 @@ mod.on_setting_changed = function (setting_id)
 end
 
 local ButtonPassTemplates = require("scripts/ui/pass_templates/button_pass_templates")
-local ColorUtilities = require("scripts/utilities/ui/colors")
 local ItemUtils = require("scripts/utilities/items")
 local MasterItems = require("scripts/backend/master_items")
 local ProfileUtils = require("scripts/utilities/profile_utils")
@@ -88,6 +87,9 @@ local BETTER_LOADOUTS_LAYOUT = {
 }
 local PREVIEW_LAYOUTS = {
 	fallback_texture = "content/ui/materials/base/ui_default_base",
+	fallback_talent_icon = "content/ui/textures/icons/talents/zealot/zealot_default_general_talent",
+	stat_node_material = "content/ui/materials/frames/talents/circular_small_bg",
+	talent_icon_material = "content/ui/materials/frames/talents/talent_icon_container",
 	default = {
 		map_width = 420,
 		map_height = 752,
@@ -420,6 +422,7 @@ local Layouts = {}
 local Stats = {}
 local TeamPreview = {}
 local ApplicantPreview = {}
+local PREVIEW_WIDGET_NAME_PREFIX = "loadout_previews_"
 local active_preview_setting_scope
 local PREVIEW_SETTING_SCOPES = {
 	self = {
@@ -527,7 +530,11 @@ end
 function Settings.get(setting_id)
 	local ok, value = Settings.safe_call("read setting " .. tostring(setting_id), mod.get, mod, setting_id)
 
-	return ok and value or nil
+	if ok then
+		return value
+	end
+
+	return nil
 end
 
 function Settings.localize(key, fallback)
@@ -543,7 +550,11 @@ end
 local function better_loadouts_mod()
 	local ok, better_loadouts = pcall(get_mod, "BetterLoadouts")
 
-	return ok and better_loadouts or nil
+	if ok and better_loadouts then
+		return better_loadouts
+	end
+
+	return nil
 end
 
 local function better_loadouts_loaded()
@@ -673,6 +684,8 @@ end
 function Settings.value_is_false(value)
 	if type(value) == "string" then
 		value = string.lower(value)
+		value = string.gsub(value, "^%s+", "")
+		value = string.gsub(value, "%s+$", "")
 	end
 
 	return value == false or value == 0 or value == "false" or value == "0" or value == "off" or value == "disabled"
@@ -681,6 +694,8 @@ end
 function Settings.value_is_true(value)
 	if type(value) == "string" then
 		value = string.lower(value)
+		value = string.gsub(value, "^%s+", "")
+		value = string.gsub(value, "%s+$", "")
 	end
 
 	return value == true or value == 1 or value == "true" or value == "1" or value == "on" or value == "enabled"
@@ -806,34 +821,24 @@ function Settings.show_stimm_lab_preview()
 	return scoped_preview_bool("stimm")
 end
 
+function Settings.show_stimm_lab_preview_for_scope(scope)
+	local visible = Settings.with_preview_settings(scope, function ()
+		return Settings.show_stimm_lab_preview()
+	end)
+
+	return visible == true
+end
+
 function Settings.show_team_stimm_lab_preview()
-	local value = Settings.get("show_team_stimm_lab_preview")
-
-	if value == nil then
-		value = Settings.get("show_stimm_lab_preview")
-	end
-
-	return not Settings.value_is_false(value)
+	return Settings.show_stimm_lab_preview_for_scope("team")
 end
 
 function Settings.show_valkyrie_stimm_lab_preview()
-	local value = Settings.get("show_valkyrie_stimm_lab_preview")
-
-	if value == nil then
-		value = Settings.get("show_team_stimm_lab_preview")
-	end
-
-	return not Settings.value_is_false(value)
+	return Settings.show_stimm_lab_preview_for_scope("valkyrie")
 end
 
 function Settings.show_party_finder_stimm_lab_preview()
-	local value = Settings.get("show_party_finder_stimm_lab_preview")
-
-	if value == nil then
-		value = Settings.get("show_stimm_lab_preview")
-	end
-
-	return not Settings.value_is_false(value)
+	return Settings.show_stimm_lab_preview_for_scope("party_finder")
 end
 
 function Settings.weapon_preview_text_mode()
@@ -878,7 +883,11 @@ function Layouts.local_player_profile()
 
 	local profile_ok, result = Settings.safe_call("get local player profile", profile, player)
 
-	return profile_ok and result or nil
+	if profile_ok and result then
+		return result
+	end
+
+	return nil
 end
 
 function Layouts.require(path)
@@ -888,7 +897,11 @@ function Layouts.require(path)
 
 	local ok, layout = pcall(require, path)
 
-	return ok and layout or nil
+	if ok and layout then
+		return layout
+	end
+
+	return nil
 end
 
 function Layouts.archetype_talent(archetype)
@@ -1311,7 +1324,6 @@ local function move_row_button_passes(hotspot_id, text_id, x, base_style_id)
 			value = "content/ui/materials/gradients/gradient_vertical",
 			style = {
 				horizontal_alignment = "left",
-				scale_to_material = true,
 				vertical_alignment = "center",
 				default_color = Color.terminal_background_gradient(nil, true),
 				hover_color = Color.terminal_frame_selected(nil, true),
@@ -1335,7 +1347,6 @@ local function move_row_button_passes(hotspot_id, text_id, x, base_style_id)
 			value = "content/ui/materials/frames/frame_tile_2px",
 			style = {
 				horizontal_alignment = "left",
-				scale_to_material = true,
 				vertical_alignment = "center",
 				default_color = Color.terminal_frame(nil, true),
 				hover_color = Color.terminal_frame_hover(nil, true),
@@ -1359,7 +1370,6 @@ local function move_row_button_passes(hotspot_id, text_id, x, base_style_id)
 			value = "content/ui/materials/frames/frame_corner_2px",
 			style = {
 				horizontal_alignment = "left",
-				scale_to_material = true,
 				vertical_alignment = "center",
 				default_color = Color.terminal_corner(nil, true),
 				hover_color = Color.terminal_corner_hover(nil, true),
@@ -1510,7 +1520,8 @@ local function estimated_wrapped_line_count(text, width, average_char_width)
 end
 
 function valid_material_path(value)
-	return type(value) == "string" and string.sub(value, 1, 8) == "content/"
+	return type(value) == "string"
+		and (string.sub(value, 1, 21) == "content/ui/materials/" or string.sub(value, 1, 20) == "content/ui/textures/")
 end
 
 function safe_material_path(value, fallback)
@@ -1520,6 +1531,8 @@ function safe_material_path(value, fallback)
 
 	return fallback or PREVIEW_LAYOUTS.fallback_texture
 end
+
+local sanitize_widget_texture_content
 
 local function init_gear_preview_widget(parent, widget, element)
 	local content = widget and widget.content
@@ -1575,6 +1588,10 @@ local function init_gear_preview_widget(parent, widget, element)
 			content["curio_perk_text_" .. i] = format_preview_detail_text(curio.perks)
 		end
 	end
+
+	if sanitize_widget_texture_content then
+		sanitize_widget_texture_content(widget)
+	end
 end
 
 mod:hook_require("scripts/ui/view_elements/view_element_profile_presets/view_element_profile_presets_definitions", function (definitions)
@@ -1600,6 +1617,10 @@ mod:hook_require("scripts/ui/view_elements/view_element_profile_presets/view_ele
 		init = function (parent, widget, element)
 			if widget and widget.content then
 				widget.content.element = element
+			end
+
+			if sanitize_widget_texture_content then
+				sanitize_widget_texture_content(widget)
 			end
 		end,
 	}
@@ -1956,7 +1977,11 @@ local function modifier_item(modifier)
 
 	local ok, item = Settings.safe_call("get modifier master item", MasterItems and MasterItems.get_item, modifier_id)
 
-	return ok and item or nil
+	if ok and item then
+		return item
+	end
+
+	return nil
 end
 
 local function modifier_trait_name(modifier, item)
@@ -1990,7 +2015,11 @@ local function trait_description(modifier, item)
 	local value = modifier and modifier.value or 0
 	local ok, description = Settings.safe_call("get trait description", ItemUtils and ItemUtils.trait_description, item, rarity, value)
 
-	return ok and description or nil
+	if ok and description then
+		return description
+	end
+
+	return nil
 end
 
 local function inline_description_text(text)
@@ -2707,7 +2736,7 @@ function Stats.context_dodges(context)
 	local dodge_template = context and context.dodge_template
 	local base_dodges = Stats.number(dodge_template and dodge_template.diminishing_return_start) or 2
 
-	return math.ceil(base_dodges + Stats.value(context.stats, "extra_consecutive_dodges"))
+	return math.ceil(base_dodges + Stats.value(context and context.stats or {}, "extra_consecutive_dodges"))
 end
 
 function Stats.context_dodge_distance(archetype, context)
@@ -2715,8 +2744,9 @@ function Stats.context_dodge_distance(archetype, context)
 	local archetype_dodge = archetype and archetype.dodge or {}
 	local base_distance = Stats.number(dodge_template and dodge_template.base_distance) or archetype_dodge.base_distance or archetype_dodge.distance or 2.5
 	local distance_scale = Stats.number(dodge_template and dodge_template.distance_scale) or 1
+	local stats = context and context.stats or {}
 
-	return base_distance * distance_scale * Stats.value(context.stats, "dodge_distance_modifier")
+	return base_distance * distance_scale * Stats.value(stats, "dodge_distance_modifier")
 end
 
 function Stats.context_sprint_speed(archetype, context)
@@ -2746,8 +2776,8 @@ function Stats.context_toughness_regen(archetype, context, standing_still)
 	local weapon_toughness_template = context and context.toughness_template
 	local regeneration_speed = toughness_template.regeneration_speed or {}
 	local weapon_regeneration_speed = weapon_toughness_template and weapon_toughness_template.regeneration_speed_modifier or {}
-	local base_rate = standing_still and regeneration_speed.moving or regeneration_speed.still
-	local weapon_rate_modifier = standing_still and weapon_regeneration_speed.moving or weapon_regeneration_speed.still
+	local base_rate = standing_still and regeneration_speed.still or regeneration_speed.moving
+	local weapon_rate_modifier = standing_still and weapon_regeneration_speed.still or weapon_regeneration_speed.moving
 	local stats = context and context.stats or {}
 
 	return (Stats.number(base_rate) or 0) * (Stats.number(weapon_rate_modifier) or 1) * Stats.value(stats, "toughness_regen_rate_modifier") * Stats.value(stats, "toughness_regen_rate_multiplier")
@@ -2930,35 +2960,29 @@ local function node_type_size(node_type, selected, scale)
 	scale = scale or 1
 
 	if node_type == "stat" or node_type == "iconic" then
-		return (selected and 28 or 20) * scale
+		return (selected and 22 or 16) * scale
 	end
 
 	if node_type == "start" then
-		return 48 * scale
+		return 42 * scale
 	end
 
-	if selected then
-		if node_type == "ability" then
-			return 72 * scale
-		elseif node_type == "aura" or node_type == "tactical" or node_type == "keystone" then
-			return 56 * scale
-		end
-
-		return 32 * scale
+	if node_type == "ability" or node_type == "aura" or node_type == "tactical" or node_type == "keystone" or node_type == "broker_stimm" then
+		return (selected and 46 or 24) * scale
 	end
 
-	if node_type == "ability" or node_type == "aura" or node_type == "tactical" or node_type == "keystone" then
-		return 32 * scale
+	if node_type == "ability_modifier" or node_type == "aura_modifier" or node_type == "tactical_modifier" or node_type == "keystone_modifier" then
+		return (selected and 26 or 18) * scale
 	end
 
-	return 28 * scale
+	return (selected and 24 or 16) * scale
 end
 
 local function is_stat_node(node_type, icon)
 	return node_type == "stat" or node_type == "iconic" or icon == "content/ui/textures/frames/talents/circular_small_frame" or icon == "content/ui/materials/frames/talents/circular_small_bg"
 end
 
-local function sanitize_widget_texture_content(widget)
+function sanitize_widget_texture_content(widget)
 	local content = widget and widget.content
 	local passes = widget and widget.passes
 
@@ -2972,9 +2996,31 @@ local function sanitize_widget_texture_content(widget)
 
 		if pass_type == "texture" or pass_type == "rotated_texture" then
 			local value_id = pass.value_id
+			local style = pass.style_id and widget.style and widget.style[pass.style_id] or nil
+			local material_values = style and style.material_values
 
 			if value_id and not valid_material_path(content[value_id]) then
 				content[value_id] = string.sub(value_id, 1, 12) == "weapon_icon_" and WEAPON_LAYOUT.fallback_icon or PREVIEW_LAYOUTS.fallback_texture
+			elseif not value_id and not valid_material_path(pass.value) then
+				pass.value = PREVIEW_LAYOUTS.fallback_texture
+			end
+
+			if type(material_values) == "table" then
+				if material_values.icon ~= nil and not valid_material_path(material_values.icon) then
+					material_values.icon = PREVIEW_LAYOUTS.fallback_talent_icon
+				end
+
+				if material_values.icon_mask ~= nil and not valid_material_path(material_values.icon_mask) then
+					material_values.icon_mask = nil
+				end
+
+				if material_values.frame ~= nil and not valid_material_path(material_values.frame) then
+					material_values.frame = nil
+				end
+
+				if material_values.texture_map ~= nil and not valid_material_path(material_values.texture_map) then
+					material_values.texture_map = PREVIEW_LAYOUTS.fallback_texture
+				end
 			end
 		end
 	end
@@ -3162,25 +3208,7 @@ local function add_line_pass(pass_template, index, from_x, from_y, to_x, to_y, s
 	return index
 end
 
-local function node_icon_material_values(node_type, icon, selected)
-	local settings_by_node_type = TalentBuilderViewSettings and TalentBuilderViewSettings.settings_by_node_type or {}
-	local settings = settings_by_node_type[node_type] or settings_by_node_type.default or {}
-	local frame = valid_material_path(settings.frame) and settings.frame or "content/ui/textures/frames/talents/circular_frame"
-	local gradient_map = valid_material_path(settings.gradient_map) and settings.gradient_map or nil
-	local icon_mask = valid_material_path(settings.icon_mask) and settings.icon_mask or "content/ui/textures/frames/talents/circular_frame_mask"
-
-	return {
-		frame = frame,
-		frame_intensity = selected and 1 or 0.35,
-		gradient_map = gradient_map,
-		icon = icon,
-		icon_mask = icon_mask,
-		intensity = selected and -0.1 or -0.65,
-		saturation = selected and 1 or 0.25,
-	}
-end
-
-local function add_start_node_pass(pass_template, index, node, x, y, use_material_values, node_size_scale)
+local function add_start_node_pass(pass_template, index, node, x, y, node_size_scale)
 	if not valid_material_path(node.icon) then
 		return index
 	end
@@ -3202,23 +3230,6 @@ local function add_start_node_pass(pass_template, index, node, x, y, use_materia
 		color = Color.white(255, true),
 	}
 
-	if use_material_values and ColorUtilities and ColorUtilities.format_color_to_material then
-		style.material_values = {
-			fill_color = ColorUtilities.format_color_to_material({
-				255,
-				224,
-				250,
-				255,
-			}),
-			blur_color = ColorUtilities.format_color_to_material({
-				255,
-				99,
-				167,
-				176,
-			}),
-		}
-	end
-
 	index = index + 1
 	pass_template[index] = {
 		pass_type = "texture",
@@ -3230,48 +3241,121 @@ local function add_start_node_pass(pass_template, index, node, x, y, use_materia
 	return index
 end
 
-local function add_direct_icon_passes(pass_template, index, node_type, icon, x, y, size, selected)
-	local half_size = size * 0.5
-	local settings_by_node_type = TalentBuilderViewSettings and TalentBuilderViewSettings.settings_by_node_type or {}
-	local settings = settings_by_node_type[node_type] or settings_by_node_type.default or {}
-	local frame = valid_material_path(settings.frame) and settings.frame or nil
-	local frame_alpha = selected and 220 or 75
-	local icon_size = size * 0.62
-	local icon_half_size = icon_size * 0.5
+local function add_node_marker_pass(pass_template, index, node_type, x, y, size, selected, has_icon)
+	local marker_size = has_icon and math.max(size * 0.72, 10) or size
+	local half_size = marker_size * 0.5
+	local square = node_type == "tactical"
+		or node_type == "tactical_modifier"
+		or node_type == "ability_modifier"
+		or node_type == "aura_modifier"
+		or node_type == "keystone_modifier"
+	local selected_color = has_icon and {
+		110,
+		34,
+		50,
+		34,
+	} or {
+		145,
+		210,
+		194,
+		142,
+	}
+	local inactive_color = {
+		has_icon and 55 or 70,
+		55,
+		70,
+		55,
+	}
 
-	if frame then
-		index = index + 1
-		pass_template[index] = {
-			pass_type = "texture",
-			style_id = "node_frame_direct_" .. index,
-			value = frame,
-			style = {
-				horizontal_alignment = "left",
-				vertical_alignment = "top",
-				offset = {
-					x - half_size,
-					y - half_size,
-					selected and 5 or 3,
-				},
-				size = {
-					size,
-					size,
-				},
-				color = selected and Color.ui_terminal(frame_alpha, true) or {
-					frame_alpha,
-					85,
-					100,
-					85,
-				},
+	index = index + 1
+	pass_template[index] = {
+		pass_type = square and "rect" or "circle",
+		style_id = "node_marker_" .. index,
+		style = {
+			horizontal_alignment = "left",
+			vertical_alignment = "top",
+			offset = {
+				x - half_size,
+				y - half_size,
+				selected and 4 or 2,
 			},
-		}
-	end
+			size = {
+				marker_size,
+				marker_size,
+			},
+			color = selected and selected_color or inactive_color,
+		},
+	}
+
+	return index
+end
+
+local function add_stat_node_pass(pass_template, index, x, y, size, selected)
+	local half_size = size * 0.5
 
 	index = index + 1
 	pass_template[index] = {
 		pass_type = "texture",
-		style_id = "node_icon_direct_" .. index,
-		value = icon,
+		style_id = "node_stat_" .. index,
+		value = PREVIEW_LAYOUTS.stat_node_material,
+		style = {
+			horizontal_alignment = "left",
+			vertical_alignment = "top",
+			ignore_icon = true,
+			offset = {
+				x - half_size,
+				y - half_size,
+				selected and 6 or 4,
+			},
+			size = {
+				size,
+				size,
+			},
+			color = selected and {
+				255,
+				125,
+				205,
+				255,
+			} or {
+				80,
+				70,
+				85,
+				75,
+			},
+			material_values = {
+				intensity = selected and -0.1 or -0.65,
+				saturation = selected and 1 or 0.25,
+			},
+		},
+	}
+
+	return index
+end
+
+local function node_icon_material_values(node_type, icon, selected)
+	local settings_by_node_type = TalentBuilderViewSettings and TalentBuilderViewSettings.settings_by_node_type or {}
+	local settings = settings_by_node_type[node_type] or settings_by_node_type.default or {}
+
+	return {
+		frame = safe_material_path(settings.frame, "content/ui/textures/frames/talents/circular_frame"),
+		frame_intensity = selected and 1 or 0.35,
+		gradient_map = valid_material_path(settings.gradient_map) and settings.gradient_map or nil,
+		icon = icon,
+		icon_mask = safe_material_path(settings.icon_mask, "content/ui/textures/frames/talents/circular_frame_mask"),
+		intensity = selected and -0.1 or -0.65,
+		saturation = selected and 1 or 0.25,
+	}
+end
+
+local function add_talent_icon_pass(pass_template, index, node_type, icon, x, y, size, selected)
+	local icon_size = size
+	local icon_half_size = icon_size * 0.5
+
+	index = index + 1
+	pass_template[index] = {
+		pass_type = "texture",
+		style_id = "node_icon_" .. index,
+		value = PREVIEW_LAYOUTS.talent_icon_material,
 		style = {
 			horizontal_alignment = "left",
 			vertical_alignment = "top",
@@ -3284,120 +3368,30 @@ local function add_direct_icon_passes(pass_template, index, node_type, icon, x, 
 				icon_size,
 				icon_size,
 			},
-			color = selected and Color.white(255, true) or {
-				95,
-				110,
-				120,
-				110,
-			},
+			color = Color.white(selected and 255 or 135, true),
+			material_values = node_icon_material_values(node_type, icon, selected),
 		},
 	}
 
 	return index
 end
 
-local function add_node_passes(pass_template, index, node, x, y, selected, use_material_values, node_size_scale)
+local function add_node_passes(pass_template, index, node, x, y, selected, node_size_scale)
 	local node_type = node.type
 	local size = node_type_size(node_type, selected, node_size_scale)
-	local half_size = size * 0.5
-	local frame_alpha = selected and 230 or 110
 	local icon = valid_material_path(node.icon) and node.icon or nil
 	local stat_node = is_stat_node(node_type, icon)
 	local has_icon = icon and not stat_node
-	local frame = selected and "content/ui/materials/frames/frame_tile_2px" or "content/ui/materials/backgrounds/default_square"
-	local frame_color = selected and Color.ui_terminal(frame_alpha, true) or {
-		frame_alpha,
-		85,
-		100,
-		85,
-	}
-	local icon_color = selected and Color.white(255, true) or {
-		105,
-		120,
-		130,
-		120,
-	}
 
 	if node_type == "start" and icon then
-		index = add_start_node_pass(pass_template, index, node, x, y, use_material_values, node_size_scale)
+		index = add_start_node_pass(pass_template, index, node, x, y, node_size_scale)
 	elseif stat_node then
-		index = index + 1
-		pass_template[index] = {
-			pass_type = "texture",
-			style_id = "node_stat_" .. index,
-			value = "content/ui/materials/frames/talents/circular_small_bg",
-			style = {
-				horizontal_alignment = "left",
-				vertical_alignment = "top",
-				offset = {
-					x - half_size,
-					y - half_size,
-					selected and 6 or 4,
-				},
-				size = {
-					size,
-					size,
-				},
-				color = selected and {
-					255,
-					125,
-					205,
-					255,
-				} or {
-					80,
-					70,
-					85,
-					75,
-				},
-			},
-		}
+		index = add_stat_node_pass(pass_template, index, x, y, size, selected)
 	elseif has_icon then
-		if use_material_values then
-			index = index + 1
-			pass_template[index] = {
-				pass_type = "texture",
-				style_id = "node_icon_" .. index,
-				value = "content/ui/materials/frames/talents/talent_icon_container",
-				style = {
-					horizontal_alignment = "left",
-					vertical_alignment = "top",
-					offset = {
-						x - half_size,
-						y - half_size,
-						6,
-					},
-					size = {
-						size,
-						size,
-					},
-					color = icon_color,
-					material_values = node_icon_material_values(node_type, icon, selected),
-				},
-			}
-		else
-			index = add_direct_icon_passes(pass_template, index, node_type, icon, x, y, size, selected)
-		end
+		index = add_node_marker_pass(pass_template, index, node_type, x, y, size, selected, true)
+		index = add_talent_icon_pass(pass_template, index, node_type, icon, x, y, size, selected)
 	else
-		index = index + 1
-		pass_template[index] = {
-			pass_type = "texture",
-			style_id = "node_frame_" .. index,
-			value = frame,
-			style = {
-				horizontal_alignment = "left",
-				vertical_alignment = "top",
-				offset = {
-					x - half_size,
-					y - half_size,
-					selected and 5 or 3,
-				},
-				size = {
-					size,
-					size,
-				},
-				color = frame_color,
-			},
-		}
+		index = add_node_marker_pass(pass_template, index, node_type, x, y, size, selected, false)
 	end
 
 	return index
@@ -3474,7 +3468,7 @@ local function build_compact_talents_pass_template(nodes, preview_layout)
 		if node then
 			local size = node_type_size(node.type, true)
 
-			pass_index = add_node_passes(pass_template, pass_index, node, x + size * 0.5, y, true, true)
+			pass_index = add_node_passes(pass_template, pass_index, node, x + size * 0.5, y, true)
 			x = x + size + PREVIEW_LAYOUTS.compact_talent.icon_gap
 		end
 	end
@@ -3603,7 +3597,7 @@ local function build_talent_map_pass_template(layout, selected, preview_layout)
 		local position = node and positions[node.widget_name]
 
 		if position then
-			pass_index = add_node_passes(pass_template, pass_index, node, position[1], position[2], selected[node.widget_name], true, node_size_scale)
+			pass_index = add_node_passes(pass_template, pass_index, node, position[1], position[2], selected[node.widget_name], node_size_scale)
 		end
 	end
 
@@ -3626,6 +3620,10 @@ local function append_passes_with_offset(destination, source, offset_x, offset_y
 		if style then
 			style = table.clone(style)
 			pass.style = style
+
+			if style.material_values then
+				style.material_values = table.clone(style.material_values)
+			end
 
 			if style.offset then
 				style.offset = table.clone(style.offset)
@@ -4726,7 +4724,11 @@ function TeamPreview.is_human_player(player)
 
 	local ok, is_human = pcall(is_human_controlled, player)
 
-	return ok and is_human == true
+	if ok then
+		return is_human == true
+	end
+
+	return false
 end
 
 function TeamPreview.is_local_player(player)
@@ -4746,7 +4748,11 @@ function TeamPreview.is_local_player(player)
 
 	local ok, local_player = Settings.safe_call("get local player for team preview", local_player_method, player_manager, 1)
 
-	return ok and player == local_player
+	if ok then
+		return player == local_player
+	end
+
+	return false
 end
 
 function TeamPreview.should_show_lobby_slot(slot)
@@ -4776,7 +4782,11 @@ function TeamPreview.player_profile(player)
 
 	local ok, result = pcall(profile, player)
 
-	return ok and result or nil
+	if ok and result then
+		return result
+	end
+
+	return nil
 end
 
 function TeamPreview.player_name(player)
@@ -4788,7 +4798,11 @@ function TeamPreview.player_name(player)
 
 	local ok, result = pcall(name, player)
 
-	return ok and result or nil
+	if ok and result then
+		return result
+	end
+
+	return nil
 end
 
 function TeamPreview.profile_title(player, profile)
@@ -4871,7 +4885,11 @@ function TeamPreview.profile_key_for_mode(player, profile, title, mode, tree_onl
 	if unique_id then
 		local ok, value = pcall(unique_id, player)
 
-		unique_id = ok and value or nil
+		if ok then
+			unique_id = value
+		else
+			unique_id = nil
+		end
 	end
 
 	pieces[#pieces + 1] = tostring(unique_id)
@@ -4947,7 +4965,6 @@ function TeamPreview.add_panel_passes(pass_template, width, height, has_title, h
 		value = "content/ui/materials/backgrounds/terminal_basic",
 		style = {
 			horizontal_alignment = "center",
-			scale_to_material = true,
 			vertical_alignment = "center",
 			offset = {
 				0,
@@ -5077,6 +5094,10 @@ function TeamPreview.scale_pass_template(pass_template, scale)
 			style = table.clone(style)
 			pass.style = style
 
+			if style.material_values then
+				style.material_values = table.clone(style.material_values)
+			end
+
 			if style.offset then
 				style.offset = table.clone(style.offset)
 				style.offset[1] = (style.offset[1] or 0) * scale
@@ -5133,7 +5154,11 @@ end
 function TeamPreview.mission_brief_mod()
 	local ok, mission_brief = pcall(get_mod, "MissionBrief")
 
-	return ok and mission_brief or nil
+	if ok and mission_brief then
+		return mission_brief
+	end
+
+	return nil
 end
 
 function TeamPreview.mission_brief_show_mission(mission_brief)
@@ -5255,37 +5280,115 @@ function TeamPreview.build_element(view, player, profile, include_title, context
 	return wrapped and TeamPreview.scale_element(wrapped, TeamPreview.context_scale(context, preview_mode, tree_only)) or nil
 end
 
-function TeamPreview.destroy_widget_resources(view, widget, context, optional_renderer)
-	if not widget or widget._loadout_previews_destroyed then
+function TeamPreview.preview_widget_name(name)
+	return type(name) == "string" and string.sub(name, 1, #PREVIEW_WIDGET_NAME_PREFIX) == PREVIEW_WIDGET_NAME_PREFIX
+end
+
+function TeamPreview.remove_widget_from_view_array(view, widget)
+	local widgets = view and view._widgets
+
+	if type(widgets) ~= "table" or not widget then
 		return
 	end
 
-	widget._loadout_previews_destroyed = true
+	for i = #widgets, 1, -1 do
+		local existing_widget = widgets[i]
+
+		if existing_widget == widget or existing_widget and TeamPreview.preview_widget_name(existing_widget.name) and existing_widget.name == widget.name then
+			table.remove(widgets, i)
+		end
+	end
+end
+
+function TeamPreview.unregister_widget(view, widget, context)
+	local name = widget and widget.name
+
+	if not view or not TeamPreview.preview_widget_name(name) then
+		return
+	end
+
+	if view._unregister_widget_name then
+		Settings.safe_method(context or "unregister loadout preview widget", view, "_unregister_widget_name", name)
+	elseif type(view._widgets_by_name) == "table" then
+		view._widgets_by_name[name] = nil
+	end
+
+	if type(view._widgets_by_name) == "table" then
+		view._widgets_by_name[name] = nil
+	end
+
+	TeamPreview.remove_widget_from_view_array(view, widget)
+end
+
+function TeamPreview.destroy_widget_resources(view, widget, context, optional_renderer)
+	if not widget or widget._loadout_previews_destroyed then
+		return true
+	end
 
 	local ui_renderer = optional_renderer or widget._loadout_previews_ui_renderer or view and view._ui_renderer
+	local ok = true
 
 	if ui_renderer then
-		Settings.safe_call(context or "destroy loadout preview widget resources", UIWidget and UIWidget.destroy, ui_renderer, widget)
+		ok = Settings.safe_call(context or "destroy loadout preview widget resources", UIWidget and UIWidget.destroy, ui_renderer, widget)
+	end
+
+	if not ok then
+		widget.visible = false
+		widget._loadout_previews_ui_renderer = nil
+
+		return false
 	end
 
 	widget._loadout_previews_ui_renderer = nil
+	widget._loadout_previews_destroyed = true
+
+	return true
 end
 
-function TeamPreview.destroy_slot_widget(view, slot)
+function TeamPreview.detach_widget(view, widget, context)
+	if not widget then
+		return true
+	end
+
+	widget.visible = false
+	widget._loadout_previews_ui_renderer = nil
+	widget._loadout_previews_destroyed = true
+	widget._loadout_previews_detached = true
+
+	TeamPreview.unregister_widget(view, widget, context or "detach loadout preview widget")
+
+	return true
+end
+
+function TeamPreview.destroy_slot_widget(view, slot, optional_renderer, context, detach_only)
 	local widget = slot and slot._loadout_previews_widget
 
 	if widget then
-		TeamPreview.destroy_widget_resources(view, widget, "destroy team preview widget resources")
-	end
+		local destroyed
 
-	if widget and view and view._unregister_widget_name then
-		Settings.safe_method("unregister team preview widget", view, "_unregister_widget_name", widget.name)
+		if detach_only ~= false then
+			destroyed = TeamPreview.detach_widget(view, widget, context or "detach team preview widget")
+		else
+			destroyed = TeamPreview.destroy_widget_resources(view, widget, context or "destroy team preview widget resources", optional_renderer)
+
+			if destroyed then
+				TeamPreview.unregister_widget(view, widget, "unregister team preview widget")
+			else
+				destroyed = TeamPreview.detach_widget(view, widget, "detach team preview widget after failed destroy")
+			end
+		end
+
+		if not destroyed then
+			return false
+		end
 	end
 
 	if slot then
 		slot._loadout_previews_widget = nil
 		slot._loadout_previews_widget_key = nil
 	end
+
+	return true
 end
 
 function TeamPreview.lobby_tree_slot_keys(view)
@@ -5338,6 +5441,10 @@ function TeamPreview.bind_lobby_toggle(view, slot, widget)
 end
 
 function TeamPreview.refresh_slot_widget(view, slot, context, include_title, mode, tree_only)
+	if view and (view._loadout_previews_exiting or view._destroyed) then
+		return nil
+	end
+
 	if not TeamPreview.enabled(context) or not slot or not slot.occupied then
 		TeamPreview.destroy_slot_widget(view, slot)
 
@@ -5445,15 +5552,48 @@ function TeamPreview.draw_widget(widget, ui_renderer, context)
 	return ok
 end
 
-function TeamPreview.clear_view_widgets(view)
-	local spawn_slots = view and view._spawn_slots
+function TeamPreview.clear_registered_view_widgets(view, context, optional_renderer, detach_only)
+	local widgets_by_name = view and view._widgets_by_name
 
-	if type(spawn_slots) ~= "table" then
+	if type(widgets_by_name) ~= "table" then
 		return
 	end
 
-	for i = 1, #spawn_slots do
-		TeamPreview.destroy_slot_widget(view, spawn_slots[i])
+	local preview_widgets = {}
+
+	for name, widget in pairs(widgets_by_name) do
+		if TeamPreview.preview_widget_name(name) then
+			preview_widgets[#preview_widgets + 1] = widget
+		end
+	end
+
+	for i = 1, #preview_widgets do
+		local widget = preview_widgets[i]
+
+		if detach_only ~= false then
+			TeamPreview.detach_widget(view, widget, context or "detach registered loadout preview widget")
+		elseif TeamPreview.destroy_widget_resources(view, widget, context or "destroy registered loadout preview widget resources", optional_renderer) then
+			TeamPreview.unregister_widget(view, widget, "unregister registered loadout preview widget")
+		else
+			TeamPreview.detach_widget(view, widget, "detach registered loadout preview widget after failed destroy")
+		end
+	end
+end
+
+function TeamPreview.clear_view_widgets(view, context, optional_renderer, detach_only)
+	local spawn_slots = view and view._spawn_slots
+
+	if type(spawn_slots) == "table" then
+		for i = 1, #spawn_slots do
+			TeamPreview.destroy_slot_widget(view, spawn_slots[i], optional_renderer, context, detach_only)
+		end
+	end
+
+	TeamPreview.clear_registered_view_widgets(view, context, optional_renderer, detach_only)
+
+	if view then
+		view._loadout_previews_lobby_tree_slot_key = nil
+		view._loadout_previews_lobby_tree_slot_keys = nil
 	end
 end
 
@@ -5619,6 +5759,12 @@ function TeamPreview.position_lobby_widgets(widgets)
 end
 
 function TeamPreview.draw_lobby(view, ui_renderer)
+	if view and (view._loadout_previews_exiting or view._destroyed) then
+		TeamPreview.clear_view_widgets(view, "detach exiting lobby team preview widgets", ui_renderer, true)
+
+		return
+	end
+
 	local spawn_slots = view and view._spawn_slots
 
 	if type(spawn_slots) ~= "table" or not TeamPreview.enabled("lobby") then
@@ -5843,7 +5989,7 @@ function TeamPreview.render_pass(context, ui_renderer, ui_scenegraph, input_serv
 	local ok, error_message = pcall(function ()
 		render_settings.start_layer = start_layer or 0
 		render_settings.scale = render_scale
-		render_settings.inverse_scale = render_scale and 1 / render_scale
+		render_settings.inverse_scale = render_scale and render_scale ~= 0 and 1 / render_scale or nil
 
 		UIRenderer.begin_pass(ui_renderer, ui_scenegraph, input_service, dt, render_settings)
 		pass_started = true
@@ -5867,6 +6013,12 @@ function TeamPreview.render_pass(context, ui_renderer, ui_scenegraph, input_serv
 end
 
 function TeamPreview.draw_mission_intro_pass(view, dt, t, input_service, layer)
+	if view and (view._loadout_previews_exiting or view._destroyed) then
+		TeamPreview.clear_view_widgets(view, "detach exiting mission intro preview widgets", view and view._ui_renderer, true)
+
+		return
+	end
+
 	local ui_renderer = view and view._ui_renderer
 	local ui_scenegraph = view and view._ui_scenegraph
 	local render_settings = view and view._render_settings
@@ -5882,21 +6034,25 @@ function TeamPreview.draw_mission_intro_pass(view, dt, t, input_service, layer)
 	end)
 end
 
-function ApplicantPreview.destroy_widget(view)
+function ApplicantPreview.destroy_widget(view, detach_only)
 	local widget = view and view._loadout_previews_applicant_widget
 
 	if widget then
-		TeamPreview.destroy_widget_resources(view, widget, "destroy party finder applicant preview widget resources")
-	end
-
-	if widget and view._unregister_widget_name then
-		Settings.safe_method("unregister party finder applicant preview widget", view, "_unregister_widget_name", widget.name)
+		if detach_only ~= false then
+			TeamPreview.detach_widget(view, widget, "detach party finder applicant preview widget")
+		elseif TeamPreview.destroy_widget_resources(view, widget, "destroy party finder applicant preview widget resources") then
+			TeamPreview.unregister_widget(view, widget, "unregister party finder applicant preview widget")
+		else
+			TeamPreview.detach_widget(view, widget, "detach party finder applicant preview widget after failed destroy")
+		end
 	end
 
 	if view then
 		view._loadout_previews_applicant_widget = nil
 		view._loadout_previews_applicant_widget_key = nil
 	end
+
+	return true
 end
 
 function ApplicantPreview.profile(element)
@@ -5984,7 +6140,6 @@ function ApplicantPreview.wrap_tooltip_element(element)
 			value = "content/ui/materials/backgrounds/terminal_basic",
 			style = {
 				horizontal_alignment = "center",
-				scale_to_material = true,
 				vertical_alignment = "center",
 				color = Color.terminal_grid_background(255, true),
 				offset = {
@@ -6134,7 +6289,11 @@ function ApplicantPreview.scenegraph_position(view, scenegraph_id)
 
 	local ok, position = pcall(view._scenegraph_world_position, view, scenegraph_id)
 
-	return ok and position or nil
+	if ok and position then
+		return position
+	end
+
+	return nil
 end
 
 function ApplicantPreview.scenegraph_size(view, scenegraph_id)
@@ -6187,6 +6346,13 @@ function ApplicantPreview.delay_elapsed(view, key, t)
 end
 
 function ApplicantPreview.draw(view, ui_renderer, t)
+	if view and (view._loadout_previews_exiting or view._destroyed) then
+		ApplicantPreview.destroy_widget(view, true)
+		ApplicantPreview.clear_hover_delay(view)
+
+		return
+	end
+
 	if not TeamPreview.enabled("applicant") then
 		ApplicantPreview.destroy_widget(view)
 		ApplicantPreview.clear_hover_delay(view)
@@ -6625,33 +6791,84 @@ mod:hook_safe("LobbyView", "_draw_widgets", function (self, dt, t, input_service
 end)
 
 mod:hook_safe("LobbyView", "on_enter", function (self)
+	self._loadout_previews_exiting = nil
 	lobby_team_previews_keybind_hidden = false
 end)
 
 mod:hook("GroupFinderView", "on_exit", function (func, self, ...)
-	ApplicantPreview.destroy_widget(self)
+	self._loadout_previews_exiting = true
+	ApplicantPreview.destroy_widget(self, true)
+
+	return func(self, ...)
+end)
+
+mod:hook_safe("GroupFinderView", "on_enter", function (self)
+	self._loadout_previews_exiting = nil
+end)
+
+mod:hook("GroupFinderView", "destroy", function (func, self, ...)
+	self._loadout_previews_exiting = true
+	ApplicantPreview.destroy_widget(self, true)
+
+	return func(self, ...)
+end)
+
+mod:hook("BaseView", "destroy", function (func, self, ...)
+	local class_name = self and self.__class_name
+
+	if class_name == "LobbyView" then
+		self._loadout_previews_exiting = true
+		TeamPreview.clear_view_widgets(self, "detach lobby team preview widgets from base destroy", self._ui_renderer, true)
+	elseif class_name == "MissionIntroView" then
+		self._loadout_previews_exiting = true
+		TeamPreview.clear_view_widgets(self, "detach mission intro team preview widgets from base destroy", self._ui_renderer, true)
+		TeamPreview._mission_intro_tree_gear_scale = nil
+	elseif class_name == "GroupFinderView" then
+		self._loadout_previews_exiting = true
+		ApplicantPreview.destroy_widget(self, true)
+	end
 
 	return func(self, ...)
 end)
 
 mod:hook_safe("LobbyView", "_reset_spawn_slot", function (self, slot)
-	TeamPreview.destroy_slot_widget(self, slot)
+	TeamPreview.destroy_slot_widget(self, slot, nil, nil, self and (self._loadout_previews_exiting or self._destroyed))
 end)
 
 mod:hook("LobbyView", "_destroy_spawn_slots", function (func, self, ...)
-	TeamPreview.clear_view_widgets(self)
+	TeamPreview.clear_view_widgets(self, "detach lobby team preview widgets before spawn slots", nil, true)
+
+	return func(self, ...)
+end)
+
+mod:hook("LobbyView", "_all_ready_countdown", function (func, self, dt, ...)
+	local countdown = self and self._countdown
+
+	if type(countdown) == "number" and type(dt) == "number" and countdown - dt < 0 then
+		self._loadout_previews_exiting = true
+		TeamPreview.clear_view_widgets(self, "detach lobby team preview widgets before ready complete", self._ui_renderer, true)
+	end
+
+	return func(self, dt, ...)
+end)
+
+mod:hook("LobbyView", "on_exit", function (func, self, ...)
+	self._loadout_previews_exiting = true
+	TeamPreview.clear_view_widgets(self, "detach lobby team preview widgets on exit", self._ui_renderer, true)
 
 	return func(self, ...)
 end)
 
 mod:hook("MissionIntroView", "on_exit", function (func, self, ...)
-	TeamPreview.clear_view_widgets(self)
+	self._loadout_previews_exiting = true
+	TeamPreview.clear_view_widgets(self, "detach mission intro team preview widgets on exit", self._ui_renderer, true)
 	TeamPreview._mission_intro_tree_gear_scale = nil
 
 	return func(self, ...)
 end)
 
 mod:hook_safe("MissionIntroView", "on_enter", function (self)
+	self._loadout_previews_exiting = nil
 	mission_intro_team_previews_keybind_hidden = false
 end)
 
@@ -6672,5 +6889,5 @@ mod:hook("GroupFinderView", "draw", function (func, self, dt, t, input_service, 
 end)
 
 mod:hook_safe("MissionIntroView", "_reset_spawn_slot", function (self, slot)
-	TeamPreview.destroy_slot_widget(self, slot)
+	TeamPreview.destroy_slot_widget(self, slot, nil, nil, self and (self._loadout_previews_exiting or self._destroyed))
 end)
