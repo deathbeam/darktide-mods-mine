@@ -5,6 +5,9 @@ local WeaponTemplate = mod:original_require('scripts/utilities/weapon/weapon_tem
 local BuffSettings = mod:original_require('scripts/settings/buff/buff_settings')
 local BuffTemplates = mod:original_require('scripts/settings/buff/buff_templates')
 local WeaponTraitTemplates = mod:original_require('scripts/settings/equipment/weapon_traits/weapon_trait_templates')
+local WeaponHandlingTemplates =
+    mod:original_require('scripts/settings/equipment/weapon_handling_templates/weapon_handling_templates')
+local WeaponTweakTemplates = mod:original_require('scripts/extension_systems/weapon/utilities/weapon_tweak_templates')
 local MasterItems = mod:original_require('scripts/backend/master_items')
 local HomePlanets = mod:original_require('scripts/settings/character/home_planets')
 local Childhood = mod:original_require('scripts/settings/character/childhood')
@@ -32,23 +35,6 @@ local _HAVOC_PLAYER_FACING = {
 }
 
 -- Enemy-type damage resistance curio perks: damage_taken_by_<breed>_multiplier (multiplicative).
-local _ENEMY_RESISTANCE_TERMS = {
-    { key = 'damage_taken_by_cultist_grenadier_multiplier', label = 'stat_taken_from_bombers' },
-    { key = 'damage_taken_by_renegade_grenadier_multiplier', label = 'stat_taken_from_bombers' },
-    { key = 'damage_taken_by_cultist_flamer_multiplier', label = 'stat_taken_from_flamers' },
-    { key = 'damage_taken_by_renegade_flamer_multiplier', label = 'stat_taken_from_flamers' },
-    { key = 'damage_taken_by_renegade_flamer_mutator_multiplier', label = 'stat_taken_from_flamers' },
-    { key = 'damage_taken_by_cultist_gunner_multiplier', label = 'stat_taken_from_gunners' },
-    { key = 'damage_taken_by_renegade_gunner_multiplier', label = 'stat_taken_from_gunners' },
-    { key = 'damage_taken_by_chaos_ogryn_gunner_multiplier', label = 'stat_taken_from_gunners' },
-    { key = 'damage_taken_by_cultist_mutant_multiplier', label = 'stat_taken_from_mutants' },
-    { key = 'damage_taken_by_cultist_mutant_mutator_multiplier', label = 'stat_taken_from_mutants' },
-    { key = 'damage_taken_by_chaos_hound_multiplier', label = 'stat_taken_from_pox_hounds' },
-    { key = 'damage_taken_by_chaos_hound_mutator_multiplier', label = 'stat_taken_from_pox_hounds' },
-    { key = 'damage_taken_by_chaos_armored_hound_multiplier', label = 'stat_taken_from_pox_hounds' },
-    { key = 'damage_taken_by_renegade_sniper_multiplier', label = 'stat_taken_from_snipers' },
-}
-
 local GADGET_STAT_LABEL = {
     gadget_health_increase = 'Max Health',
     gadget_innate_health_increase = 'Max Health',
@@ -83,9 +69,27 @@ local function _weapon_toughness_template(unit)
     return weapon_ext and weapon_ext:toughness_template() or nil
 end
 
-local function _weapon_handling(unit)
-    local weapon_ext = _ext(unit, 'weapon_system')
-    return weapon_ext and weapon_ext:weapon_handling_template() or nil
+-- Max crit chance_modifier across the weapon template's actions. Ninja weapons (combat knife,
+-- hatchets, saws, shivs) carry a crit bump on their handling template. The template is
+-- preparsed at load, which mutates each action's weapon_handling_template into a lookup key,
+-- so the original name is recovered via get_template_identifiers().base_identifier.
+local function _weapon_crit_modifier(wep_template)
+    if not wep_template or not wep_template.__base_template_lookup then
+        return nil
+    end
+    local best = nil
+    for action_name in pairs(wep_template.actions or EMPTY) do
+        local base_id = WeaponTweakTemplates.get_template_identifiers(wep_template, 'weapon_handling', action_name)
+        local cs = base_id and WeaponHandlingTemplates[base_id] and WeaponHandlingTemplates[base_id].critical_strike
+        local mod = cs and cs.chance_modifier
+        if type(mod) == 'table' then
+            mod = mod.lerp_perfect or mod.lerp_basic
+        end
+        if type(mod) == 'number' and (best == nil or mod > best) then
+            best = mod
+        end
+    end
+    return best
 end
 
 local function _resolve_crime(key)
@@ -126,6 +130,22 @@ end
 local function _stat_base(name)
     local b = stat_buff_type_base[name]
     return b ~= nil and b or 1
+end
+
+-- Inject a single additive stat contribution (value + named source) into the folded result,
+-- bypassing the buff template path. Used for non-buff base values like the weapon crit bump.
+local function _inject_source(result, stat_name, value, source)
+    if not value or value == 0 or not source then
+        return
+    end
+    local cur = result.values[stat_name]
+    result.values[stat_name] = (cur or _stat_base(stat_name)) + value
+    local list = result.sources[stat_name]
+    if not list then
+        list = {}
+        result.sources[stat_name] = list
+    end
+    list[#list + 1] = { name = source, delta = value, stacks = 1 }
 end
 
 local function _merge(result, stat_buffs, stack_count, source, lerp_t)
@@ -279,37 +299,45 @@ local function _display_for_buff(template_name)
     return (template and SharedUtils.safe_localize(template.display_name)) or SharedUtils.prettify(template_name)
 end
 
-local function _weapon_buffs(player)
+-- Both blessings (item.traits) and perks (item.perks) carry on-equip stat buffs in the same
+-- shape (WeaponTraitTemplates[name].buffs -> rarity-indexed overrides), so fold them together.
+local function _weapon_buffs(player, slot_name)
     local vl = _equip_loadout(player)
-    local cached = vl and MasterItems.get_cached()
+    if not vl or not slot_name then
+        return {}
+    end
+    local cached = MasterItems.get_cached()
     if not cached then
         return {}
     end
     local out = {}
-    for _, slot in ipairs({ 'slot_primary', 'slot_secondary' }) do
-        local item = vl:item_from_slot(slot)
-        if item and item.traits then
-            for i = 1, #item.traits do
-                local trait = item.traits[i]
-                local trait_item = trait.id and cached[trait.id]
-                local trait_name = trait_item and trait_item.trait
-                local def = trait_name and WeaponTraitTemplates[trait_name]
-                if def and def.buffs then
-                    local rarity = trait.rarity or 1
-                    for buff_template_name, levels in pairs(def.buffs) do
-                        local override
-                        for r = rarity, 1, -1 do
-                            override = levels[r]
-                            if override then
-                                break
+    local item = vl:item_from_slot(slot_name)
+    if item then
+        for _, list_key in ipairs({ 'traits', 'perks' }) do
+            local list = item[list_key]
+            if list then
+                for i = 1, #list do
+                    local trait = list[i]
+                    local trait_item = trait.id and cached[trait.id]
+                    local trait_name = trait_item and trait_item.trait
+                    local def = trait_name and WeaponTraitTemplates[trait_name]
+                    if def and def.buffs then
+                        local rarity = trait.rarity or 1
+                        for buff_template_name, levels in pairs(def.buffs) do
+                            local override
+                            for r = rarity, 1, -1 do
+                                override = levels[r]
+                                if override then
+                                    break
+                                end
                             end
+                            out[#out + 1] = {
+                                template_name = buff_template_name,
+                                override_data = override,
+                                display_name = SharedUtils.safe_localize(trait_item and trait_item.display_name)
+                                    or _display_for_buff(buff_template_name),
+                            }
                         end
-                        out[#out + 1] = {
-                            template_name = buff_template_name,
-                            override_data = override,
-                            display_name = SharedUtils.safe_localize(trait_item and trait_item.display_name)
-                                or _display_for_buff(buff_template_name),
-                        }
                     end
                 end
             end
@@ -419,34 +447,7 @@ end
 
 -- Group damage-taken terms that share a label (e.g. a Gunners perk buffs 3 breeds to the
 -- same value): collapses them into one term carrying all keys, value taken from the first.
-local function _group_terms_by_label(terms)
-    local grouped, by_label = {}, {}
-    for i = 1, #terms do
-        local t = terms[i]
-        local existing = by_label[t.label]
-        if existing then
-            existing.keys[#existing.keys + 1] = t.key
-        else
-            local copy = { label = t.label, value = t.value, delta = t.delta, kind = t.kind, keys = { t.key } }
-            by_label[t.label] = copy
-            grouped[#grouped + 1] = copy
-        end
-    end
-    return grouped
-end
-
 -- {label, key, delta} terms for the given stat keys, skipping defaults (multiplier base 1).
-local function _terms(values, keys)
-    local out = {}
-    for _, k in ipairs(keys) do
-        local v = values[k.key]
-        if type(v) == 'number' and v ~= 1 then
-            out[#out + 1] = { label = k.label, key = k.key, delta = v - 1, kind = k.kind }
-        end
-    end
-    return out
-end
-
 -- damage_taken / toughness_damage_taken share the same compose: mult = <prefix>_multiplier,
 -- mod = <prefix>_modifier (+ melee/ranged variants), final = mult * mod.
 local function _compose_taken(values, prefix)
@@ -548,15 +549,13 @@ function M.character_bio(profile)
     return filtered
 end
 
-function M.wielded_weapon_template(unit)
-    local weapon_ext = _ext(unit, 'weapon_system')
-    if not weapon_ext then
-        return nil, nil
+function M.wielded_weapon_template(unit, slot_name)
+    local vl = unit and ScriptUnit.has_extension(unit, 'visual_loadout_system')
+    if not vl or not slot_name then
+        return nil
     end
-    local ok, template = pcall(function()
-        return weapon_ext.weapon_template and weapon_ext:weapon_template()
-    end)
-    return (ok and template) or nil, weapon_ext
+    local item = vl:item_from_slot(slot_name)
+    return item and WeaponTemplate.weapon_template_from_item(item) or nil
 end
 
 function M.vitals(unit)
@@ -638,7 +637,7 @@ function M.folded_stat_buffs(unit, profile, player, toggles)
         for i = 1, #coherency_templates do
             names[#names + 1] = coherency_templates[i]
         end
-        local coh_source = mod:localize('coherency_source')
+        local coh_source = mod:localize('source_coherency')
         for i = 1, #names do
             local template = BuffTemplates[names[i]]
             local stepped = template and template.stepped_stat_buffs
@@ -650,7 +649,8 @@ function M.folded_stat_buffs(unit, profile, player, toggles)
         end
     end
 
-    for _, entry in ipairs(_weapon_buffs(player)) do
+    local weapon_slot = toggles.weapon_slot
+    for _, entry in ipairs(_weapon_buffs(player, weapon_slot)) do
         local template = BuffTemplates[entry.template_name]
         if template then
             local stacks = _stacks_for(template, toggles)
@@ -667,13 +667,29 @@ function M.folded_stat_buffs(unit, profile, player, toggles)
         end
     end
 
+    local archetype = profile and profile.archetype
+    local base_crit = (archetype and archetype.base_critical_strike_chance) or 0
+    if base_crit ~= 0 then
+        _inject_source(result, 'critical_strike_chance', base_crit, mod:localize('source_base'))
+    end
+    local wep_template = M.wielded_weapon_template(unit, weapon_slot)
+    local crit_mod = _weapon_crit_modifier(wep_template)
+    if crit_mod and crit_mod ~= 0 then
+        local vl = unit and ScriptUnit.has_extension(unit, 'visual_loadout_system')
+        local item = vl and weapon_slot and vl:item_from_slot(weapon_slot)
+        local weapon_name = (item and SharedUtils.safe_localize(item.display_name))
+            or (wep_template and wep_template.name)
+            or mod:localize('mod_name')
+        _inject_source(result, 'critical_strike_chance', crit_mod, weapon_name)
+    end
+
     for _, entry in ipairs(_gadget_buffs(player)) do
         _fold(result, BuffTemplates[entry.template_name], nil, 1, entry.display_name, entry.lerp_value)
     end
 
     local havoc_rank = toggles.havoc_rank or 0
     if havoc_rank > 0 then
-        local havoc_source = mod:localize('havoc_source')
+        local havoc_source = mod:localize('source_havoc')
         for _, name in ipairs(_havoc_debuffs(havoc_rank)) do
             _fold(result, BuffTemplates[name], nil, 1, havoc_source)
         end
@@ -686,7 +702,7 @@ function M.sources_for_stat(folded, stat_key)
     return folded and folded.sources and folded.sources[stat_key] or nil
 end
 
-function M.crit_chance(player, unit, wep_template, folded)
+function M.crit_chance(folded, wep_template)
     local s = folded and folded.values
     if not s then
         return nil
@@ -697,45 +713,8 @@ function M.crit_chance(player, unit, wep_template, folded)
     elseif _is_ranged(wep_template) then
         add = add + (s.ranged_critical_strike_chance or 0)
     end
-    local handling = _weapon_handling(unit)
-    if handling and handling.critical_strike then
-        add = add + (handling.critical_strike.chance_modifier or 0)
-    end
-    local profile = M.profile(player)
-    local archetype = profile and profile.archetype
-    local base = (archetype and archetype.base_critical_strike_chance) or 0
-    local chance = math.clamp(base + add, 0, 1)
+    local chance = math.clamp(add, 0, 1)
     return chance * (1 - (s.critical_strike_chance_to_damage_convert or 0))
-end
-
-function M.crit_damage_mult(folded, wep_template)
-    local s = folded and folded.values
-    if not s then
-        return nil
-    end
-    local crit = s.critical_strike_damage or 1
-    if _is_melee(wep_template) then
-        crit = crit + (s.melee_critical_strike_damage or 1) - 1
-    elseif _is_ranged(wep_template) then
-        crit = crit + (s.ranged_critical_strike_damage or 1) - 1
-    end
-    return crit
-end
-
-function M.attack_speed(unit, folded, wep_template)
-    local s = folded and folded.values
-    if not s or not wep_template then
-        return nil
-    end
-    local base = s.attack_speed or 1
-    local factor = _is_melee(wep_template) and (s.melee_attack_speed or 1)
-        or _is_ranged(wep_template) and (base + (s.ranged_attack_speed or 1) - 1)
-        or base
-    local handling = _weapon_handling(unit)
-    if handling then
-        factor = factor * (handling.time_scale or 1)
-    end
-    return factor
 end
 
 function M.mobility(unit, live_stat_buffs, folded)
@@ -827,7 +806,7 @@ function M.toughness_regen(unit, live_stat_buffs, tough_template, max_toughness,
         * (fv and fv.toughness_coherency_regen_rate_multiplier or s.toughness_coherency_regen_rate_multiplier or 1)
     local coherency_regen = base_rate * wep_mod * rate_modifier * coherency_modifier
     local percent_regen = (fv and fv.toughness_regen_percent or s.toughness_regen_percent or 0) * (max_toughness or 0)
-    return coherency_regen, percent_regen, coherency_modifier
+    return coherency_regen, percent_regen
 end
 
 function M.toughness_regen_delay(unit, live_stat_buffs, tough_template)
@@ -841,161 +820,9 @@ function M.toughness_regen_delay(unit, live_stat_buffs, tough_template)
     return tough_template.regeneration_delay * wep_mod * buff_mod
 end
 
-function M.toughness_melee_bounty(unit, live_stat_buffs, tough_template, max_toughness, wep_template)
-    local s = live_stat_buffs
-    if not s or not tough_template or not max_toughness or not _is_melee(wep_template) then
-        return nil
-    end
-    local wep_tough = _weapon_toughness_template(unit)
-    local recovery = tough_template.recovery_percentages or EMPTY
-    local wep_mod = wep_tough
-            and wep_tough.recovery_percentage_modifiers
-            and wep_tough.recovery_percentage_modifiers.melee_kill
-        or 1
-    local replenish = (s.toughness_melee_replenish or 1) + (s.toughness_replenish_multiplier or 1) - 1
-    return max_toughness * (recovery.melee_kill or 0) * replenish * wep_mod
-end
-
--- Mirrors damage_calculation.lua:_calculate_damage_buff: sums (value-1) across additive attacker
--- buffs with melee/ranged layered on the generic base.
-function M.damage_multiplier(folded)
+function M.compose_taken(folded, prefix)
     local v = _folded_values(folded)
-    if not v then
-        return nil
-    end
-    local function compose(is_melee, is_ranged)
-        local add = 0
-        local function term(key)
-            local val = v[key]
-            if type(val) == 'number' and val ~= 1 then
-                add = add + val - 1
-            end
-        end
-        term('damage')
-        term('power_level_modifier')
-        if is_melee then
-            term('melee_damage')
-            term('melee_power_level_modifier')
-        elseif is_ranged then
-            term('ranged_damage')
-            term('ranged_power_level_modifier')
-        end
-        return 1 + add
-    end
-    return { generic = compose(false, false), melee = compose(true, false), ranged = compose(false, true) }
-end
-
--- Mirrors the weakspot/finesse damage fold in damage_calculation.lua:_finesse_boost_damage:
--- the per-hit multiplier is 1 + sum(weakspot_damage-1) with melee/ranged variants layered on.
-function M.weakspot_damage(folded, wep_template)
-    local v = _folded_values(folded)
-    if not v then
-        return nil
-    end
-    local function compose(is_melee, is_ranged)
-        local add = 0
-        local function term(key)
-            local val = v[key]
-            if type(val) == 'number' and val ~= 1 then
-                add = add + val - 1
-            end
-        end
-        term('weakspot_damage')
-        if is_melee then
-            term('melee_weakspot_damage')
-        elseif is_ranged then
-            term('ranged_weakspot_damage')
-        end
-        return 1 + add
-    end
-    return { generic = compose(false, false), melee = compose(true, false), ranged = compose(false, true) }
-end
-
-function M.damage_vs_terms(folded)
-    local v = _folded_values(folded)
-    if not v then
-        return nil
-    end
-    return _terms(v, {
-        { key = 'damage_vs_elites', label = 'stat_damage_vs_elites' },
-        { key = 'melee_heavy_damage_vs_elites', label = 'stat_melee_heavy_vs_elites' },
-        { key = 'damage_vs_specials', label = 'stat_damage_vs_specials' },
-        { key = 'damage_vs_monsters', label = 'stat_damage_vs_monsters' },
-        { key = 'ranged_damage_vs_monsters', label = 'stat_ranged_vs_monsters' },
-        { key = 'damage_vs_ogryn', label = 'stat_damage_vs_ogryn' },
-        { key = 'damage_vs_ogryn_and_monsters', label = 'stat_damage_vs_ogryn_monsters' },
-        { key = 'damage_vs_horde', label = 'stat_damage_vs_horde' },
-        { key = 'damage_vs_bleeding', label = 'stat_damage_vs_bleeding' },
-        { key = 'damage_vs_burning', label = 'stat_damage_vs_burning' },
-        { key = 'damage_vs_electrocuted', label = 'stat_damage_vs_electrocuted' },
-        { key = 'damage_vs_staggered', label = 'stat_damage_vs_staggered' },
-        { key = 'damage_vs_suppressed', label = 'stat_damage_vs_suppressed' },
-        { key = 'damage_vs_healthy', label = 'stat_damage_vs_healthy' },
-    })
-end
-
-function M.rending_terms(folded, wep_template)
-    local v = _folded_values(folded)
-    if not v then
-        return nil
-    end
-    local keys = {
-        { key = 'rending_multiplier', label = 'stat_rending' },
-        { key = 'backstab_rending_multiplier', label = 'stat_backstab_rending' },
-        { key = 'flanking_rending_multiplier', label = 'stat_flanking_rending' },
-        { key = 'critical_strike_rending_multiplier', label = 'stat_crit_rending' },
-        { key = 'rending_vs_staggered_multiplier', label = 'stat_rending_vs_staggered' },
-        { key = 'rending_vs_electrocuted_multiplier', label = 'stat_rending_vs_electrocuted' },
-        { key = 'close_range_rending_multiplier', label = 'stat_close_range_rending' },
-        { key = 'warp_attacks_rending_multiplier', label = 'stat_warp_rending' },
-    }
-    if _is_melee(wep_template) then
-        keys[#keys + 1] = { key = 'melee_rending_multiplier', label = 'stat_melee_rending' }
-        keys[#keys + 1] = { key = 'melee_heavy_rending_multiplier', label = 'stat_melee_heavy_rending' }
-    elseif _is_ranged(wep_template) then
-        keys[#keys + 1] = { key = 'ranged_rending_multiplier', label = 'stat_ranged_rending' }
-        keys[#keys + 1] = { key = 'ranged_critical_strike_rending_multiplier', label = 'stat_ranged_crit_rending' }
-    end
-    return _terms(v, keys)
-end
-
-function M.damage_taken(folded)
-    local v = _folded_values(folded)
-    return v and _compose_taken(v, 'damage_taken') or nil
-end
-
-function M.toughness_damage_taken(folded)
-    local v = _folded_values(folded)
-    return v and _compose_taken(v, 'toughness_damage_taken') or nil
-end
-
-function M.damage_taken_from_sources(folded)
-    local v = _folded_values(folded)
-    if not v then
-        return nil
-    end
-    local terms = _terms(v, {
-        { key = 'damage_taken_from_explosions', label = 'stat_taken_from_explosions' },
-        { key = 'damage_taken_from_prop_explosions', label = 'stat_taken_from_prop_explosions' },
-        { key = 'damage_taken_from_toxin', label = 'stat_taken_from_toxin' },
-        { key = 'damage_taken_from_burning', label = 'stat_taken_from_burning' },
-        { key = 'damage_taken_from_bleeding', label = 'stat_taken_from_bleeding' },
-        { key = 'damage_taken_from_electrocution', label = 'stat_taken_from_electrocution' },
-        { key = 'damage_taken_from_kinetic', label = 'stat_taken_from_kinetic' },
-    })
-    local function mult_term(label, key)
-        local val = v[key]
-        if type(val) == 'number' and val ~= 1 then
-            terms[#terms + 1] = { label = label, key = key, value = val, kind = 'mult' }
-        end
-    end
-    mult_term('stat_taken_from_toxic_gas', 'damage_taken_from_toxic_gas_multiplier')
-    mult_term('stat_taken_from_corruption', 'corruption_taken_multiplier')
-    mult_term('stat_taken_from_grimoire', 'corruption_taken_grimoire_multiplier')
-    for _, t in ipairs(_ENEMY_RESISTANCE_TERMS) do
-        mult_term(t.label, t.key)
-    end
-    return _group_terms_by_label(terms)
+    return v and _compose_taken(v, prefix) or nil
 end
 
 -- Sum the bonus toughness regen granted by allocated talents' proc/over-time buffs that call
