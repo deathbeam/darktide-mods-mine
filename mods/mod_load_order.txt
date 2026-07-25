@@ -37,6 +37,7 @@ machine_gods_beacon
 DisableScreenEffects
 vfx_swapper
 DynamicCrosshair
+ConstantFov
 markers_aio
 crosshair_hud
 stamina_dodge_bars
