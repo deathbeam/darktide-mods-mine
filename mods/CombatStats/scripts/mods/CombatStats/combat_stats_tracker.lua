@@ -1,5 +1,7 @@
 local mod = get_mod('CombatStats')
 
+local SharedUtils = mod:io_dofile('CombatStats/scripts/mods/CombatStats/shared/shared_utils')
+
 local SESSION_STAT_KEYS = {
     'total_damage',
     'overkill_damage',
@@ -27,6 +29,19 @@ local SESSION_STAT_KEYS = {
     'ranged_crit_hits',
     'ranged_weakspot_hits',
 }
+
+local function breed_category(breed)
+    local category = SharedUtils.classify_breed(breed)
+    if category == 'monstrosity' or category == 'captain' then
+        category = 'boss'
+    elseif category == 'disabler' or category == 'specialist' or category == 'ritualist' then
+        category = 'specialist'
+    elseif category == 'horde' or category == 'roamer' or category == 'unknown' then
+        category = 'horde'
+    end
+    return category
+end
+
 local function new_stats(base)
     local stats = base or {}
 
@@ -160,7 +175,7 @@ function CombatStatsTracker:load_from_history(history_data)
             type = eng_data.type,
             start_time = eng_data.start_time,
             end_time = eng_data.end_time,
-            killed = eng_data.killed ~= nil and eng_data.killed or true,
+            killed = eng_data.killed ~= false,
 
             buffs = eng_data.buffs or {},
             stats = eng_data.stats or new_stats(),
@@ -218,7 +233,6 @@ end
 
 function CombatStatsTracker:get_engagement_stats()
     local engagements = {}
-
     for _, engagement in ipairs(self._engagements or {}) do
         local stats = new_stats()
         accumulate(stats, engagement.stats or {})
@@ -279,23 +293,7 @@ function CombatStatsTracker:start_enemy_engagement(unit, breed)
     end
 
     local breed_name = breed.name
-    local breed_type = 'unknown'
-    if breed.tags then
-        if breed.tags.monster or breed.tags.captain or breed.tags.cultist_captain then
-            breed_type = 'monster'
-        elseif breed.tags.ritualist then
-            breed_type = 'ritualist'
-        elseif breed.tags.disabler then
-            breed_type = 'disabler'
-        elseif breed.tags.special then
-            breed_type = 'special'
-        elseif breed.tags.elite then
-            breed_type = 'elite'
-        elseif breed.tags.horde or breed.tags.roamer then
-            breed_type = 'horde'
-        end
-    end
-
+    local breed_type = breed_category(breed)
     if not mod:get('breed_' .. breed_type) then
         return
     end
@@ -382,7 +380,6 @@ function CombatStatsTracker:track_enemy_damage(
     -- Update the engagement and the session cache with the same event so the view stays in sync.
     add_damage(engagement.stats, actual_damage, overkill_damage, attack_type, is_critical, is_weakspot, damage_type)
     add_damage(self._session_stats, actual_damage, overkill_damage, attack_type, is_critical, is_weakspot, damage_type)
-
     local breed_type = engagement.type or 'unknown'
     self._session_stats.damage_by_type[breed_type] = (self._session_stats.damage_by_type[breed_type] or 0)
         + actual_damage
@@ -394,14 +391,14 @@ function CombatStatsTracker:finish_enemy_engagement(unit, killed)
         return
     end
 
-    local current_time = self:get_time()
-    engagement.end_time = current_time
+    engagement.end_time = self:get_time()
     engagement.killed = killed or false
     self._active_engagements_by_unit[unit] = nil
-    self._engagements_by_unit[unit] = nil
-    self._enemy_health[unit] = nil
 
     if killed then
+        self._engagements_by_unit[unit] = nil
+        self._enemy_health[unit] = nil
+
         local breed_type = engagement.type or 'unknown'
         local session_stats = self._session_stats
         session_stats.total_kills = session_stats.total_kills + 1
@@ -418,22 +415,21 @@ function CombatStatsTracker:_update_active_engagements()
     local timeout = mod:get('engagement_timeout')
 
     for unit, engagement in pairs(self._active_engagements_by_unit) do
-        local should_end = false
+        local unit_gone = not ALIVE[unit] or not HEALTH_ALIVE[unit]
+        local timed_out = false
 
-        if not ALIVE[unit] or not HEALTH_ALIVE[unit] then
-            should_end = true
-        elseif engagement.last_damage_time then
-            local time_since_damage = current_time - engagement.last_damage_time
-            if time_since_damage >= timeout then
-                should_end = true
-            end
+        if not unit_gone and engagement.last_damage_time then
+            timed_out = (current_time - engagement.last_damage_time) >= timeout
         end
 
-        if should_end then
+        if unit_gone or timed_out then
             engagement.end_time = current_time
             self._active_engagements_by_unit[unit] = nil
-            self._engagements_by_unit[unit] = nil
-            self._enemy_health[unit] = nil
+
+            if unit_gone then
+                self._engagements_by_unit[unit] = nil
+                self._enemy_health[unit] = nil
+            end
         end
     end
 end

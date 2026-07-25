@@ -9,6 +9,12 @@ local stats_view_names = rawget(_G, 'dmf_stats_view_names') or {}
 _G.dmf_stats_view_names = stats_view_names
 SharedUtils.stats_view_names = stats_view_names
 
+-- Per-view setting_ids (set by register_stats_view). shared_view_base reads this to
+-- auto-build the in-view settings list; on_setting_changed refreshes the detail panel.
+local stats_view_setting_ids = rawget(_G, 'dmf_stats_view_setting_ids') or {}
+_G.dmf_stats_view_setting_ids = stats_view_setting_ids
+SharedUtils.stats_view_setting_ids = stats_view_setting_ids
+
 -- Terminal-style {255, r, g, b} color per armor type name. Singletons: callers
 -- store the reference but never mutate it.
 local ARMOR_COLORS = {
@@ -30,20 +36,55 @@ local ARMOR_COLOR_FALLBACK = { 255, 200, 200, 200 }
 -- (horde/special/disabler/elite/monster). Mods map their category names to
 -- these via their own lookup; this is just the icon set.
 local CATEGORY_ICONS = {
-    regular = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_uprising',
     horde = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_uprising',
     unknown = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_uprising',
-    specialist = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
-    special = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
-    disabler = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
     ritualist = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
+    specialist = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_malice',
     elite = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_heresy',
+    captain = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
+    monstrosity = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
     boss = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
-    monster = 'content/ui/materials/icons/difficulty/flat/difficulty_skull_damnation',
 }
 
 function SharedUtils.category_icon(category)
     return CATEGORY_ICONS[category]
+end
+
+-- Canonical breed classification shared across the stats mods. Returns one of:
+-- monstrosity, captain, disabler, specialist, elite, horde, roamer, ritualist, unknown.
+-- Order matters — most specific first. All disabler-tagged breeds also carry special,
+-- and all is_boss breeds carry either monster or captain/cultist_captain.
+function SharedUtils.classify_breed(breed)
+    if not breed then
+        return 'unknown'
+    end
+
+    local tags = breed.tags
+    if tags then
+        if tags.monster then
+            return 'monstrosity'
+        elseif tags.captain or tags.cultist_captain then
+            return 'captain'
+        elseif tags.disabler then
+            return 'disabler'
+        elseif tags.special then
+            return 'specialist'
+        elseif tags.elite then
+            return 'elite'
+        elseif tags.ritualist then
+            return 'ritualist'
+        elseif tags.horde then
+            return 'horde'
+        elseif tags.roamer then
+            return 'roamer'
+        end
+    end
+
+    if breed.is_boss then
+        return 'monstrosity'
+    end
+
+    return 'unknown'
 end
 
 -- Localize a game loc key, returning nil on miss or when the game has no entry.
@@ -68,6 +109,38 @@ function SharedUtils.safe_localize(text)
     end
 
     return nil
+end
+
+-- Number: integer when whole (within 0.05), else one decimal. '-' for nil.
+function SharedUtils.fmt_num(n)
+    if n == nil then
+        return '-'
+    end
+    if math.abs(n - math.floor(n)) < 0.05 then
+        return string.format('%d', math.floor(n + 0.5))
+    end
+    if math.abs(n) >= 100 then
+        return string.format('%.0f', n)
+    end
+    return string.format('%.1f', n)
+end
+
+-- Percentage: 0 or 1 decimal (whole% drops the decimal). '-' for nil. Takes a fraction (0.2 -> 20%).
+function SharedUtils.fmt_pct(n)
+    if n == nil then
+        return '-'
+    end
+    local pct = n * 100
+    local fmt = math.abs(pct - math.floor(pct)) < 0.05 and '%.0f%%' or '%.1f%%'
+    return string.format(fmt, pct)
+end
+
+-- Multiplier: xN.NN. '-' for nil.
+function SharedUtils.fmt_mult(n)
+    if n == nil then
+        return '-'
+    end
+    return string.format('x%.2f', n)
 end
 
 -- Convert a snake_case key to Title Case (e.g. "base_damage" -> "Base Damage").
@@ -279,10 +352,13 @@ function SharedUtils.armor_color(armor_key)
     return ARMOR_COLORS[armor_key] or ARMOR_COLOR_FALLBACK
 end
 
--- Register a stats view with the framework and add an ESC-menu button that opens
--- it. `button_text_loc` is the localization key for the button label; the button
--- honors the mod's `add_to_esc_menu` setting.
-function SharedUtils.register_stats_view(mod, view_name, class_name, path, button_text_loc)
+function SharedUtils.register_stats_view(mod, config)
+    local view_name = config.view_name
+    local class_name = config.class_name
+    local path = config.path
+    local button_text_loc = config.button_text_loc
+    local setting_ids = config.setting_ids
+
     stats_view_names[#stats_view_names + 1] = view_name
     mod:add_require_path(path)
     mod:register_view({
@@ -317,6 +393,34 @@ function SharedUtils.register_stats_view(mod, view_name, class_name, path, butto
             transition_time = nil,
         },
     })
+
+    if setting_ids and #setting_ids > 0 then
+        stats_view_setting_ids[view_name] = setting_ids
+
+        local refresh_ids = {}
+        for i = 1, #setting_ids do
+            refresh_ids[setting_ids[i]] = true
+        end
+
+        -- Preserve the mod's own on_setting_changed (if any).
+        local previous = mod.on_setting_changed
+        mod.on_setting_changed = function(id)
+            if previous then
+                previous(id)
+            end
+            if not refresh_ids[id] then
+                return
+            end
+            local ui_manager = Managers.ui
+            if not ui_manager or not ui_manager:view_active(view_name) then
+                return
+            end
+            local view = ui_manager:view_instance(view_name)
+            if view and view._present_detail then
+                view:_present_detail(view._detail_entry)
+            end
+        end
+    end
 
     local menu_button = {
         text = button_text_loc,

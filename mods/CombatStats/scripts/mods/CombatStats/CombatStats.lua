@@ -21,13 +21,12 @@ mod:register_hud_element({
 })
 
 -- Register Combat Stats View (and its ESC-menu button)
-SharedUtils.register_stats_view(
-    mod,
-    'combat_stats_view',
-    'CombatStatsView',
-    'CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view',
-    'loc_combat_stats_menu_button'
-)
+SharedUtils.register_stats_view(mod, {
+    view_name = 'combat_stats_view',
+    class_name = 'CombatStatsView',
+    path = 'CombatStats/scripts/mods/CombatStats/combat_stats_view/combat_stats_view',
+    button_text_loc = 'loc_combat_stats_menu_button',
+})
 
 -- Initialize tracker and history
 mod.tracker = CombatStatsTracker:new()
@@ -116,21 +115,23 @@ mod:hook(
             local player = Managers.player and Managers.player:local_player_safe(1)
             if player then
                 local player_unit = player.player_unit
-                local player_unit_spawn_manager = Managers.state and Managers.state.player_unit_spawn
-                local attacker_owner = attacking_unit
-                    and player_unit_spawn_manager
-                    and player_unit_spawn_manager:owner(attacking_unit)
 
                 local attacked_breed = ALIVE[attacked_unit]
                         and ScriptUnit.has_extension(attacked_unit, 'unit_data_system')
                     or nil
                 attacked_breed = attacked_breed and attacked_breed:breed()
 
-                -- Update the HP ledger for any player hit so teammate damage is reflected.
+                -- Update the HP ledger for any player hit so teammate damage is reflected
                 local actual_damage, overkill_damage = damage, 0
-                if attacker_owner and Breed.is_minion(attacked_breed) then
-                    actual_damage, overkill_damage =
-                        mod.tracker:update_enemy_health(attacked_unit, damage, attack_result)
+                if Breed.is_minion(attacked_breed) then
+                    local player_unit_spawn_manager = Managers.state and Managers.state.player_unit_spawn
+                    local attacker_owner = attacking_unit
+                        and player_unit_spawn_manager
+                        and player_unit_spawn_manager:owner(attacking_unit)
+                    if attacker_owner then
+                        actual_damage, overkill_damage =
+                            mod.tracker:update_enemy_health(attacked_unit, damage, attack_result)
+                    end
                 end
 
                 if player_unit and attacking_unit == player_unit and attacked_breed then
@@ -151,10 +152,6 @@ mod:hook(
                         hit_weakspot,
                         damage_profile_name
                     )
-
-                    if attack_result == 'died' then
-                        mod.tracker:finish_enemy_engagement(attacked_unit, true)
-                    end
                 elseif
                     player_unit
                     and attacked_unit == player_unit
@@ -166,6 +163,10 @@ mod:hook(
                     if breed then
                         mod.tracker:start_enemy_engagement(attacking_unit, breed)
                     end
+                end
+
+                if attack_result == 'died' and player_unit and attacking_unit == player_unit then
+                    mod.tracker:finish_enemy_engagement(attacked_unit, true)
                 end
             end
         end

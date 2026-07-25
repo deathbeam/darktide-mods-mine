@@ -29,8 +29,8 @@ custom_hud
 Enhanced_descriptions
 modular_menu_buttons
 true_level
-DumpStatFinder
 LoadoutPreviews
+DumpStatFinder
 
 -- In Game HUD
 machine_gods_beacon
@@ -38,9 +38,14 @@ DisableScreenEffects
 vfx_swapper
 DynamicCrosshair
 markers_aio
-stamina_dodge_bars
-RemoveTagSkulls
-ForTheEmperor
 crosshair_hud
+stamina_dodge_bars
+PlayerOutlines
 enemies_improved
 danger_zone
+
+-- Fancy stuff
+ForTheEmperor
+RemoveTagSkulls
+pointer
+RecolorBossHealthBars
