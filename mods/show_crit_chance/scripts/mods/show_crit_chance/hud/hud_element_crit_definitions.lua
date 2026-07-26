@@ -32,10 +32,7 @@ local widget_definitions = {
 				font_type = mod._font_type,
 				font_size = mod._font_size,
 				size = HudElementCritSettings.widget_size,
-				offset = {
-					HudElementCritSettings.widget_horizontal_offset + mod._crit_chance_indicator_horizontal_offset,
-					HudElementCritSettings.widget_vertical_offset + mod._crit_chance_indicator_vertical_offset
-				},
+				offset = {mod._crit_chance_indicator_horizontal_offset, mod._crit_chance_indicator_vertical_offset},
 				vertical_alignment = hud_element_vertical_alignment,
 				horizontal_alignment = hud_element_horizontal_alignment,
 				text_vertical_alignment = hud_element_vertical_alignment,

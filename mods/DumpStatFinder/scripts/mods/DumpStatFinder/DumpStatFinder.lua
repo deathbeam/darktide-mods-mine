@@ -466,10 +466,7 @@ local function is_dump_stat_curio(item)
 	end
 	if item.item_type == nil or (item.item_type and item.item_type ~= "GADGET") then
 		return false, false
-    end
-    if item.traits == nil or #item.traits == 0 then
-        return false, false
-    end
+	end
 
 	local item_trait = item.traits[1]
 	--debug_print(string.format("is_dump_stat_curio() %s %f", item_trait.id, item_trait.value))

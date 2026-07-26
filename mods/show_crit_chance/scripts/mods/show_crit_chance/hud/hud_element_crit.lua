@@ -26,8 +26,6 @@ local guaranteed_crit_buffs = {
 }
 
 local _check_for_guaranteed_crit = function(player_unit)
-    mod._guaranteed_crit = false
-
     if not player_unit then
         return
     end
@@ -40,40 +38,84 @@ local _check_for_guaranteed_crit = function(player_unit)
 	local buffs = buff_extension:buffs()
 
 	for i = #buffs, 1, -1 do
-		local buff = buffs[i]
-		local buff_template = buff:template()
-		local buff_validator = buff_template and guaranteed_crit_buffs[buff_template.name]
+		local buff_template = buffs[i]:template()
 
-		if buff_validator and buff_validator(buff) == true then
+		if guaranteed_crit_buffs[buff_template.name] and guaranteed_crit_buffs[buff_template.name](buffs[i]) == true then
 			mod._guaranteed_crit = true
 
 			break
 		end
+
+        mod._guaranteed_crit = false
 	end
 end
 
 local _convert_chance_to_text = function(chance)
-    local chance_number = tonumber(chance)
+    local crit_chance_percent = "NaN"
 
-    if not chance_number then
-        return mod._crit_chance_indicator_icon .. "NaN"
+    local string_crit_chance = tostring(chance * 100)
+    local dot_position = string.find(string_crit_chance, "%.")
+
+    local before_dot = 0
+    local after_dot = 0
+
+    if dot_position then
+        before_dot = tonumber(string.sub(string_crit_chance, 1, dot_position - 1)) or 0
+        after_dot = tonumber(string.sub(string_crit_chance, dot_position + 1, dot_position + 2)) or 0
+    else
+        before_dot = tonumber(string_crit_chance) or 0
     end
 
-    local percent_value = chance_number * 100
+    -- "00" converted to nil. Since a player always has >= 1% crit chance, this means 100%.
+    if before_dot == nil then
+        before_dot = 100
+    end
 
+    -- Possible nil for whole % crit chance
+    if after_dot == nil then
+        after_dot = 0
+    end
+
+    -- Account for float inaccuracy and developer error
+    if after_dot and (after_dot - 9) % 10 == 0 then
+        after_dot = after_dot + 1
+
+        if after_dot == 100 then
+            after_dot = 0
+            before_dot = before_dot + 1
+        end
+    end
+
+    local before_dot_string = tostring(before_dot)
+
+    -- Convert to text
     if mod._show_floating_point then
-        local rounded_percent_value = math.floor(percent_value * 100 + 0.5) / 100
+        local after_dot_string = tostring(after_dot)
 
-        if rounded_percent_value == -0 then
-            rounded_percent_value = 0
+        -- Making sure the fixed precision is 2
+        while #after_dot_string < 2 do
+            after_dot_string = after_dot_string .. "0"
         end
 
-        return string.format("%s%.2f%%", mod._crit_chance_indicator_icon, rounded_percent_value)
+        crit_chance_percent = mod._crit_chance_indicator_icon .. before_dot_string .. "." .. after_dot_string .. "%"
+    else
+        -- Mathematically round to whole %
+        if after_dot then
+            local after_dot_tens = after_dot
+            if after_dot_tens > 10 then
+                after_dot_tens = after_dot_tens / 10
+            end
+
+            if after_dot_tens >= 5 then
+                before_dot = before_dot + 1
+                before_dot_string = tostring(before_dot)
+            end
+        end
+
+        crit_chance_percent = mod._crit_chance_indicator_icon .. before_dot_string .. "%"
     end
 
-    local rounded_percent = math.floor(percent_value + 0.5)
-
-    return string.format("%s%d%%", mod._crit_chance_indicator_icon, rounded_percent)
+    return crit_chance_percent
 end
 
 HudElementCrit.on_resolution_modified = function(self)
