@@ -43,6 +43,7 @@ ConstantFov
 markers_aio
 crosshair_hud
 stamina_dodge_bars
+BetterNameplate
 PlayerOutlines
 enemies_improved
 danger_zone

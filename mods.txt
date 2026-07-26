@@ -1,5 +1,6 @@
 Alfs_DMF_Extensions 864 1.2.02
 AutoMark 736 2.2.8
+BetterNameplate 827 1.0.6
 CharacterStats 1093 0.2.2
 CombatStats 661 0.5.10
 ConstantFov 91 1.9
