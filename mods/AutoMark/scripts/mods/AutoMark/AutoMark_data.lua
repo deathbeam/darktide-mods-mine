@@ -33,18 +33,11 @@ local other_widget   = {
 
 local function create_breed_priority_dropdown(breed_name, default_value)
     local breed_priority_setting = {
-        setting_id = breed_name,
-        type = "dropdown",
-        default_value = default_value,
-        options = {
-            { text = "priority_off",     value = 0 },
-            { text = "priority_lowest",  value = 1 },
-            { text = "priority_low",     value = 2 },
-            { text = "priority_medium",  value = 3 },
-            { text = "priority_high",    value = 4 },
-            { text = "priority_highest", value = 5 },
-
-        }
+        setting_id    = breed_name,
+        type          = "numeric",
+        default_value = breed_name == "chaos_poxwalker_bomber" and 0 or default_value,
+        range         = { 0, 30 },
+        tooltip       = "tooltip_breed_priority",
     }
     return breed_priority_setting
 end
@@ -57,16 +50,16 @@ local other_priority_dropdown   = {}
 for breed_name, breed_data in pairs(Breeds) do
     if Breed.is_minion(breed_data) and breed_data.smart_tag_target_type == "breed" then
         if breed_data.tags.elite then
-            elite_priority_dropdown[#elite_priority_dropdown + 1] = create_breed_priority_dropdown(breed_name, 3)
+            elite_priority_dropdown[#elite_priority_dropdown + 1] = create_breed_priority_dropdown(breed_name, 0)
         elseif breed_data.tags.special then
-            special_priority_dropdown[#special_priority_dropdown + 1] = create_breed_priority_dropdown(breed_name, 3)
+            special_priority_dropdown[#special_priority_dropdown + 1] = create_breed_priority_dropdown(breed_name, 1)
         elseif breed_data.is_boss then
-            boss_priority_dropdown[#boss_priority_dropdown + 1] = create_breed_priority_dropdown(breed_name, 3)
+            boss_priority_dropdown[#boss_priority_dropdown + 1] = create_breed_priority_dropdown(breed_name, 1)
             if breed_data.tags.witch then
-                boss_priority_dropdown[#boss_priority_dropdown + 1] = create_breed_priority_dropdown(breed_name .. "_passive", 3)
+                boss_priority_dropdown[#boss_priority_dropdown + 1] = create_breed_priority_dropdown(breed_name .. "_passive", 1)
             end
         elseif breed_data.faction_name ~= "imperium" then
-            other_priority_dropdown[#other_priority_dropdown + 1] = create_breed_priority_dropdown(breed_name, 3)
+            other_priority_dropdown[#other_priority_dropdown + 1] = create_breed_priority_dropdown(breed_name, 1)
         end
     end
 end
@@ -206,6 +199,13 @@ local widgets = {
                 setting_id    = "execution_order_priority",
                 type          = "checkbox",
                 default_value = false,
+                sub_widgets   = {
+                    {
+                        setting_id    = "execution_order_force_mark",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
+                }
             },
             {
                 setting_id    = "companion_cancel_mark",

@@ -48,6 +48,7 @@ local INDEX_NORMAL                                     = 3
 local INDEX_ACTOR                                      = 4
 local COLLISION_FILTER                                 = "filter_player_ping_target_selection"
 local EMPTY_TABLE                                      = {}
+local MAX_VISIBILITY_CHECKS_PER_FRAME                  = 5
 
 local DARKNESS_LOS_MODIFIER_NAME                       = "mutator_darkness_los"
 local VENTILATION_PURGE_LOS_MODIFIER_NAME              = "mutator_ventilation_purge_los"
@@ -62,33 +63,37 @@ local BUFF_KEYWORD_DISTANCE_LOS_REQUIREMENT            = {
 
 -- Params
 local visibility_raycast_object                        = nil
-local servo_skull_visibility_raycast_object            = nil
 
 function mod:init_visibility_raycast_objects()
     local smart_targeting_extension = context.smart_targeting_extension
     local physics_world = smart_targeting_extension and smart_targeting_extension._physics_world
     if physics_world then
-        visibility_raycast_object = PhysicsWorld.make_raycast(physics_world, "closest", "types", "both", "collision_filter", "filter_interactable_line_of_sight_marker_check")
-        servo_skull_visibility_raycast_object = PhysicsWorld.make_raycast(physics_world, "closest", "types", "both", "collision_filter", "filter_minion_line_of_sight_check")
+        visibility_raycast_object = PhysicsWorld.make_raycast(physics_world, "closest", "types", "both", "collision_filter", "filter_minion_line_of_sight_check")
     end
 end
 
 function mod:destroy_visibility_raycast_objects()
     visibility_raycast_object = nil
-    servo_skull_visibility_raycast_object = nil
 end
 
-local function is_target_aggroed(target_unit)
+local function is_daemonhost_aggroed(unit)
+    local game_session   = Managers.state.game_session:game_session()
+    local game_object_id = Managers.state.unit_spawner:game_object_id(unit)
+    local stage          = GameSession.game_object_field(game_session, game_object_id, "stage")
+    return type(stage) == "number" and stage >= 6
+end
+
+local function is_target_aggroed(unit)
     local game_session = Managers.state.game_session:game_session()
-    local game_object_id = Managers.state.unit_spawner:game_object_id(target_unit)
+    local game_object_id = Managers.state.unit_spawner:game_object_id(unit)
     local target_unit_id = GameSession.game_object_field(game_session, game_object_id, "target_unit_id")
     return target_unit_id ~= -1
 end
 
-local function get_breed_priority(target_unit, breed_data, breed_priorities)
+local function get_breed_priority(unit, breed_data, breed_priorities)
     local breed_name = breed_data and breed_data.name
     if breed_data.tags.witch then
-        if is_target_aggroed(target_unit) then
+        if is_daemonhost_aggroed(unit) then
             return breed_priorities[breed_name]
         else
             return breed_priorities[breed_name .. "_passive"]
@@ -99,7 +104,7 @@ local function get_breed_priority(target_unit, breed_data, breed_priorities)
 end
 
 -- Check if Target Unit's Breed is Valid for Auto-Mark
-local function is_breed_valid(breed_data, class_settings)
+local function is_breed_group_valid(breed_data, class_settings)
     if not breed_data or not class_settings then
         return false
     end
@@ -114,6 +119,20 @@ local function is_breed_valid(breed_data, class_settings)
     else
         return class_settings.toggle_other
     end
+end
+
+local function is_ritual_started(unit)
+    local game_session = Managers.state.game_session:game_session()
+    local game_object_id = Managers.state.unit_spawner:game_object_id(unit)
+    local target_unit_id = GameSession.game_object_field(game_session, game_object_id, "target_unit_id")
+    local target_unit = Managers.state.unit_spawner:unit(target_unit_id)
+    if not target_unit then
+        return false
+    end
+
+    local daemonhost_game_object_id = Managers.state.unit_spawner:game_object_id(target_unit)
+    local stage = GameSession.game_object_field(game_session, daemonhost_game_object_id, "stage")
+    return type(stage) == "number" and stage > 1
 end
 
 local function can_focus_target_overwrite(target_unit, target_tag)
@@ -159,9 +178,17 @@ end
 -- Check if Tagged Target Unit can be Marked with Current Tag
 local function is_target_valid(tag_name, target_tag, target_unit, target_position, target_breed_data)
     if tag_name == TAG_NAMES.COMPANION_TAG then
-        -- arbite shouldn't mark any arbite's prey or veteran's prey
+        if not target_breed_data then
+            local unit_data_extension = ScriptUnit_extension(target_unit, "unit_data_system")
+            target_breed_data = unit_data_extension and unit_data_extension._breed
+        end
+
+        if not target_breed_data then
+            return false
+        end
+
         local target_tag_name = target_tag and target_tag._template.name
-        local pounce_setting = target_breed_data and target_breed_data.companion_pounce_setting
+        local pounce_setting = target_breed_data.companion_pounce_setting
         local pounce_action = pounce_setting and pounce_setting.companion_pounce_action
         if pounce_action == "human" then
             if target_tag_name == TAG_NAMES.COMPANION_TAG or target_tag_name == TAG_NAMES.VETERAN_TAG then
@@ -173,8 +200,17 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_positio
             end
         end
 
-        if mod_settings.companion_mark_ignore_unaggroed and not is_target_aggroed(target_unit) then
-            return false
+        local breed_name = target_breed_data.name
+        if breed_name == "chaos_mutator_ritualist" then
+            if not is_ritual_started(target_unit) then
+                return false
+            end
+        elseif breed_name == "cultist_ritualist" then
+            -- do nothing
+        else
+            if mod_settings.companion_mark_ignore_unaggroed and not is_target_aggroed(target_unit) then
+                return false
+            end
         end
 
         local companion_range_limitation = mod_settings.companion_range_limitation
@@ -194,11 +230,19 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_positio
             return false
         end
 
-        if Vector3_distance_squared(companion_unit_position, target_position) < companion_range_limitation * companion_range_limitation then
-            return true
-        end
+        return Vector3_distance_squared(companion_unit_position, target_position) <= companion_range_limitation * companion_range_limitation
     elseif tag_name == TAG_NAMES.VETERAN_TAG then
-        if mod_settings.focus_target_ignore_unaggroed and not is_target_aggroed(target_unit) then
+        if not target_breed_data then
+            local unit_data_extension = ScriptUnit_extension(target_unit, "unit_data_system")
+            target_breed_data = unit_data_extension and unit_data_extension._breed
+        end
+
+        if not target_breed_data then
+            return false
+        end
+
+        local breed_name = target_breed_data.name
+        if breed_name ~= "cultist_ritualist" and mod_settings.focus_target_ignore_unaggroed and not is_target_aggroed(target_unit) then
             return false
         end
 
@@ -209,8 +253,26 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_positio
             return false
         end
 
-        if mod_settings.servo_skull_mark_ignore_unaggroed and not is_target_aggroed(target_unit) then
+        if not target_breed_data then
+            local unit_data_extension = ScriptUnit_extension(target_unit, "unit_data_system")
+            target_breed_data = unit_data_extension and unit_data_extension._breed
+        end
+
+        if not target_breed_data then
             return false
+        end
+
+        local breed_name = target_breed_data.name
+        if breed_name == "chaos_mutator_ritualist" then
+            if not is_ritual_started(target_unit) then
+                return false
+            end
+        elseif breed_name == "cultist_ritualist" then
+            -- do nothing
+        else
+            if mod_settings.servo_skull_mark_ignore_unaggroed and not is_target_aggroed(target_unit) then
+                return false
+            end
         end
 
         if not mod_settings.capacitance_retention or not context.has_noospheric_command then
@@ -222,13 +284,6 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_positio
             return false
         end
 
-        local unit_data_extension = ScriptUnit_extension(target_unit, "unit_data_system")
-        local breed_data = unit_data_extension and unit_data_extension._breed
-        if not breed_data then
-            return false
-        end
-
-        local breed_name = breed_data.name
         local breed_settings = noospheric_command_breed_settings[breed_name]
         local capacitance_retention_threshold
         if breed_settings and breed_settings.override then
@@ -236,9 +291,9 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_positio
         end
 
         if capacitance_retention_threshold == nil then
-            if breed_data.is_boss then
+            if target_breed_data.is_boss then
                 capacitance_retention_threshold = mod_settings.capacitance_retention_boss_threshold
-            elseif breed_data.tags.special then
+            elseif target_breed_data.tags.special then
                 capacitance_retention_threshold = mod_settings.capacitance_retention_special_threshold
             else
                 capacitance_retention_threshold = mod_settings.capacitance_retention_elite_threshold
@@ -283,6 +338,11 @@ local function is_target_visible(ray_origin, up, hit_unit_center_pos, half_heigh
         return cached_visibility
     end
 
+    mod.num_visibility_checks_this_frame = mod.num_visibility_checks_this_frame + 1
+    if mod.num_visibility_checks_this_frame > MAX_VISIBILITY_CHECKS_PER_FRAME then
+        return false
+    end
+
     local ray_to_target_center = hit_unit_center_pos - ray_origin
     local ray_to_target_top = ray_to_target_center + up * half_height * 2 / 3
     local hit_top = Raycast_cast(visibility_raycast_object, ray_origin, Vector3_normalize(ray_to_target_top), Vector3_length(ray_to_target_top))
@@ -298,8 +358,8 @@ local function is_target_visible(ray_origin, up, hit_unit_center_pos, half_heigh
     return not hit_center
 end
 
-local function is_servo_skull_target_visible(target_unit, fixed_frame)
-    if not servo_skull_visibility_raycast_object then
+local function is_servo_skull_target_visible(target_unit, fixed_frame, force_check)
+    if not visibility_raycast_object then
         return false
     end
 
@@ -312,6 +372,13 @@ local function is_servo_skull_target_visible(target_unit, fixed_frame)
     local last_check_frame = servo_skull_visibility_check_frame[target_unit]
     if cached_visibility ~= nil and fixed_frame - last_check_frame <= 5 then
         return cached_visibility
+    end
+
+    if not force_check then
+        mod.num_visibility_checks_this_frame = mod.num_visibility_checks_this_frame + 1
+        if mod.num_visibility_checks_this_frame > MAX_VISIBILITY_CHECKS_PER_FRAME then
+            return false
+        end
     end
 
     local companion_spawner_extension = context.companion_spawner_extension
@@ -369,7 +436,7 @@ local function is_servo_skull_target_visible(target_unit, fixed_frame)
     local los_direction = Vector3_normalize(to_los_position)
     local los_distance = Vector3_length(to_los_position)
 
-    local hit = Raycast_cast(servo_skull_visibility_raycast_object, los_from_position, los_direction, los_distance)
+    local hit = Raycast_cast(visibility_raycast_object, los_from_position, los_direction, los_distance)
     servo_skull_visibility_cache[target_unit] = not hit
     servo_skull_visibility_check_frame[target_unit] = fixed_frame
     return not hit
@@ -379,9 +446,8 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
     local player = context.player
     local player_unit = player and player.player_unit
     local smart_targeting_extension = context.smart_targeting_extension
-    local precision_target_finder = smart_targeting_extension and smart_targeting_extension._precision_target_aim_assist
     local smart_tag_system = context.smart_tag_system
-    if not player_unit or not smart_targeting_extension or not precision_target_finder or not smart_tag_system then
+    if not player_unit or not smart_targeting_extension or not smart_tag_system then
         return nil
     end
 
@@ -408,8 +474,7 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
         best_unit = marked_unit
         local unit_data_extension = ScriptUnit_extension(best_unit, "unit_data_system")
         local breed_data = unit_data_extension and unit_data_extension._breed
-        local breed_name = breed_data and breed_data.name
-        best_unit_priority = breed_priorities[breed_name] or 0
+        best_unit_priority = get_breed_priority(best_unit, breed_data, breed_priorities) or 0
         best_unit_marked_by_execution_order = not not execution_order_units[best_unit]
     end
 
@@ -433,11 +498,20 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
         if not breed_data or breed_data.smart_tag_target_type ~= "breed" then
             goto continue
         end
-
         local hit_unit_priority = get_breed_priority(hit_unit, breed_data, breed_priorities) or 0
+        local hit_unit_marked_by_execution_order = not not execution_order_units[hit_unit]
         -- filter unit by type and priority
-        if use_filter and (hit_unit_priority <= 0 or not is_breed_valid(breed_data, class_settings)) then
-            goto continue
+        if use_filter and (hit_unit_priority <= 0 or not is_breed_group_valid(breed_data, class_settings)) then
+            local breed_name = breed_data.name
+            if not is_execution_order_priority
+                or not mod_settings.execution_order_force_mark
+                or not hit_unit_marked_by_execution_order
+                or breed_name == "chaos_poxwalker_bomber"
+                or breed_name == "chaos_ogryn_houndmaster"
+                or (breed_name == "chaos_daemonhost" or breed_name == "chaos_mutator_daemonhost_passive") and not is_daemonhost_aggroed(hit_unit)
+            then
+                goto continue
+            end
         end
 
         local hit_unit_pose, _ = Unit_box(hit_unit, true)
@@ -458,7 +532,6 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
         end
 
         if type == "auto" then
-            local hit_unit_marked_by_execution_order = not not execution_order_units[hit_unit]
             if is_execution_order_priority then
                 if hit_unit_marked_by_execution_order == best_unit_marked_by_execution_order then
                     if hit_unit_priority <= best_unit_priority then
@@ -539,8 +612,8 @@ function mod:is_target_valid(tag_name, target_tag, target_unit, target_position,
     return is_target_valid(tag_name, target_tag, target_unit, target_position, target_breed_data)
 end
 
-function mod:is_servo_skull_target_visible(target_unit, fixed_frame)
-    return is_servo_skull_target_visible(target_unit, fixed_frame)
+function mod:is_servo_skull_target_visible(target_unit, fixed_frame, force_check)
+    return is_servo_skull_target_visible(target_unit, fixed_frame, force_check)
 end
 
 function mod:can_focus_target_overwrite(target_unit, target_tag)
@@ -554,7 +627,7 @@ function mod:is_noospheric_command_boost_breed_valid(target_unit)
         return false
     end
 
-    if breed_data.tags.witch and not is_target_aggroed(target_unit) then
+    if breed_data.tags.witch and not is_daemonhost_aggroed(target_unit) then
         return false
     end
 
@@ -575,6 +648,5 @@ end
 
 mod:hook_safe(CLASS.PrecisionTargetFinder, "init",
     function(self, is_server, is_local_unit, player, physics_world, unit)
-        visibility_raycast_object = PhysicsWorld.make_raycast(physics_world, "closest", "types", "both", "collision_filter", "filter_interactable_line_of_sight_marker_check")
-        servo_skull_visibility_raycast_object = PhysicsWorld.make_raycast(physics_world, "closest", "types", "both", "collision_filter", "filter_minion_line_of_sight_check")
+        visibility_raycast_object = PhysicsWorld.make_raycast(physics_world, "closest", "types", "both", "collision_filter", "filter_minion_line_of_sight_check")
     end)

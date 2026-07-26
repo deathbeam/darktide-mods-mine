@@ -105,6 +105,16 @@ local localization = {
         ["zh-tw"] = "遵從處決指令的選擇，法務官電子獒犬自動標記將優先標記已被處決指令選中的敵人。\n\n" ..
             "當已標記的敵人沒有被處決指令選中，而正在瞄準的敵人被處決指令選中時，將切換至瞄準的目標。",
     },
+    execution_order_force_mark = {
+        en = "Force Mark",
+        ["zh-cn"] = "强制标记",
+        ["zh-tw"] = "強制標記",
+    },
+    execution_order_force_mark_description = {
+        en = "Force Auto-Mark to mark targets chosen by Execution Order, regardless of whether the enemy type is ignored in priority settings.",
+        ["zh-cn"] = "强制自动标记系统标记处决指令选中的目标，无论该类敌人是否在优先级设置中被设为忽略。",
+        ["zh-tw"] = "強制自動標記系統標記處決指令選中的目標，無論該類敵人是否在優先度設定中被設為忽略。",
+    },
     companion_range_limitation = {
         en = "Range Limitation",
         ["zh-cn"] = "范围限制",
@@ -116,7 +126,7 @@ local localization = {
         ["zh-cn"] = "限制自动标记系统可标记的目标与你的" .. highlight("智能獒犬") .. "之间的最大距离。\n\n" ..
             "设置为" .. highlight("0") .. "以禁用。",
         ["zh-tw"] = "限制自動標記系統可標記的目標與你的" .. highlight("電子獒犬") .. "之間的最大距離。\n\n" ..
-            "設置為" .. highlight("0") .. "可停用",
+            "設為" .. highlight("0") .. "可停用",
     },
     companion_cancel_mark = {
         en = "Auto Cancel Cyber-Mastiff Mark",
@@ -782,6 +792,14 @@ local localization = {
         en = "Reset All Mark Settings",
         ["zh-cn"] = "重置所有标记设置",
         ["zh-tw"] = "重設所有標記設定",
+    },
+    tooltip_breed_priority = {
+        en = "Set the marking priority for this enemy type. Auto-Mark prioritizes targets with higher priority values.\n\n" ..
+            "Set to " .. highlight("0") .. " to ignore this enemy type.",
+        ["zh-cn"] = "设置该类敌人的标记优先级。自动标记将优先标记优先级更高的目标。\n\n" ..
+            "设置为" .. highlight("0") .. "以忽略此类敌人。",
+        ["zh-tw"] = "設定該類敵人的標記優先度。自動標記將優先標記優先度較高的目標。\n\n" ..
+            "設為" .. highlight("0") .. "可忽略此類敵人。",
     },
 }
 

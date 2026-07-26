@@ -18,6 +18,8 @@ local ScriptUnit                           = ScriptUnit
 -- Delay for Server Latency, Interval for Auto Mark
 local AUTO_MARK_DELAY                      = 0.5
 local AUTO_MARK_INTERVAL                   = 0.25
+local ENEMY_TAG_DELAY                      = 1
+local PRIORITY_SWITCH_DELAY                = 0.5
 
 -- set delay and interval for auto mark
 local function on_set_tag(tag_context)
@@ -92,7 +94,7 @@ end
 
 -- Check Manual Input Marked Target
 mod:hook(CLASS.SmartTagSystem, "set_contextual_unit_tag",
-    function(func, self, tagger_unit, target_unit, alternate)
+    function(func, self, tagger_unit, target_unit, alternate, ...)
         local player = context.player
         if player and tagger_unit == player.player_unit then
             local target_extension = self._unit_extension_data[target_unit]
@@ -106,11 +108,11 @@ mod:hook(CLASS.SmartTagSystem, "set_contextual_unit_tag",
                 on_set_tag(tag_context)
             end
         end
-        return func(self, tagger_unit, target_unit, alternate)
+        return func(self, tagger_unit, target_unit, alternate, ...)
     end)
 
 mod:hook(CLASS.SmartTagSystem, "trigger_tag_interaction",
-    function(func, self, tag_id, interactor_unit, target_unit, optional_alternate)
+    function(func, self, tag_id, interactor_unit, target_unit, optional_alternate, ...)
         local player = context.player
         if player and interactor_unit == player.player_unit then
             local target_extension = self._unit_extension_data[target_unit]
@@ -127,13 +129,13 @@ mod:hook(CLASS.SmartTagSystem, "trigger_tag_interaction",
                 end
             end
         end
-        return func(self, tag_id, interactor_unit, target_unit, optional_alternate)
+        return func(self, tag_id, interactor_unit, target_unit, optional_alternate, ...)
     end)
 
 local function delay_normal_tag()
     local tag_context = mark_context[TAG_NAMES.ENEMY_TAG]
-    if tag_context.cooldown < 1 then
-        tag_context.cooldown = 1
+    if tag_context.cooldown < ENEMY_TAG_DELAY then
+        tag_context.cooldown = ENEMY_TAG_DELAY
     end
 end
 
@@ -152,6 +154,7 @@ mod:hook_safe(CLASS.SmartTag, "init",
         end
 
         mark_context.auto_mark_interval = AUTO_MARK_INTERVAL
+        tag_context.priority_switch_cooldown = PRIORITY_SWITCH_DELAY
         -- refresh delay and set cooldown
         tag_context.tag = self
         tag_context.delay = 0
@@ -193,7 +196,7 @@ mod:hook_safe(CLASS.SmartTag, "init",
     end)
 
 mod:hook(CLASS.SmartTag, "destroy",
-    function(func, self)
+    function(func, self, ...)
         local tag_name = self._template.name
         local tag_context = mark_context[tag_name]
         if not tag_context then
@@ -214,5 +217,5 @@ mod:hook(CLASS.SmartTag, "destroy",
             end
         end
 
-        return func(self)
+        return func(self, ...)
     end)

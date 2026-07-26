@@ -251,7 +251,7 @@ function mod:auto_cancel_servo_skull_mark(t, fixed_frame)
         return
     end
 
-    if mod:is_servo_skull_target_visible(marked_unit, fixed_frame) then
+    if mod:is_servo_skull_target_visible(marked_unit, fixed_frame, true) then
         tag_context.servo_skull_lose_sight_time = nil
     elseif tag_context.servo_skull_lose_sight_time == nil then
         tag_context.servo_skull_lose_sight_time = t

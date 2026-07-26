@@ -44,6 +44,7 @@ stamina_dodge_bars
 PlayerOutlines
 enemies_improved
 danger_zone
+PlasmaChargebar
 
 -- Fancy stuff
 ForTheEmperor
