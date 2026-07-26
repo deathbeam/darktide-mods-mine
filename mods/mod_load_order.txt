@@ -31,6 +31,8 @@ modular_menu_buttons
 true_level
 LoadoutPreviews
 DumpStatFinder
+ItemSorting
+GlobalStore
 
 -- In Game HUD
 machine_gods_beacon
