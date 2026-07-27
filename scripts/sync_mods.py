@@ -3,28 +3,15 @@
 
 Reads ``mods.txt`` (a lockfile of ``folder mod_id version`` lines), fetches each
 mod's current MAIN file from the Nexus Mods API, and downloads + extracts
-anything that is missing or out of date. Handles both ``.zip`` and ``.7z``
-archives, and normalises permissions so extracted folders stay writable.
+anything missing or out of date. Handles both ``.zip`` and ``.7z`` archives.
 
-Why no file_id in the lockfile
-------------------------------
-Nexus assigns a new ``file_id`` to every uploaded version, so storing it is
-pointless. The current MAIN file (``category_id == 1``) is resolved fresh on
-every run from ``/games/{domain}/mods/{mod_id}/files.json`` — the same lookup
-the upload script (``darktide-mods/scripts/ci/publish_mods.py``) uses.
-
-Usage
------
+Usage:
     python3 scripts/sync_mods.py             # download outdated mods
     python3 scripts/sync_mods.py --status    # only report outdated, no download
-    python3 scripts/sync_mods.py --force      # re-download even if up to date
+    python3 scripts/sync_mods.py --force     # re-download even if up to date
 
-To add a mod: append ``folder mod_id`` to mods.txt (the mod_id is the number in
-its nexusmods.com/.../mods/<id> URL), then run sync.
-
-Environment
------------
-    NEXUSMODS_APIKEY         required (same key as the publish script)
+Env:
+    NEXUSMODS_APIKEY         required
     NEXUSMODS_GAME_DOMAIN    default: warhammer40kdarktide
 """
 
@@ -50,43 +37,39 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 MODS_DIR = REPO_ROOT / "mods"
 LOCKFILE = REPO_ROOT / "mods.txt"
 
-# Nexus mod-file category ids (see Nexus-Mods node-nexus-api ModFileCategory).
-# 1=MAIN, 2=UPDATED, 3=OPTIONAL, 4=OLD_VERSION, 5=MISCELLANEOUS, 6=ARCHIVED,
-# 7=REMOVED. Only the first three are "live"; the rest are historical/dead.
+# 1=MAIN, 2=UPDATED, 3=OPTIONAL, 4=OLD_VERSION, 5=MISCELLANEOUS,
+# 6=ARCHIVED, 7=REMOVED. Only the first three are live.
 DEAD_CATEGORIES = {4, 6, 7}
-_USE_COLOR = sys.stderr.isatty()
+VERSION_RE = re.compile(r"\bversion\s*=\s*[\"']([^\"']+)[\"']")
+USE_COLOR = sys.stderr.isatty()
 
 
-def _c(code: str, msg: str) -> str:
-    return f"\033[{code}m{msg}\033[0m" if _USE_COLOR else msg
+def colorize(code: str, msg: str) -> str:
+    return f"\033[{code}m{msg}\033[0m" if USE_COLOR else msg
 
 
 def log_ok(msg: str) -> None:
-    print(f"  {_c('32', '✓')} {msg}")
+    print(f"  {colorize('32', '✓')} {msg}")
 
 
 def log_skip(msg: str) -> None:
-    print(f"  {_c('33', '·')} {msg}")
+    print(f"  {colorize('33', '·')} {msg}")
 
 
 def log_fail(msg: str) -> None:
-    print(f"  {_c('31', '✗')} {msg}")
+    print(f"  {colorize('31', '✗')} {msg}")
 
 
 def log_info(msg: str) -> None:
-    print(f"  {_c('36', '→')} {msg}")
+    print(f"  {colorize('36', '→')} {msg}")
 
 
 def log_section(title: str) -> None:
-    print(f"\n{_c('1', f'== {title} ==')}")
+    print(f"\n{colorize('1', f'== {title} ==')}")
 
-
-# ---------------------------------------------------------------------------
-# Nexus Mods API client
-# ---------------------------------------------------------------------------
 
 class NexusError(RuntimeError):
-    """Raised on a non-2xx Nexus API response, preserving status + body."""
+    """Non-2xx Nexus API response, preserving status + body."""
 
     def __init__(self, status: int, body: str, url: str):
         super().__init__(f"HTTP {status} from {url}: {body}")
@@ -120,10 +103,6 @@ class NexusAPI:
                         f.write(chunk)
 
 
-# ---------------------------------------------------------------------------
-# Lockfile (mods.txt): ``folder mod_id version`` per line.
-# ---------------------------------------------------------------------------
-
 class LockEntry:
     __slots__ = ("folder", "mod_id", "version")
 
@@ -134,7 +113,7 @@ class LockEntry:
 
 
 def read_lockfile(path: Path) -> list[LockEntry]:
-    """Parse ``mods.txt`` into ordered entries. Comments/blank lines skipped."""
+    """Parse ``mods.txt`` into ordered entries (comments/blank lines skipped)."""
     if not path.exists():
         return []
     entries: list[LockEntry] = []
@@ -151,21 +130,14 @@ def read_lockfile(path: Path) -> list[LockEntry]:
 
 
 def write_lockfile(path: Path, entries: list[LockEntry]) -> None:
-    """Rewrite ``mods.txt``, preserving comments/blank lines and entry order,
-    only touching the version column of entry lines.
-
-    On a new file the header is written once; on an existing file the header
-    (and any other comments) is preserved untouched, so re-running never
-    duplicates it.
-    """
+    """Rewrite ``mods.txt`` preserving comments/blank lines and entry order,
+    only touching the version column. Writes the header once on a new file."""
     header = (
         "# Darktide mod lockfile.\n"
         "# Each line: <folder> <mod_id> <version>\n"
         "#   folder  - install folder under mods/ (usually the mod name)\n"
         "#   mod_id  - Nexus Mods mod id (the number in the mod's URL)\n"
         "#   version - currently installed version (auto-updated by sync)\n"
-        "# file_id is resolved from the current MAIN file every run, so it is\n"
-        "# never stored here. Load order lives in mods/mod_load_order.txt.\n"
     )
     by_key = {(e.folder, e.mod_id): e.version for e in entries}
 
@@ -195,38 +167,22 @@ def write_lockfile(path: Path, entries: list[LockEntry]) -> None:
     path.write_text("\n".join(lines_out) + "\n", encoding="utf-8")
 
 
-# ---------------------------------------------------------------------------
-# .mod file parsing
-# ---------------------------------------------------------------------------
-
-_VERSION_RE = re.compile(r"\bversion\s*=\s*[\"']([^\"']+)[\"']")
-
-
 def read_local_version(folder: str) -> str | None:
-    """Return the ``version`` parsed from ``mods/<folder>/<folder>.mod``.
+    """Parse ``version`` from ``mods/<folder>/<folder>.mod``.
 
-    Only used as a fallback to back-fill a version when the lockfile column is
-    empty (first sync of a freshly-added ``folder mod_id`` line).
-    """
+    Only used to back-fill the lockfile version on a first sync of a freshly
+    added ``folder mod_id`` line."""
     mod_file = MODS_DIR / folder / f"{folder}.mod"
     if not mod_file.exists():
         return None
-    m = _VERSION_RE.search(mod_file.read_text(encoding="utf-8"))
+    m = VERSION_RE.search(mod_file.read_text(encoding="utf-8"))
     return m.group(1) if m else None
 
 
-# ---------------------------------------------------------------------------
-# Nexus file resolution + download
-# ---------------------------------------------------------------------------
-
 def get_main_file(api: NexusAPI, mod_id: str) -> dict | None:
-    """Resolve the current MAIN file for a mod.
-
-    Prefers ``category_id == 1`` / ``category_name == "MAIN"``; falls back to the
-    most recent non-dead file (skips OLD_VERSION/ARCHIVED/REMOVED).
-    Returns ``{version, file_id, file_name, size_kb}`` or ``None``. ``file_name``
-    carries the real archive extension (``.zip`` or ``.7z``).
-    """
+    """Resolve the current MAIN file: prefer ``category_id == 1``/``"MAIN"``,
+    else the most recent non-dead file. Returns ``{version, file_id,
+    file_name, size_kb}`` or ``None``."""
     data = api.v1("GET", f"/games/{GAME_DOMAIN}/mods/{mod_id}/files.json")
     files = data.get("files", [])
     if not files:
@@ -256,17 +212,10 @@ def fetch_download_url(api: NexusAPI, mod_id: str, file_id: str) -> str:
     raise RuntimeError("download_link.json returned no URIs")
 
 
-# ---------------------------------------------------------------------------
-# Extraction (.zip and .7z)
-# ---------------------------------------------------------------------------
-
-def _rmtree(path: Path) -> None:
-    """``shutil.rmtree`` that also clears read-only bits first.
-
-    Some extracted mod folders land as ``dr-xr-xr-x`` (archives preserve the
-    author's perms), which blocks the plain rmtree with EACCES. We chmod every
-    dir (including ``path`` itself) to 0o755 before removing.
-    """
+def remove_tree(path: Path) -> None:
+    """``shutil.rmtree`` that clears read-only bits first. Some extracted mod
+    folders land as ``dr-xr-xr-x`` (archives preserve author perms), which
+    blocks a plain rmtree with EACCES."""
     try:
         os.chmod(path, 0o755)
     except OSError:
@@ -280,7 +229,7 @@ def _rmtree(path: Path) -> None:
     shutil.rmtree(path)
 
 
-def _extract_archive(archive_path: Path, dest_dir: Path) -> None:
+def extract_archive(archive_path: Path, dest_dir: Path) -> None:
     """Extract a ``.zip`` or ``.7z`` archive into ``dest_dir`` (must exist)."""
     name = archive_path.name.lower()
     if name.endswith(".7z"):
@@ -305,18 +254,17 @@ def _extract_archive(archive_path: Path, dest_dir: Path) -> None:
 
 
 def extract_mod(archive_path: Path, folder: str) -> None:
-    """Extract into ``mods/<folder>/``, normalising perms so the tree stays
-    writable. Permissions are deliberately NOT retained from the archive — some
-    authors ship ``0o555`` dirs, which would make the folder undeletable later.
-    """
+    """Extract into ``mods/<folder>/``. Perms are deliberately not retained
+    from the archive — some authors ship ``0o555`` dirs, which would make the
+    folder undeletable later."""
     with tempfile.TemporaryDirectory(prefix="nx-mod-") as tmp:
         tmp_path = Path(tmp)
-        _extract_archive(archive_path, tmp_path)
+        extract_archive(archive_path, tmp_path)
         entries = [p for p in tmp_path.iterdir()]
         src = entries[0] if len(entries) == 1 and entries[0].is_dir() else tmp_path
         dest = MODS_DIR / folder
         if dest.exists():
-            _rmtree(dest)
+            remove_tree(dest)
         MODS_DIR.mkdir(parents=True, exist_ok=True)
         for root, dirs, files in os.walk(src):
             os.chmod(root, 0o755)
@@ -324,10 +272,6 @@ def extract_mod(archive_path: Path, folder: str) -> None:
                 os.chmod(Path(root) / fname, 0o644)
         shutil.move(str(src), str(dest))
 
-
-# ---------------------------------------------------------------------------
-# Sync
-# ---------------------------------------------------------------------------
 
 def cmd_sync(api: NexusAPI, args: argparse.Namespace) -> int:
     entries = read_lockfile(LOCKFILE)
@@ -338,26 +282,21 @@ def cmd_sync(api: NexusAPI, args: argparse.Namespace) -> int:
     failed: list[str] = []
     changed_entries: list[LockEntry] = []
 
+    def mark_failed(entry: LockEntry, msg: str) -> None:
+        log_fail(msg)
+        failed.append(entry.folder)
+        changed_entries.append(entry)
+
     for e in entries:
-        # The lockfile version is the source of truth for "what's installed".
-        # Mod authors frequently forget to bump the ``version`` field inside the
-        # .mod file (e.g. vfx_swapper ships a .mod saying 1.2.0 even for its
-        # 1.2.2 release), so trusting the .mod would cause endless re-downloads.
-        # We only consult the .mod to back-fill a version when the lockfile
-        # column is empty (first run after a manual ``folder mod_id`` entry).
         effective = e.version if e.version else read_local_version(e.folder)
 
         try:
             published = get_main_file(api, e.mod_id)
         except Exception as ex:
-            log_fail(f"{e.folder}: could not fetch published version ({ex})")
-            failed.append(e.folder)
-            changed_entries.append(e)
+            mark_failed(e, f"{e.folder}: could not fetch published version ({ex})")
             continue
         if not published or not published["version"]:
-            log_fail(f"{e.folder}: no published MAIN file found")
-            failed.append(e.folder)
-            changed_entries.append(e)
+            mark_failed(e, f"{e.folder}: no published MAIN file found")
             continue
         pub_version = published["version"]
 
@@ -392,19 +331,16 @@ def cmd_sync(api: NexusAPI, args: argparse.Namespace) -> int:
                     tmp_archive.unlink()
         except NexusError as ex:
             if ex.status == 403 and "premium" in ex.body.lower():
-                log_fail(
+                mark_failed(
+                    e,
                     f"{e.folder}: download requires Premium (or a website key); "
-                    f"grab it manually: https://www.nexusmods.com/{GAME_DOMAIN}/mods/{e.mod_id}?tab=files"
+                    f"grab it manually: https://www.nexusmods.com/{GAME_DOMAIN}/mods/{e.mod_id}?tab=files",
                 )
             else:
-                log_fail(f"{e.folder}: download failed ({ex})")
-            failed.append(e.folder)
-            changed_entries.append(e)
+                mark_failed(e, f"{e.folder}: download failed ({ex})")
             continue
         except Exception as ex:
-            log_fail(f"{e.folder}: download/extract failed ({ex})")
-            failed.append(e.folder)
-            changed_entries.append(e)
+            mark_failed(e, f"{e.folder}: download/extract failed ({ex})")
             continue
 
         log_ok(f"{e.folder}: updated to {pub}")
@@ -422,17 +358,11 @@ def cmd_sync(api: NexusAPI, args: argparse.Namespace) -> int:
         if failed:
             log_fail(f"failed {len(failed)} mod(s): {', '.join(failed)}")
 
-    # Only persist on a real sync: a mod is "installed" at a version once
-    # we've actually downloaded it, or confirmed it already matches.
     if not args.status:
         write_lockfile(LOCKFILE, changed_entries)
 
     return 1 if failed else 0
 
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Sync Darktide mods from Nexus Mods.")
