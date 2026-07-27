@@ -35,7 +35,7 @@ ItemSorting
 GlobalStore
 
 -- In Game HUD
-machine_gods_beacon
+LetThereBeLight
 DisableScreenEffects
 vfx_swapper
 DynamicCrosshair

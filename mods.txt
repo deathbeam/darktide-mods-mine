@@ -1,6 +1,6 @@
 Alfs_DMF_Extensions 864 1.2.02
 AutoMark 736 2.2.8
-BetterNameplate 827 1.0.6
+BetterNameplate 827 1.0.7
 CharacterStats 1093 0.2.2
 CombatStats 661 0.5.10
 ConstantFov 91 1.9
@@ -24,9 +24,9 @@ guarantee_special_action 351 1.1.13
 guarantee_weapon_swap 331 1.4.4
 IconBrowser 820 1.0.3
 ImprovedMeatGrinder 1013 1.6.0
+LetThereBeLight 1099 1.1.3
 LoadoutPreviews 1038 1.5.5
 LocalizationExport 975 2
-machine_gods_beacon 684 2026.07.16
 markers_aio 447 2.14.2
 modular_menu_buttons 166 1.2.9
 MoreGraphicsOptions 236 1.0.0.5

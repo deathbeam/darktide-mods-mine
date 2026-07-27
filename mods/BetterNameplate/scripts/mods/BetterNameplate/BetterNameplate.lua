@@ -1,13 +1,13 @@
 ---@class BetterNameplateMod:DMFMod
-local mod                              = get_mod("BetterNameplate")
-local UISettings                       = require("scripts/settings/ui/ui_settings")
+local mod          = get_mod("BetterNameplate")
+local UISettings   = require("scripts/settings/ui/ui_settings")
 -- Global Cache
-local CLASS                            = CLASS
-local Managers                         = Managers
-local ScriptUnit                       = ScriptUnit
+local CLASS        = CLASS
+local Managers     = Managers
+local ScriptUnit   = ScriptUnit
 
 -- Settings
-local mod_settings                     = {
+local mod_settings = {
     only_icon_in_nameplate                = mod:get("only_icon_in_nameplate"),
     no_icon_in_nameplate                  = mod:get("no_icon_in_nameplate"),
     class_name_in_nameplate               = mod:get("class_name_in_nameplate"),
@@ -28,6 +28,14 @@ local mod_settings                     = {
     override_font_color                   = mod:get("override_font_color"),
     font_color                            = mod:get("font_color"),
 }
+
+local function has_changed_nameplate()
+    return mod_settings.only_icon_in_nameplate
+        or mod_settings.no_icon_in_nameplate
+        or mod_settings.class_name_in_nameplate
+        or mod_settings.only_class_name_in_nameplate
+        or mod_settings.only_icon_and_class_name_in_nameplate
+end
 
 -- Params
 local DEFAULT_PLAYER_SCREEN_MARGINS    = {
@@ -305,7 +313,7 @@ mod:hook_require("scripts/ui/hud/elements/world_markers/templates/world_marker_t
         mod:hook_safe(instance, "on_enter",
             function(widget, marker)
                 on_marker_enter(widget, marker, "companion")
-                if mod_settings.only_icon_in_nameplate or mod_settings.no_icon_in_nameplate or mod_settings.class_name_in_nameplate or mod_settings.only_class_name_in_nameplate or mod_settings.only_icon_and_class_name_in_nameplate then
+                if has_changed_nameplate() then
                     Managers.event:unregister(marker, "event_update_player_name")
                 end
             end)
@@ -342,7 +350,7 @@ mod.on_all_mods_loaded    = function()
     if true_level then
         mod:hook(true_level, "is_enabled_feature",
             function(func, ref, ...)
-                if mod_settings.only_icon_in_nameplate and ref == "nameplate" and not is_in_hub then
+                if has_changed_nameplate() and ref == "nameplate" and not is_in_hub then
                     return false
                 end
 
@@ -352,7 +360,7 @@ mod.on_all_mods_loaded    = function()
     local who_are_you = get_mod("who_are_you")
     if who_are_you then
         mod:hook_safe(CLASS.HudElementWorldMarkers, "_calculate_markers", function(self)
-            if not mod_settings.only_icon_in_nameplate and not mod_settings.no_icon_in_nameplate and not mod_settings.class_name_in_nameplate and not mod_settings.only_class_name_in_nameplate and not mod_settings.only_icon_and_class_name_in_nameplate then
+            if not has_changed_nameplate() then
                 return
             end
 
