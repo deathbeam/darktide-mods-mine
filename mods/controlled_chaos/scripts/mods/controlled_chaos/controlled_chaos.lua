@@ -15,6 +15,8 @@ local _player_debuff_handles = {}
 
 local _danger_entry = nil
 local _tg_view_open = false
+local _vanilla_danger_max = nil
+local _save_repair_done = false
 local _pw_havoc_selected = false
 local _pw_active = nil
 local _pw_refresh_havoc_text
@@ -90,6 +92,57 @@ local function _load_refs()
 	if not _MINION_TYPE then _MINION_TYPE = require("scripts/settings/breed/breed_settings").types.minion end
 	if not _HavocModifierConfig then _HavocModifierConfig = require("scripts/settings/havoc/havoc_modifier_config") end
 	if not _HavocSettings then _HavocSettings = require("scripts/settings/havoc_settings") end
+end
+
+local TG_HAVOC_PREF = "tg_havoc_selected"
+
+local function _vanilla_danger_count()
+	if _vanilla_danger_max then return _vanilla_danger_max end
+	local ok, list = pcall(require, DANGER_PATH)
+	if not ok or type(list) ~= "table" then return nil end
+	local n = #list
+	if _tg_view_open then n = n - 1 end
+	if n > 0 then _vanilla_danger_max = n end
+	return _vanilla_danger_max
+end
+
+local function _save_is_loaded(save)
+	local store = save._save_data
+	if type(store) ~= "table" then return nil end
+	return store.save_loaded and true or false
+end
+
+local function _repair_saved_danger()
+	local max_danger = _vanilla_danger_count()
+	local save = Managers and Managers.save
+	if not max_danger or not save or not save.data then return nil end
+
+	local loaded = _save_is_loaded(save)
+	if loaded == false then return nil end
+
+	local ok, data = pcall(save.data, save)
+	local accounts = ok and type(data) == "table" and data.account_data
+	if type(accounts) ~= "table" then return nil end
+
+	local seen, fixed = false, 0
+	for _, account in pairs(accounts) do
+		local characters = type(account) == "table" and account.character_data
+		if type(characters) == "table" then
+			for _, character in pairs(characters) do
+				if type(character) == "table" then
+					seen = true
+					if (tonumber(character.training_grounds_danger) or 0) > max_danger then
+						character.training_grounds_danger = max_danger
+						fixed = fixed + 1
+					end
+				end
+			end
+		end
+	end
+
+	if not seen and loaded ~= true then return nil end
+	if fixed > 0 then pcall(save.queue_save, save) end
+	return fixed
 end
 
 local function _clamp_level(v)
@@ -559,6 +612,10 @@ local function _refresh_havoc_live()
 end
 
 mod.update = function(dt)
+	if not _save_repair_done then
+		_save_repair_done = _repair_saved_danger() ~= nil
+	end
+
 	local in_mg = mod:is_enabled() and _is_meatgrinder()
 	if in_mg ~= _in_meatgrinder then
 		_in_meatgrinder = in_mg
@@ -586,6 +643,7 @@ end
 
 local function _build_difficulty()
 	_load_refs()
+	_vanilla_danger_max = #_DangerSettings
 	local base = _DangerSettings[4] or _DangerSettings[#_DangerSettings]
 	local entry = _shallow(base)
 	entry.name = "havoc_training"
@@ -1116,11 +1174,25 @@ mod:hook(TG_VIEW, "on_enter", function(func, self)
 	return func(self)
 end)
 
-mod:hook_safe(TG_VIEW, "on_exit", function(self)
-	if _tg_view_open then
+mod:hook(TG_VIEW, "on_exit", function(func, self)
+	local was_open = _tg_view_open
+
+	if was_open then
+		local stepper = self._element and self:_element("difficulty_selector")
+		local idx = (stepper and stepper.get_current_selected_difficulty and stepper:get_current_selected_difficulty()) or 0
+		local sel = _DangerSettings and _DangerSettings[idx]
+		mod:set(TG_HAVOC_PREF, (sel and sel.name == "havoc_training") and true or false, false)
+	end
+
+	local result = func(self)
+
+	if was_open then
 		_remove_havoc_entry()
 		_tg_view_open = false
+		_repair_saved_danger()
 	end
+
+	return result
 end)
 
 mod:hook(TG_VIEW, "_start_training_grounds", function(func, self, mechanism_context)
@@ -1135,6 +1207,10 @@ mod:hook("ViewElementMissionBoardDifficultySelector", "initialize_data", functio
 	local parent = self:parent()
 	local list = (parent and parent.get_difficulty_settings and parent:get_difficulty_settings()) or require(DANGER_PATH)
 	local n = (list and #list) or 1
+	if _tg_view_open and mod:get(TG_HAVOC_PREF) then
+		local havoc_index = _havoc_entry_index()
+		if havoc_index then optional_difficulty_index = havoc_index end
+	end
 	if optional_difficulty_index and optional_difficulty_index > n then
 		optional_difficulty_index = n
 	end

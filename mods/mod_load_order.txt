@@ -33,6 +33,7 @@ LoadoutPreviews
 DumpStatFinder
 ItemSorting
 GlobalStore
+HavocQuickplay
 
 -- In Game HUD
 LetThereBeLight
