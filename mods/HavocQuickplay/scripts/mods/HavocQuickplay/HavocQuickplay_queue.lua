@@ -35,14 +35,20 @@ end
 
 local function decline_book()
 	local id = mod.character_id()
-	local book = S.declines[id]
 
-	if not book then
-		book = {}
-		S.declines[id] = book
+	if id ~= C.UNKNOWN_CHARACTER and S.declines_character ~= id then
+		if S.declines_character ~= nil then
+			mod.debug("character changed, decline memory cleared")
+		end
+
+		S.declines_character = id
+
+		for party_id in pairs(S.declines) do
+			S.declines[party_id] = nil
+		end
 	end
 
-	return book
+	return S.declines
 end
 
 mod.remember_decline = function(party_id)
@@ -52,29 +58,108 @@ mod.remember_decline = function(party_id)
 end
 
 mod.was_declined = function(party_id)
-	local book = S.declines[mod.character_id()]
+	return decline_book()[party_id] ~= nil
+end
 
-	return book ~= nil and book[party_id] ~= nil
+mod.decline_count = function()
+	local n = 0
+
+	for _ in pairs(decline_book()) do
+		n = n + 1
+	end
+
+	return n
 end
 
 mod.prune_declines = function()
 	local now = mod.now()
+	local book = decline_book()
 
-	for character_id, book in pairs(S.declines) do
-		local empty = true
-
-		for party_id, at in pairs(book) do
-			if now - at > C.DECLINE_TTL then
-				book[party_id] = nil
-			else
-				empty = false
-			end
-		end
-
-		if empty then
-			S.declines[character_id] = nil
+	for party_id, at in pairs(book) do
+		if now - at >= C.DECLINE_TTL then
+			book[party_id] = nil
 		end
 	end
+end
+
+mod.blacklist_minutes = function()
+	local minutes = tonumber(mod.setting("hq_blacklist_minutes")) or C.BLACKLIST_DEF_MIN
+
+	if minutes < C.BLACKLIST_MIN_MIN then
+		minutes = C.BLACKLIST_MIN_MIN
+	elseif minutes > C.BLACKLIST_MAX_MIN then
+		minutes = C.BLACKLIST_MAX_MIN
+	end
+
+	return math.floor(minutes)
+end
+
+mod.blacklist_ttl = function()
+	return mod.blacklist_minutes() * 60
+end
+
+mod.blacklist_lobby = function(party_id)
+	if not party_id then
+		return false
+	end
+
+	S.blacklist[party_id] = mod.now()
+
+	mod.debug("blacklisted %s", tostring(party_id))
+
+	return true
+end
+
+mod.is_blacklisted = function(party_id)
+	local at = party_id and S.blacklist[party_id]
+
+	if not at then
+		return false
+	end
+
+	if mod.now() - at >= mod.blacklist_ttl() then
+		S.blacklist[party_id] = nil
+
+		return false
+	end
+
+	return true
+end
+
+mod.blacklist_count = function()
+	local n = 0
+
+	for party_id in pairs(S.blacklist) do
+		if mod.is_blacklisted(party_id) then
+			n = n + 1
+		end
+	end
+
+	return n
+end
+
+mod.leave_and_blacklist = function()
+	if mod.other_members() < 1 then
+		mod.say(mod.loc("hq_notify_not_in_lobby"))
+
+		return false
+	end
+
+	mod.blacklist_lobby(mod.party_id())
+
+	if S.hosting then
+		mod.end_host_session()
+	end
+
+	local party_manager = mod.party()
+
+	if party_manager and party_manager.leave_party then
+		pcall(party_manager.leave_party, party_manager)
+	end
+
+	mod.say(mod.loc("hq_notify_blacklisted", mod.blacklist_minutes()))
+
+	return true
 end
 
 local function cancel_key_text()
@@ -294,6 +379,10 @@ local function listing_matches(listing, own_party_id, own_size)
 		return false
 	end
 
+	if mod.is_blacklisted(listing.party_id) then
+		return false
+	end
+
 	local members = listing_members(listing)
 
 	if members >= C.PARTY_MAX then
@@ -304,7 +393,7 @@ local function listing_matches(listing, own_party_id, own_size)
 		return false
 	end
 
-	if not mod.setting("hq_retry_declined") and mod.was_declined(listing.party_id) then
+	if mod.was_declined(listing.party_id) then
 		return false
 	end
 
@@ -408,6 +497,13 @@ local function best_offer()
 end
 
 mod.add_offer = function(party_id, invite_token)
+	if mod.is_blacklisted(party_id) then
+		mod.debug("refused a blacklisted offer from %s", tostring(party_id))
+		decline_offer(party_id, invite_token)
+
+		return
+	end
+
 	S.offers[party_id] = {
 		party_id = party_id,
 		invite_token = invite_token,
@@ -613,6 +709,7 @@ mod.print_status = function()
 	mod:echo("range: %d - %d", mod.min_rank(), mod.max_rank())
 	mod:echo("party: %d / %d", mod.party_size(), C.PARTY_MAX)
 	mod:echo("listings: %d   offers held: %d", listings, offer_count())
+	mod:echo("blacklisted lobbies: %d   declined lobbies: %d", mod.blacklist_count(), mod.decline_count())
 end
 
 mod:hook(CLASS.PartyImmateriumManager, "_handle_immaterium_invite", function(func, self, party_id, invite_token, inviter_account_id, ...)

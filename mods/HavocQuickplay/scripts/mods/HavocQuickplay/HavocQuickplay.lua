@@ -1,6 +1,7 @@
 local mod = get_mod("HavocQuickplay")
+local TaskbarFlash = require("scripts/utilities/taskbar_flash")
 
-mod.VERSION = "2.3.2"
+mod.VERSION = "2.5.0"
 
 mod.C = {
 	MAX_HAVOC_RANK      = 40,
@@ -8,6 +9,7 @@ mod.C = {
 	HAVOC_MIN_LEVEL     = 30,
 	PARTY_MAX           = 4,
 	SENTINEL_ACCOUNT    = "00000000-0000-0000-0000-000000000000",
+	UNKNOWN_CHARACTER   = "unknown",
 	PAGE_NAME           = "havoc",
 	PAGE_ICON           = "content/ui/materials/icons/generic/havoc",
 	PAGE_COLOR          = { 255, 252, 44, 178 },
@@ -16,12 +18,17 @@ mod.C = {
 	SWEEP_INTERVAL      = 1,
 	STREAM_WARMUP       = 3,
 	COUNTDOWN           = 8,
-	DECLINE_TTL         = 1800,
+	DECLINE_TTL         = 300,
 	HOLD_REPEAT_DELAY   = 0.6,
 	HOLD_REPEAT_RATE    = 0.08,
 	RANK_TTL            = 300,
 	RANK_ERROR_BACKOFF  = 60,
 	CANCEL_ACTION       = "cancel_matchmaking",
+	BLACKLIST_MIN_MIN   = 3,
+	BLACKLIST_MAX_MIN   = 60,
+	BLACKLIST_DEF_MIN   = 5,
+	FLASH_COUNT         = 3,
+	FLASH_TIMEOUT       = 300,
 }
 
 mod.STATE = {
@@ -50,6 +57,11 @@ mod.S = {
 	countdown_ends_at  = nil,
 
 	declines           = {},
+	declines_character = nil,
+	blacklist          = {},
+
+	party_last_size    = nil,
+	flash_until        = nil,
 
 	notif_id           = nil,
 	notif_next_update  = 0,
@@ -176,7 +188,7 @@ mod.character_id = function()
 		return player and player:character_id()
 	end)
 
-	return ok and id or "unknown"
+	return ok and id or mod.C.UNKNOWN_CHARACTER
 end
 
 mod.presence_name = function()
@@ -229,6 +241,18 @@ mod.party_size = function()
 	return count > 0 and count or 1
 end
 
+mod.other_members = function()
+	local party_manager = mod.party()
+
+	if not party_manager or not party_manager.num_other_members then
+		return 0
+	end
+
+	local ok, count = pcall(party_manager.num_other_members, party_manager)
+
+	return ok and tonumber(count) or 0
+end
+
 mod.party_id = function()
 	local party_manager = mod.party()
 
@@ -269,6 +293,48 @@ mod.is_queued = function()
 	return mod.S.state ~= mod.STATE.IDLE
 end
 
+mod.window_focused = function()
+	local window = rawget(_G, "Window")
+
+	if not window or not window.has_focus then
+		return true
+	end
+
+	local ok, focused = pcall(window.has_focus)
+
+	return not ok or focused and true or false
+end
+
+mod.flash_taskbar = function()
+	pcall(TaskbarFlash.flash_window, mod.C.FLASH_COUNT)
+end
+
+mod.party_watch = function()
+	local S = mod.S
+	local size = mod.party_size()
+	local previous = S.party_last_size
+
+	S.party_last_size = size
+
+	if previous and previous < mod.C.PARTY_MAX and size >= mod.C.PARTY_MAX and not mod.in_mission() then
+		S.flash_until = mod.now() + mod.C.FLASH_TIMEOUT
+
+		mod.debug("party filled, flashing the taskbar")
+	end
+
+	if not S.flash_until then
+		return
+	end
+
+	if mod.window_focused() or mod.now() >= S.flash_until then
+		S.flash_until = nil
+
+		return
+	end
+
+	mod.flash_taskbar()
+end
+
 local BASE = "HavocQuickplay/scripts/mods/HavocQuickplay/"
 
 mod:io_dofile(BASE .. "HavocQuickplay_order")
@@ -294,6 +360,7 @@ mod.update = function(dt)
 	S.sweep_timer = 0
 
 	mod.prune_declines()
+	mod.party_watch()
 	mod.host_sweep()
 
 	if S.state ~= mod.STATE.IDLE then
@@ -335,6 +402,10 @@ mod:command("hqp_q", mod.loc("hq_cmd_queue_desc"), function()
 	end
 
 	mod.start_queue()
+end)
+
+mod:command("hqp_bl", mod.loc("hq_cmd_blacklist_desc"), function()
+	mod.leave_and_blacklist()
 end)
 
 mod:command("hqp_cancel", mod.loc("hq_cmd_cancel_desc"), function()

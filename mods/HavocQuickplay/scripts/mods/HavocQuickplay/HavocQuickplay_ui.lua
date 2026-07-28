@@ -30,7 +30,166 @@ mod:add_global_localize_strings({
 	},
 	loc_hq_warn_confirm = { en = "I am sure" },
 	loc_hq_warn_cancel = { en = "Cancel" },
+	loc_hqp_leave_blacklist = { en = "Leave and Blacklist Lobby" },
+	loc_hqp_bl_title = { en = "Leave and Blacklist Lobby" },
+	loc_hqp_bl_confirm = { en = "Leave and blacklist" },
+	loc_hqp_bl_cancel = { en = "Cancel" },
 })
+
+local SYSTEM_BLUEPRINTS_PATH = "scripts/ui/views/system_view/system_view_content_blueprints"
+local SYSTEM_LIST_PATH = "scripts/ui/views/system_view/system_view_content_list"
+local BLACKLIST_TYPE = "hqp_leave_blacklist_button"
+local BLACKLIST_LABEL = "loc_hqp_leave_blacklist"
+local LEAVE_PARTY_LABEL = "loc_leave_party_display_name"
+local LEAVE_PARTY_ICON = "content/ui/materials/icons/system/escape/leave_party"
+local BLACKLIST_COLOR = { 255, 206, 70, 56 }
+
+local function paint(color)
+	if type(color) ~= "table" then
+		return
+	end
+
+	color[1] = BLACKLIST_COLOR[1]
+	color[2] = BLACKLIST_COLOR[2]
+	color[3] = BLACKLIST_COLOR[3]
+	color[4] = BLACKLIST_COLOR[4]
+end
+
+local function inject_blueprint(blueprints)
+	if not blueprints or blueprints[BLACKLIST_TYPE] then
+		return
+	end
+
+	local base = blueprints.button
+
+	if not base or not base.init then
+		return
+	end
+
+	blueprints[BLACKLIST_TYPE] = {
+		size = { base.size[1], base.size[2] },
+		pass_template = base.pass_template,
+		init = function(parent, widget, element, callback_name, disabled)
+			base.init(parent, widget, element, callback_name, disabled)
+
+			local style = widget and widget.style
+			local text = style and style.text
+			local icon = style and style.icon
+
+			if text then
+				paint(text.default_color)
+				paint(text.hover_color)
+				paint(text.selected_color)
+				paint(text.text_color)
+			end
+
+			if icon then
+				paint(icon.default_color)
+				paint(icon.hover_color)
+				paint(icon.color)
+			end
+		end,
+	}
+end
+
+mod:hook_require(SYSTEM_BLUEPRINTS_PATH, inject_blueprint)
+
+local blueprint_ready = false
+
+local function ensure_blueprint()
+	if blueprint_ready then
+		return true
+	end
+
+	local ok, blueprints = pcall(require, SYSTEM_BLUEPRINTS_PATH)
+
+	if not ok or type(blueprints) ~= "table" then
+		return false
+	end
+
+	inject_blueprint(blueprints)
+
+	blueprint_ready = blueprints[BLACKLIST_TYPE] ~= nil
+
+	return blueprint_ready
+end
+
+local function show_blacklist_popup()
+	Managers.event:trigger("event_show_ui_popup", {
+		title_text = "loc_hqp_bl_title",
+		description_text_unlocalized = mod.loc("hq_bl_popup_body", mod.blacklist_minutes()),
+		options = {
+			{
+				close_on_pressed = true,
+				text = "loc_hqp_bl_confirm",
+				callback = function()
+					mod.leave_and_blacklist()
+				end,
+			},
+			{
+				close_on_pressed = true,
+				hotkey = "back",
+				template_type = "terminal_button_small",
+				text = "loc_hqp_bl_cancel",
+			},
+		},
+	})
+end
+
+local function blacklist_entry(leave_party_validation)
+	return {
+		icon = LEAVE_PARTY_ICON,
+		text = BLACKLIST_LABEL,
+		type = BLACKLIST_TYPE,
+		validation_function = function()
+			if not mod:is_enabled() or mod.setting("hq_disable_bl_button") then
+				return false
+			end
+
+			if not ensure_blueprint() then
+				return false
+			end
+
+			if not leave_party_validation then
+				return true
+			end
+
+			return leave_party_validation()
+		end,
+		trigger_function = show_blacklist_popup,
+	}
+end
+
+local function inject_entry(list)
+	if type(list) ~= "table" then
+		return
+	end
+
+	for i = 1, #list do
+		if list[i].text == BLACKLIST_LABEL then
+			return
+		end
+	end
+
+	for i = 1, #list do
+		if list[i].text == LEAVE_PARTY_LABEL then
+			table.insert(list, i + 1, blacklist_entry(list[i].validation_function))
+
+			return
+		end
+	end
+end
+
+mod.inject_system_entry = inject_entry
+
+mod:hook_require(SYSTEM_LIST_PATH, function(content_list)
+	if type(content_list) ~= "table" then
+		return
+	end
+
+	inject_entry(content_list.StateMainMenu)
+	inject_entry(content_list.default)
+end)
 
 local function wants_step(content, side, hotspot)
 	local now = mod.now()

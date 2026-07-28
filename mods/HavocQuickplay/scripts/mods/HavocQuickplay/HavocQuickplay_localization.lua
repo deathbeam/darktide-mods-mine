@@ -24,11 +24,14 @@ return {
 	hq_auto_start_desc = {
 		en = "Automatically puts up your current havoc mission when your lobby reaches 4 players. Will stop if someone declines.",
 	},
-	hq_retry_declined = {
-		en = "Retry declined lobbies",
+	hq_disable_bl_button = {
+		en = "Disable Blacklist Button",
 	},
-	hq_retry_declined_desc = {
-		en = "The mod will keep trying to join lobbies that declined your request. By default the mod doesn't do that until 30 minutes have passed.",
+	hq_disable_bl_button_desc = {
+		en = "Disables the blacklist button in case it's incompatible with another mod of yours. You can use /hqp_bl instead",
+	},
+	hq_blacklist_minutes = {
+		en = "Blacklist Duration (minutes)",
 	},
 	hq_rank_group = {
 		en = "Havoc Rank Filter",
@@ -91,6 +94,16 @@ return {
 	hq_notify_already_queued = {
 		en = "Already in the Havoc queue",
 	},
+	hq_notify_blacklisted = {
+		en = "Left the lobby. The queue will not ask to join it again for %d minutes.",
+	},
+	hq_bl_popup_body = {
+		en = "Leave this lobby and stop the queue from asking to join it again for the next %d minutes. "
+			.. "The block clears by itself, and it applies to this lobby only.",
+	},
+	hq_notify_not_in_lobby = {
+		en = "Not in a lobby with anyone",
+	},
 	hq_notify_not_queued = {
 		en = "Not queued or hosting",
 	},
@@ -134,6 +147,9 @@ return {
 
 	hq_cmd_queue_desc = {
 		en = "Queue for a Havoc match, works from inside a mission",
+	},
+	hq_cmd_blacklist_desc = {
+		en = "Leave the lobby and block the queue from asking to rejoin it",
 	},
 	hq_cmd_cancel_desc = {
 		en = "Cancel the Havoc queue or stop hosting",

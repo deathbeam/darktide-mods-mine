@@ -28,11 +28,20 @@ return {
 				tooltip = "hq_auto_start_desc",
 			},
 			{
-				setting_id = "hq_retry_declined",
+				setting_id = "hq_disable_bl_button",
 				type = "checkbox",
 				default_value = false,
-				title = "hq_retry_declined",
-				tooltip = "hq_retry_declined_desc",
+				title = "hq_disable_bl_button",
+				tooltip = "hq_disable_bl_button_desc",
+			},
+			{
+				setting_id = "hq_blacklist_minutes",
+				type = "numeric",
+				default_value = 5,
+				range = { 3, 60 },
+				step_size_value = 1,
+				decimals_number = 0,
+				title = "hq_blacklist_minutes",
 			},
 			{
 				setting_id = "hq_rank_group",
