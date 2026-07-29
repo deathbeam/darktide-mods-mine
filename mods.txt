@@ -1,9 +1,10 @@
 Alfs_DMF_Extensions 864 1.2.02
 AutoMark 736 2.2.8
 BetterNameplate 827 1.0.7
-CharacterStats 1093 0.2.2
+CharacterStats 1093 0.2.3
 CombatStats 661 0.5.10
 ConstantFov 91 1.9
+CurioHunter 875 7
 DisableScreenEffects 17 26.02.08-1
 DumpStatFinder 368 0.94.2
 DynamicCrosshair 110 1.7
@@ -22,7 +23,7 @@ enemies_improved 809 2.0.14
 guarantee_ability_activation 336 1.4.1
 guarantee_special_action 351 1.1.13
 guarantee_weapon_swap 331 1.4.4
-HavocQuickplay 1116 3
+HavocQuickplay 1116 4
 IconBrowser 820 1.0.3
 ImprovedMeatGrinder 1013 1.6.0
 LetThereBeLight 1099 1.1.3

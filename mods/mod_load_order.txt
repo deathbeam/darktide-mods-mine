@@ -33,6 +33,7 @@ LoadoutPreviews
 DumpStatFinder
 ItemSorting
 GlobalStore
+CurioHunter
 HavocQuickplay
 
 -- In Game HUD

@@ -1,7 +1,7 @@
 local mod = get_mod("HavocQuickplay")
 local TaskbarFlash = require("scripts/utilities/taskbar_flash")
 
-mod.VERSION = "2.5.0"
+mod.VERSION = "2.5.1"
 
 mod.C = {
 	MAX_HAVOC_RANK      = 40,
@@ -161,13 +161,25 @@ end
 mod.local_player = function()
 	local player_manager = Managers.player
 
-	return player_manager and player_manager:local_player(1) or nil
+	if not player_manager or not player_manager.local_player then
+		return nil
+	end
+
+	local ok, player = pcall(player_manager.local_player, player_manager, 1)
+
+	return ok and player or nil
 end
 
 mod.local_account_id = function()
 	local player = mod.local_player()
 
-	return player and player:account_id() or nil
+	if not player then
+		return nil
+	end
+
+	local ok, id = pcall(player.account_id, player)
+
+	return ok and id or nil
 end
 
 mod.character_level = function()

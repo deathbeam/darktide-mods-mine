@@ -72,6 +72,10 @@ mod.decline_count = function()
 end
 
 mod.prune_declines = function()
+	if next(S.declines) == nil then
+		return
+	end
+
 	local now = mod.now()
 	local book = decline_book()
 
