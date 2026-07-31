@@ -4,7 +4,6 @@
 Alfs_DMF_Extensions
 MoreGraphicsOptions
 LocalizationExport
-IconBrowser
 
 -- Gameplay
 Skitarius
