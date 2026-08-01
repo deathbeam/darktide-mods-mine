@@ -4,6 +4,7 @@
 Alfs_DMF_Extensions
 MoreGraphicsOptions
 LocalizationExport
+SMOG
 
 -- Gameplay
 Skitarius
@@ -27,7 +28,7 @@ WeaponStats
 custom_hud
 Enhanced_descriptions
 modular_menu_buttons
-true_level
+state_your_name
 LoadoutPreviews
 DumpStatFinder
 ItemSorting
