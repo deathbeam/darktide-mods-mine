@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.1.5
+
+### Features
+
+- **Editor box colours** — The edit-mode overlay box of every HUD element is now fully themeable. Independent colours for the **fill** and each of the four **borders** (top / bottom / left / right), each with its own **default / hovered / hidden / hidden-hovered** state and a separate transparency slider. Colours are picked from the engine palette (`Color.list`). Live-tracks element resize and animates on hover.
+- **Colourised colour dropdowns** — Every entry (and the selected value) shows the colour name drawn *in that colour*, so the palette is pickable by sight. Uses `{#color()}` text markup — works with **or without** Alf's DMF Extensions, no add-on dependency. Names are title-cased ("Blue Violet"); very dark colours are floored to a readable shade in the list only (the applied HUD colour is unchanged).
+- **Settings reorganised into tabs** — Options are split into a **General** tab and a **Colors** tab, each declaring an explicit `tab` field so Alf's DMF Extensions tabbed settings render them on their own pages (no positional drift / overlap). The Colors tab is further grouped into Box Fill and the four border sections.
+
+### Changes
+
+- **Settings-page description trimmed** — The keybind legend is no longer duplicated in the mod's settings description (the in-editor Controls legend and the keybind tooltip cover it). The description now shows the author credit.
+- **Author** — Now maintained by **Sungrief**.
+
+### Notes
+
+- Colour/alpha changes rebuild the HUD so the new values apply immediately (the overlay-box styles capture the colour tables by reference at build time).
+- Graft preserved all existing optimisations: lazy opacity draw-hooks, the single-pass position re-pinning system, and the plain `mod._opacity` fast path. The colour cache is additive.
+
 ## v2.1.2
 
 ### Features

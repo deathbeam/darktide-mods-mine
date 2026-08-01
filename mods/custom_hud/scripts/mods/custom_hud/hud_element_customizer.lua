@@ -6,14 +6,69 @@ local UIRenderer = mod:original_require("scripts/managers/ui/ui_renderer")
 local ColorUtilities = mod:original_require("scripts/utilities/ui/colors")
 local UIHudSettings = mod:original_require("scripts/settings/ui/ui_hud_settings")
 
+local function _mod_enabled()
+    return not mod.is_enabled or mod:is_enabled()
+end
+
+-- NOTE: this file is re-executed by the engine's require on every HUD
+-- (re)build, so it must stay idempotent: no top-level mod:hook calls here.
+-- The repin pass and the latched set_scenegraph_position helper live in
+-- custom_hud.lua (main script); the helper is reached via
+-- mod._set_element_sg_position, looked up at call time.
+
+-- Per-instance draw hook: suppresses draw while right-click hidden (vanilla
+-- draw ignores _is_hidden - it's a mod-invented field). Installed ONLY when an
+-- element is actually hidden: moved-but-visible elements don't need it (their
+-- position is applied via the scenegraph, and opacity is handled by the lazily
+-- installed base-class hooks), and every needless instance hook is a permanent
+-- per-frame DMF chain + alloc. One shared handler, so no closure per instance.
+local function _element_draw_hook(func, self, dt, t, ui_renderer, render_settings, input_service)
+    if self._is_hidden and _mod_enabled() then
+        return
+    end
+
+    local opacity = mod._opacity or 1
+    if opacity ~= 1 and render_settings then
+        render_settings.alpha_multiplier = opacity
+    end
+
+    return func(self, dt, t, ui_renderer, render_settings, input_service)
+end
+
+local function _ensure_element_draw_hook(element)
+    local hooked_elements = mod._hooked_elements
+    if hooked_elements and not hooked_elements[element] then
+        hooked_elements[element] = true
+        mod:hook(element, "draw", _element_draw_hook)
+    end
+end
+
 -- ============================================================================
 -- Constants
 -- ============================================================================
 
-local PANEL_WIDTH = 340
+local PANEL_WIDTH_DEFAULT = 340
 local PANEL_MARGIN = 10
 local PANEL_LINE_HEIGHT = 22
-local PANEL_HEADER_HEIGHT = 32
+
+-- Resolution anchoring for the info panel. The layout was tuned at this height;
+-- the panel's SIZE scale is multiplied by (screen_height / reference) so the panel
+-- grows/shrinks proportionally with resolution instead of staying a fixed pixel
+-- size (which looked oversized at 1080p, tiny at 4K). Anchored to height so
+-- ultrawide/widescreen don't stretch it. Applied to the size scale only — never
+-- to positions or cursor mapping, which must use the real inverse_scale so
+-- hit-testing lines up with drawing. Clamped to keep extremes sane.
+local PANEL_REFERENCE_HEIGHT = 1440
+local function _panel_res_factor()
+    local h = RESOLUTION_LOOKUP.height
+    if not h or h <= 0 then
+        return 1
+    end
+    return math.clamp(h / PANEL_REFERENCE_HEIGHT, 0.5, 2.5)
+end
+-- Two-row header: title band on top, button band below.
+local PANEL_HEADER_HEIGHT = 56
+local PANEL_HEADER_TITLE_BAND = 26
 local PANEL_DETAIL_HEIGHT = 310
 local PANEL_MAX_VISIBLE_LINES = 30
 local PANEL_BG_COLOR = { 200, 15, 15, 15 }
@@ -27,6 +82,56 @@ local PANEL_TEXT_HIDDEN_COLOR = { 180, 120, 60, 60 }
 local PANEL_DETAIL_LABEL_COLOR = { 200, 140, 140, 140 }
 local PANEL_DETAIL_VALUE_COLOR = { 255, 220, 220, 220 }
 local PANEL_SCROLL_SPEED = 3
+
+-- Ignore-list toggle button colors. Muted to match the panel's dark theme; a
+-- faint accent (the panel's selected-line purple) marks the open state, and a
+-- subtle hover lift gives click feedback.
+local IGNORE_BTN_COLOR = { 170, 38, 38, 46 }
+local IGNORE_BTN_COLOR_HOVER = { 220, 58, 58, 70 }
+local IGNORE_BTN_COLOR_OPEN = { 200, 72, 48, 78 }
+local IGNORE_BTN_COLOR_OPEN_HOVER = { 235, 96, 64, 104 }
+local IGNORE_BTN_BORDER_COLOR = { 110, 120, 120, 135 }
+local IGNORE_BTN_TEXT_COLOR = { 255, 236, 236, 236 }
+-- Header buttons size themselves to their measured label, resolution-independent.
+-- text_size / draw_text use raw (unscaled) font pixels while draw_rect scales by
+-- self.scale, so the button width (a rect) is converted from the actual-pixel
+-- text width via inverse_scale: bw_pass = (text_px + 2*pad) * inverse_scale. This
+-- makes the button wrap the text identically at every resolution -- no per-button
+-- pixel trims. PANEL_BTN_PAD is the actual-pixel inset on each side of the label.
+local PANEL_BTN_PAD = 6
+
+
+-- Per-row edit-hide toggle. A small square at the right of each panel row:
+-- filled green-ish while the editor box is shown, muted amber once it is
+-- edit-hidden. The header "Reveal" button reuses the ignore-button palette but
+-- lights up with its own accent while reveal is active.
+local EDIT_TOGGLE_SHOWN_COLOR = { 200, 70, 120, 70 }
+local EDIT_TOGGLE_HIDDEN_COLOR = { 200, 120, 80, 45 }
+local EDIT_TOGGLE_BORDER_COLOR = { 140, 120, 120, 130 }
+local EDIT_TOGGLE_HOVER_BORDER_COLOR = { 255, 220, 220, 220 }
+local REVEAL_BTN_COLOR_ON = { 210, 60, 96, 72 }
+local REVEAL_BTN_COLOR_ON_HOVER = { 240, 80, 128, 96 }
+
+-- Row text color by tag state:
+--   [S] only      -> orange    (stashed from edit mode, still live in the HUD)
+--   [H] only      -> dark red  (hidden from the live HUD)
+--   [S]+[H]       -> dark purple (hidden both places; lowest priority)
+local ROW_COLOR_EDIT = { 255, 235, 150, 45 }
+local ROW_COLOR_HIDDEN = { 255, 150, 45, 45 }
+local ROW_COLOR_BOTH = { 255, 120, 70, 140 }
+
+-- End-of-row toggle-box icons, by tag state. Drawn (tinted) over the box fill.
+local TOGGLE_ICON_NORMAL = "content/ui/materials/hud/interactions/icons/attention"
+local TOGGLE_ICON_STASHED = "content/ui/materials/icons/generic/loot"
+local TOGGLE_ICON_HIDDEN = "content/ui/materials/icons/circumstances/ventilation_purge_01"
+local TOGGLE_ICON_BOTH = "content/ui/materials/icons/system/settings/category_interface"
+local TOGGLE_ICON_COLOR = { 255, 240, 240, 240 }
+-- Icon size as a fraction of the toggle box (1.0 = fills the box, lower = smaller,
+-- centered). Raise above 1.0 to overflow the box edges. One per icon type.
+local TOGGLE_ICON_SCALE_NORMAL = 1.5
+local TOGGLE_ICON_SCALE_STASHED = 1.35
+local TOGGLE_ICON_SCALE_HIDDEN = 1.1
+local TOGGLE_ICON_SCALE_BOTH = 1.25
 
 
 local PANEL_FONT_TYPE = "proxima_nova_bold"
@@ -47,6 +152,16 @@ local PANEL_SCALE_DEFAULT = 1
 local PANEL_LIST_ROWS_DEFAULT = 18
 local _cached_panel_scale = PANEL_SCALE_DEFAULT
 local _cached_panel_list_rows = PANEL_LIST_ROWS_DEFAULT
+local _cached_panel_width = PANEL_WIDTH_DEFAULT
+
+-- Arrow-key movement (edit mode). When fixed move is on, each arrow tap nudges
+-- the selected element by a fixed pixel step instead of the default ±1px/frame.
+local _cached_fixed_arrow_move = false
+local _cached_arrow_move_step = 5
+local _cached_resize_step = 5
+local _cached_z_step = 1
+-- Editor-box fill mode: 1 = Fill (standard), 2 = No Fill (outline only).
+local _cached_box_fill_mode = 1
 
 local function _refresh_panel_font()
     local idx = mod:get("panel_font") or 1
@@ -56,6 +171,12 @@ local function _refresh_panel_font()
     PANEL_FONT_SIZE_SMALL = math.max(base - 3, 8)
     _cached_panel_scale = tonumber(mod:get("panel_scale")) or PANEL_SCALE_DEFAULT
     _cached_panel_list_rows = math.max(6, math.floor(tonumber(mod:get("panel_list_rows")) or PANEL_LIST_ROWS_DEFAULT))
+    _cached_panel_width = math.clamp(math.floor(tonumber(mod:get("panel_width")) or PANEL_WIDTH_DEFAULT), 220, 700)
+    _cached_fixed_arrow_move = mod:get("fixed_arrow_move") and true or false
+    _cached_arrow_move_step = math.max(1, math.floor(tonumber(mod:get("arrow_move_step")) or 5))
+    _cached_resize_step = math.max(1, math.floor(tonumber(mod:get("resize_step")) or 5))
+    _cached_z_step = math.max(1, math.floor(tonumber(mod:get("z_step")) or 1))
+    _cached_box_fill_mode = math.floor(tonumber(mod:get("box_fill_mode")) or 1)
 end
 
 mod._refresh_panel_font = _refresh_panel_font
@@ -67,19 +188,27 @@ local _metrics_pool = {
 }
 
 local function _get_panel_metrics(inverse_scale, has_selected, has_active_edit)
-    local panel_scale = _cached_panel_scale
+    -- Size scale folds in the resolution factor; positions/cursor still use the
+    -- raw inverse_scale (passed in), so hit-testing stays aligned with drawing.
+    local panel_scale = _cached_panel_scale * _panel_res_factor()
     local list_rows = _cached_panel_list_rows
     local ps_is = panel_scale * inverse_scale
 
     local m = _metrics_pool
     m.scale = panel_scale
-    m.width = PANEL_WIDTH * ps_is
+    m.width = _cached_panel_width * ps_is
     m.margin = PANEL_MARGIN * ps_is
     m.line_h = PANEL_LINE_HEIGHT * ps_is
     m.header_h = PANEL_HEADER_HEIGHT * ps_is
     m.list_rows = list_rows
-    m.font = math.max(10, math.floor(PANEL_FONT_SIZE * ps_is))
-    m.font_small = math.max(8, math.floor(PANEL_FONT_SIZE_SMALL * ps_is))
+    -- Font sizes are ACTUAL pixels: draw_text / text_size do not scale font_size
+    -- by self.scale (unlike draw_rect for geometry). So font = author * panel_scale
+    -- (which already folds in the resolution factor) and NOT * inverse_scale --
+    -- otherwise the inverse cancels the factor and the font stays a fixed size
+    -- while the rest of the panel scales. This keeps font in step with geometry at
+    -- every resolution.
+    m.font = math.max(10, math.floor(PANEL_FONT_SIZE * panel_scale))
+    m.font_small = math.max(8, math.floor(PANEL_FONT_SIZE_SMALL * panel_scale))
 
     local detail_h = 0
     if has_selected then
@@ -103,6 +232,70 @@ local function _get_panel_metrics(inverse_scale, has_selected, has_active_edit)
 
     return m
 end
+
+-- Ignore-list panel geometry. Helpers are shared by draw + hit-testing so the
+-- clickable regions always match what is rendered.
+local IGNORE_PANEL_WIDTH = 230
+local PANEL_DCLICK_TIME = 0.35
+
+-- Side panels (Controls / Ignore) use a single-row header; only the main panel
+-- carries the two-row header.
+local PANEL_SIDE_HEADER_HEIGHT = 28
+local function _side_header_h(scale, inverse_scale)
+    return PANEL_SIDE_HEADER_HEIGHT * scale * inverse_scale
+end
+
+local function _get_ignore_panel_rect(px, py, pw, line_h, count, scale, inverse_scale)
+    local gap = 6 * scale * inverse_scale
+    local ipx = px + pw + gap
+    local ipw = IGNORE_PANEL_WIDTH * scale * inverse_scale
+    local rows = math.max(count, 1)
+    local iph = _side_header_h(scale, inverse_scale) + rows * line_h + 8 * scale * inverse_scale
+    return ipx, py, ipw, iph
+end
+
+-- Legend (controls reference) side panel. Drawn to the LEFT of the main panel.
+local LEGEND_PANEL_WIDTH = 370
+local LEGEND_KEY_COL = 132
+local PANEL_LEGEND_SECTION_COLOR = { 255, 235, 185, 95 }
+local PANEL_LEGEND_KEY_COLOR = { 255, 225, 225, 170 }
+
+local function _get_legend_panel_rect(px, py, line_h, count, scale, inverse_scale)
+    local gap = 6 * scale * inverse_scale
+    local lpw = LEGEND_PANEL_WIDTH * scale * inverse_scale
+    local lpx = math.max(0, px - gap - lpw)
+    local rows = math.max(count, 1)
+    local lph = _side_header_h(scale, inverse_scale) + rows * line_h + 8 * scale * inverse_scale
+    return lpx, py, lpw, lph
+end
+
+-- Control reference rows. `section` entries are headers (loc key); the rest carry
+-- a literal `key` (input combo, not translated) + an `action` loc key. Section and
+-- action are resolved via mod:localize at draw time.
+local _LEGEND_ROWS = {
+    { section = "legend_sec_select" },
+    { key = "Left-click", action = "legend_a_select" },
+    { key = "Ctrl+Click", action = "legend_a_addremove" },
+    { key = "Double-click row", action = "legend_a_ignore" },
+    { section = "legend_sec_move" },
+    { key = "Shift+Drag", action = "legend_a_move" },
+    { key = "Arrow keys", action = "legend_a_nudge" },
+    { key = "Shift+Ctrl drag", action = "legend_a_invertsnap" },
+    { key = "Ctrl+Shift+C", action = "legend_a_center" },
+    { key = "Tab", action = "legend_a_reset" },
+    { section = "legend_sec_size" },
+    { key = "Alt+Drag edge", action = "legend_a_resize" },
+    { key = "Alt+Arrows", action = "legend_a_resizestep" },
+    { key = "Shift+Up/Down", action = "legend_a_zorder" },
+    { key = "Scroll on elem", action = "legend_a_scale" },
+    { section = "legend_sec_visibility" },
+    { key = "Right-click", action = "legend_a_hide" },
+    { key = "Row box", action = "legend_a_stash" },
+    { section = "legend_sec_panel" },
+    { key = "Drag header", action = "legend_a_movepanel" },
+    { key = "Scroll list", action = "legend_a_scrollrows" },
+    { key = "Click value", action = "legend_a_edit" },
+}
 
 -- Detect the correct draw_text API signature once, then reuse it.
 local _draw_text_variant -- nil = not yet detected, 1-6 = detected variant
@@ -160,16 +353,29 @@ local RESIZE_HANDLE_COLOR = { 220, 255, 200, 50 }
 local RESIZE_HANDLE_HOVER_COLOR = { 255, 255, 255, 100 }
 local RESIZE_EDGE_THRESHOLD = 10
 
+-- Outline drawn around every selected node (border only, no fill) so a selection
+-- stays visible even when its editor box is hidden (stashed / hidden).
+local SELECTION_OUTLINE_COLOR = { 255, 120, 210, 255 }
+local SELECTION_OUTLINE_THICKNESS = 2
+
+-- No-fill mode draws a plain outline around every visible (non-stashed) box so the
+-- elements stay locatable without their grey fill.
+local BOX_OUTLINE_COLOR = { 200, 180, 180, 180 }
+local BOX_OUTLINE_THICKNESS = 1
+
 local _excluded_element_names = {
     HudElementCustomizer = true,
     HudElementPrologueTutorialSequenceTransitionEnd = true,
     HudElementPrologueTutorialInfoBox = true,
     HudElementCrosshair = true,
+    HudElementCrosshairHud = true,
     HudElementInteraction = true,
     HudElementWorldMarkers = true,
     HudElementEmoteWheel = true,
     HudElementSmartTagging = true,
     HudElementDamageIndicator = true,
+    HudElementRingHud_player = true,
+    HudElementRingHud_team_docked = true,
     ConstantElementWatermark = true,
     ConstantElementPopupHandler = true,
     ConstantElementSoftwareCursor = true
@@ -190,6 +396,82 @@ local _excluded_scenegraphs_by_element = {
 
 local _allowed_scenegraphs_by_element = {
 }
+
+-- ============================================================================
+-- Ignore list
+-- ============================================================================
+-- `_excluded_element_names` above are the built-in (system) ignores: the editor
+-- itself, crosshairs, world markers, etc. They are never user-editable.
+-- `_user_ignored` is the player-managed set, persisted in settings and toggled
+-- live from the edit-mode info panel. Effective ignore = system OR user.
+
+local USER_IGNORED_SETTING_ID = "user_ignored_elements"
+local _user_ignored = {}
+
+local function _is_element_ignored(element_name)
+    return _excluded_element_names[element_name] == true or _user_ignored[element_name] == true
+end
+
+local function _load_user_ignored()
+    local saved = mod:get(USER_IGNORED_SETTING_ID)
+    _user_ignored = {}
+    if type(saved) == "table" then
+        for _, name in ipairs(saved) do
+            if type(name) == "string" and name ~= "" then
+                _user_ignored[name] = true
+            end
+        end
+    end
+end
+
+local function _save_user_ignored()
+    local arr = {}
+    for name in pairs(_user_ignored) do
+        arr[#arr + 1] = name
+    end
+    table.sort(arr)
+    mod:set(USER_IGNORED_SETTING_ID, arr)
+end
+
+-- ============================================================================
+-- Edit-mode hide list
+-- ============================================================================
+-- Distinct from ignore and from per-node `is_hidden`:
+--   * Ignore     drops the element entirely (no box, no position override).
+--   * is_hidden  hides the element in the LIVE HUD (right-click).
+--   * Edit-hide  keeps the element shown in the live HUD with its applied
+--                coords, but hides only its EDITOR box so the workspace can be
+--                de-cluttered. Per element name, persisted, toggled per row.
+-- The header "Reveal" toggle temporarily forces edit-hidden boxes back on so a
+-- hidden element can be grabbed in the viewport without un-hiding it.
+
+local USER_EDIT_HIDDEN_SETTING_ID = "user_edit_hidden_elements"
+local _user_edit_hidden = {}
+
+local function _is_element_edit_hidden(element_name)
+    return _user_edit_hidden[element_name] == true
+end
+
+local function _load_user_edit_hidden()
+    local saved = mod:get(USER_EDIT_HIDDEN_SETTING_ID)
+    _user_edit_hidden = {}
+    if type(saved) == "table" then
+        for _, name in ipairs(saved) do
+            if type(name) == "string" and name ~= "" then
+                _user_edit_hidden[name] = true
+            end
+        end
+    end
+end
+
+local function _save_user_edit_hidden()
+    local arr = {}
+    for name in pairs(_user_edit_hidden) do
+        arr[#arr + 1] = name
+    end
+    table.sort(arr)
+    mod:set(USER_EDIT_HIDDEN_SETTING_ID, arr)
+end
 
 -- ============================================================================
 -- Keyboard helpers
@@ -338,13 +620,25 @@ function HudElementCustomizer:init(parent, draw_layer, start_scale)
     self._saved_node_settings = mod:get("saved_node_settings") or {}
     self._default_node_settings = {}
 
+    -- Persistence dirty-tracking. _settings_dirty = in-memory layout changed but
+    -- not yet pushed through mod:set (which deep-clones the whole table, so it
+    -- must not run per drag frame). _apply_needed = live-HUD overrides are stale
+    -- and the full apply pass must run on the next hide; starts true so the
+    -- boot-time set_visible(false) applies the saved layout. Without it, every
+    -- gameplay visibility-group flip (comm wheel, tactical overlay, death) would
+    -- rerun the whole apply + persist pass and hitch.
+    self._settings_dirty = false
+    self._apply_needed = true
+
     -- Cursor tracking - FIX: track our own push state, not input_manager state
     self._cursor_pushed = false
     self._using_cursor = false
 
     -- Info panel state
     self._panel_scroll_offset = 0
-    self._panel_all_node_names = {}  -- ordered list of all node names
+    self._panel_all_node_names = {}  -- ordered list of all node names (full)
+    self._panel_normal_list = {}     -- displayed rows (excludes ignored elements)
+    self._panel_ignore_list = {}     -- user-ignored element names (for the side panel)
     self._panel_hovered_index = nil
     self._panel_dragging = false
     self._panel_drag_offset = nil
@@ -354,6 +648,28 @@ function HudElementCustomizer:init(parent, draw_layer, start_scale)
     self._panel_key_repeat = {}
     self._panel_mouse_over = false
     self._panel_hover_preview_node = nil
+
+    -- Ignore-list panel state
+    _load_user_ignored()
+    self._show_ignore_panel = false
+    self._ignore_hovered_index = nil
+    self._ignore_btn_hover = false
+    self._ignore_btn_rect = nil
+    self._panel_dclick_key = nil
+    self._panel_dclick_t = 0
+
+    -- Edit-mode hide state
+    _load_user_edit_hidden()
+    self._reveal_edit_hidden = false
+    self._reveal_btn_hover = false
+    self._reveal_btn_rect = nil
+    self._panel_edit_toggle_targets = {}
+    self._edit_toggle_hover_element = nil
+
+    -- Legend (controls reference) panel state
+    self._show_legend = false
+    self._legend_btn_hover = false
+    self._legend_btn_rect = nil
 
     -- Resize state
     self._resize_mode = false
@@ -485,6 +801,9 @@ function HudElementCustomizer:_setup_elements(render_settings)
         for element_name in pairs(elements) do
             repeat
                 local element = self:_get_element(element_name)
+                -- Only system ignores are skipped at build time. User ignores still
+                -- get widgets/panel nodes so they can be toggled live (hidden via the
+                -- panel filter), then restored without rebuilding the element set.
                 if _excluded_element_names[element_name] or not element then
                     break
                 end
@@ -604,24 +923,16 @@ function HudElementCustomizer:_setup_elements(render_settings)
                                 },
                                 {
                                     pass_type = "rect",
-                                    style_id = "border_rect",
-                                    style = {
-                                        color = { 255, 0, 0, 0 },
-                                        offset = { 0, 0, 1 }
-                                    },
-                                    change_function = function(content, style)
-                                        style.color = content.hotspot.is_selected and { 255, 255, 255, 0 } or { 255, 0, 0, 0 }
-                                    end
-                                },
-                                {
-                                    pass_type = "rect",
                                     style_id = "rect",
                                     style = {
                                         color = { 255, 255, 255, 255 },
-                                        color_hidden = { 168, 30, 30, 30 },
-                                        color_hidden_hovered = { 255, 60, 60, 60 },
-                                        color_hovered = { 255, 168, 168, 168 },
-                                        color_default = { 168, 168, 168, 168 },
+                                        -- Fill colours resolved from the Editor Colors settings
+                                        -- (custom_hud.lua _cached_colors). Captured by reference
+                                        -- at build time; a colour change rebuilds the HUD.
+                                        color_default = mod._cached_colors.rect_default,
+                                        color_hovered = mod._cached_colors.rect_hovered,
+                                        color_hidden = mod._cached_colors.rect_hidden,
+                                        color_hidden_hovered = mod._cached_colors.rect_hidden_hovered,
                                         anim_hover_speed = 1,
                                         size = { inner_w, inner_h },
                                         offset = { 2, 2, 2 }
@@ -641,6 +952,131 @@ function HudElementCustomizer:_setup_elements(render_settings)
                                         end
 
                                         ColorUtilities.color_lerp(color_from, color_to, anim_hover_progress, color, false)
+
+                                        -- No-fill mode: remove the grey fill (coloured borders are
+                                        -- hidden too; outlines are redrawn in _draw_box_outlines).
+                                        if _cached_box_fill_mode == 2 then
+                                            color[1] = 0
+                                        end
+                                    end
+                                },
+                                -- Coloured edge borders (top/bottom/left/right), each themed
+                                -- independently via the Editor Colors settings. Lerp is written
+                                -- in place (no per-frame table alloc). Size/offset track live
+                                -- resize like the fill. Hidden in no-fill mode so _draw_box_outlines
+                                -- owns the outline there (avoids a doubled edge).
+                                {
+                                    pass_type = "rect",
+                                    style_id = "border_top",
+                                    style = {
+                                        color = { 255, 255, 255, 255 },
+                                        color_default = mod._cached_colors.border_top_default,
+                                        color_hovered = mod._cached_colors.border_top_hovered,
+                                        color_hidden = mod._cached_colors.border_top_hidden,
+                                        color_hidden_hovered = mod._cached_colors.border_top_hidden_hovered,
+                                        anim_hover_speed = 1,
+                                        size = { inner_w, 2 },
+                                        offset = { 2, 2, 5 }
+                                    },
+                                    visibility_function = function(content, style)
+                                        return _cached_box_fill_mode ~= 2
+                                    end,
+                                    change_function = function(content, style)
+                                        local hotspot = content.hotspot
+                                        local is_hidden = content.is_hidden
+                                        local color_from = is_hidden and style.color_hidden or style.color_default
+                                        local color_to = is_hidden and style.color_hidden_hovered or style.color_hovered
+                                        local content_size = content.size
+                                        if content_size then
+                                            style.size[1] = content_size[1] - 4
+                                        end
+                                        ColorUtilities.color_lerp(color_from, color_to, hotspot.anim_hover_progress or 0, style.color, false)
+                                    end
+                                },
+                                {
+                                    pass_type = "rect",
+                                    style_id = "border_bottom",
+                                    style = {
+                                        color = { 255, 255, 255, 255 },
+                                        color_default = mod._cached_colors.border_bottom_default,
+                                        color_hovered = mod._cached_colors.border_bottom_hovered,
+                                        color_hidden = mod._cached_colors.border_bottom_hidden,
+                                        color_hidden_hovered = mod._cached_colors.border_bottom_hidden_hovered,
+                                        anim_hover_speed = 1,
+                                        size = { inner_w, 2 },
+                                        offset = { 2, inner_h, 5 }
+                                    },
+                                    visibility_function = function(content, style)
+                                        return _cached_box_fill_mode ~= 2
+                                    end,
+                                    change_function = function(content, style)
+                                        local hotspot = content.hotspot
+                                        local is_hidden = content.is_hidden
+                                        local color_from = is_hidden and style.color_hidden or style.color_default
+                                        local color_to = is_hidden and style.color_hidden_hovered or style.color_hovered
+                                        local content_size = content.size
+                                        if content_size then
+                                            style.size[1] = content_size[1] - 4
+                                            style.offset[2] = content_size[2] - 4
+                                        end
+                                        ColorUtilities.color_lerp(color_from, color_to, hotspot.anim_hover_progress or 0, style.color, false)
+                                    end
+                                },
+                                {
+                                    pass_type = "rect",
+                                    style_id = "border_left",
+                                    style = {
+                                        color = { 255, 255, 255, 255 },
+                                        color_default = mod._cached_colors.border_left_default,
+                                        color_hovered = mod._cached_colors.border_left_hovered,
+                                        color_hidden = mod._cached_colors.border_left_hidden,
+                                        color_hidden_hovered = mod._cached_colors.border_left_hidden_hovered,
+                                        anim_hover_speed = 1,
+                                        size = { 2, inner_h },
+                                        offset = { 2, 2, 5 }
+                                    },
+                                    visibility_function = function(content, style)
+                                        return _cached_box_fill_mode ~= 2
+                                    end,
+                                    change_function = function(content, style)
+                                        local hotspot = content.hotspot
+                                        local is_hidden = content.is_hidden
+                                        local color_from = is_hidden and style.color_hidden or style.color_default
+                                        local color_to = is_hidden and style.color_hidden_hovered or style.color_hovered
+                                        local content_size = content.size
+                                        if content_size then
+                                            style.size[2] = content_size[2] - 4
+                                        end
+                                        ColorUtilities.color_lerp(color_from, color_to, hotspot.anim_hover_progress or 0, style.color, false)
+                                    end
+                                },
+                                {
+                                    pass_type = "rect",
+                                    style_id = "border_right",
+                                    style = {
+                                        color = { 255, 255, 255, 255 },
+                                        color_default = mod._cached_colors.border_right_default,
+                                        color_hovered = mod._cached_colors.border_right_hovered,
+                                        color_hidden = mod._cached_colors.border_right_hidden,
+                                        color_hidden_hovered = mod._cached_colors.border_right_hidden_hovered,
+                                        anim_hover_speed = 1,
+                                        size = { 2, inner_h },
+                                        offset = { inner_w, 2, 5 }
+                                    },
+                                    visibility_function = function(content, style)
+                                        return _cached_box_fill_mode ~= 2
+                                    end,
+                                    change_function = function(content, style)
+                                        local hotspot = content.hotspot
+                                        local is_hidden = content.is_hidden
+                                        local color_from = is_hidden and style.color_hidden or style.color_default
+                                        local color_to = is_hidden and style.color_hidden_hovered or style.color_hovered
+                                        local content_size = content.size
+                                        if content_size then
+                                            style.size[2] = content_size[2] - 4
+                                            style.offset[1] = content_size[1] - 4
+                                        end
+                                        ColorUtilities.color_lerp(color_from, color_to, hotspot.anim_hover_progress or 0, style.color, false)
                                     end
                                 },
                                 -- Element name tooltip on hover
@@ -734,7 +1170,203 @@ function HudElementCustomizer:_setup_elements(render_settings)
     self._ui_scenegraph = self:_create_scenegraph(_definitions, scale)
     self:_create_widgets(_definitions, self._widgets, self._widgets_by_name)
     self:_apply_saved_node_settings()
+    self:_rebuild_panel_lists()
+    self:_apply_ignore_visibility()
     self._setup_complete = true
+end
+
+-- ============================================================================
+-- Ignore list
+-- ============================================================================
+
+-- Split the full node list into the displayed (non-ignored) rows and the
+-- side-panel list of user-ignored element names. Called at setup and whenever
+-- the ignore set changes.
+function HudElementCustomizer:_rebuild_panel_lists()
+    local all = self._panel_all_node_names or {}
+    local normal = self._panel_normal_list
+    for i = #normal, 1, -1 do normal[i] = nil end
+
+    for i = 1, #all do
+        local node_name = all[i]
+        local element_name = split_node_name(node_name)
+        if not _is_element_ignored(element_name) then
+            normal[#normal + 1] = node_name
+        end
+    end
+
+    local ignore = self._panel_ignore_list
+    for i = #ignore, 1, -1 do ignore[i] = nil end
+    for element_name in pairs(_user_ignored) do
+        ignore[#ignore + 1] = element_name
+    end
+    table.sort(ignore)
+
+    self:_sort_panel_normal_list()
+end
+
+-- Tag rank for list ordering: untagged (0) on top, then [S] (1), then [H] (2),
+-- then [S]+[H] (3) at the bottom.
+function HudElementCustomizer:_tag_rank(node_name)
+    local element_name = split_node_name(node_name)
+    local node_settings = self._saved_node_settings[node_name]
+    local is_hidden = node_settings and node_settings.is_hidden and true or false
+    local stashed = _is_element_edit_hidden(element_name)
+    if is_hidden and stashed then
+        return 3
+    elseif is_hidden then
+        return 2
+    elseif stashed then
+        return 1
+    end
+    return 0
+end
+
+-- Sort the displayed rows by tag rank, keeping the original build order within a
+-- rank so untagged rows stay stable. Called on build and whenever a tag changes.
+function HudElementCustomizer:_sort_panel_normal_list()
+    local list = self._panel_normal_list
+    if not list or #list < 2 then
+        return
+    end
+
+    local all = self._panel_all_node_names or {}
+    local order = {}
+    for i = 1, #all do
+        order[all[i]] = i
+    end
+
+    table.sort(list, function(a, b)
+        local ra, rb = self:_tag_rank(a), self:_tag_rank(b)
+        if ra ~= rb then
+            return ra < rb
+        end
+        return (order[a] or 0) < (order[b] or 0)
+    end)
+end
+
+-- Hide the editor boxes of ignored / edit-hidden elements and show the rest. The
+-- engine honors widget.visible, so hidden boxes are neither drawn nor
+-- interactive. Edit-hidden boxes are suppressed only while reveal is off; the
+-- elements keep their position overrides in the live HUD regardless.
+function HudElementCustomizer:_apply_ignore_visibility()
+    local widgets_by_name = self._widgets_by_name
+    if not widgets_by_name then
+        return
+    end
+
+    local reveal = self._reveal_edit_hidden
+    for node_name, widget in pairs(widgets_by_name) do
+        local element_name = split_node_name(node_name)
+        local ignored = _is_element_ignored(element_name)
+        local edit_hidden = (not reveal) and _is_element_edit_hidden(element_name)
+        local hide_box = ignored or edit_hidden
+        widget.visible = not hide_box
+        if hide_box then
+            local content = widget.content
+            local hotspot = content and content.hotspot
+            if hotspot then
+                hotspot.is_selected = false
+            end
+        end
+    end
+end
+
+-- Toggle the edit-hide flag for the element owning `node_name`. Affects only the
+-- editor box; the live-HUD position override is untouched.
+function HudElementCustomizer:_toggle_edit_hidden_by_node(node_name)
+    local element_name = split_node_name(node_name)
+    if not element_name or element_name == "" then
+        return
+    end
+    if _excluded_element_names[element_name] then
+        return
+    end
+
+    if _user_edit_hidden[element_name] then
+        _user_edit_hidden[element_name] = nil
+    else
+        _user_edit_hidden[element_name] = true
+    end
+    _save_user_edit_hidden()
+
+    -- Drop the element from the active selection when it becomes hidden so the
+    -- detail panel does not keep editing an invisible box.
+    if (not self._reveal_edit_hidden) and _is_element_edit_hidden(element_name) then
+        local selected = self._selected_node_list
+        if selected then
+            for i = #selected, 1, -1 do
+                if split_node_name(selected[i]) == element_name then
+                    table.remove(selected, i)
+                end
+            end
+        end
+        self._panel_active_field = nil
+    end
+
+    self:_apply_ignore_visibility()
+    self:_sort_panel_normal_list()
+end
+
+-- Header toggle: temporarily force all edit-hidden boxes back on (or off) so a
+-- hidden element can be grabbed in the viewport without clearing its flag.
+function HudElementCustomizer:_toggle_reveal_edit_hidden()
+    self._reveal_edit_hidden = not self._reveal_edit_hidden
+    self:_apply_ignore_visibility()
+end
+
+function HudElementCustomizer:_apply_ignore_change(element_name)
+    -- Drop the element from the current selection if present.
+    local selected = self._selected_node_list
+    if selected then
+        for i = #selected, 1, -1 do
+            if split_node_name(selected[i]) == element_name then
+                table.remove(selected, i)
+            end
+        end
+    end
+
+    -- Newly ignored elements must not stay stuck hidden from a prior right-click.
+    if _is_element_ignored(element_name) then
+        local element = self:_get_element(element_name)
+        if element then
+            element._is_hidden = false
+        end
+    end
+
+    -- Re-derive position overrides (drops ignored, re-applies restored), refresh
+    -- the displayed lists, and update editor-box visibility.
+    self:_apply_saved_node_settings()
+    self:_rebuild_panel_lists()
+    self:_apply_ignore_visibility()
+    self._panel_active_field = nil
+    self._panel_hovered_index = nil
+    self._ignore_hovered_index = nil
+    local max_scroll = math.max(0, #self._panel_normal_list - _cached_panel_list_rows)
+    self._panel_scroll_offset = math.clamp(self._panel_scroll_offset, 0, max_scroll)
+end
+
+function HudElementCustomizer:_ignore_element_by_node(node_name)
+    local element_name = split_node_name(node_name)
+    if not element_name or element_name == "" then
+        return
+    end
+    -- System ignores are not user-editable, and skip no-ops.
+    if _excluded_element_names[element_name] or _user_ignored[element_name] then
+        return
+    end
+    _user_ignored[element_name] = true
+    _save_user_ignored()
+    self:_apply_ignore_change(element_name)
+end
+
+function HudElementCustomizer:_restore_element(element_name)
+    if not element_name or not _user_ignored[element_name] then
+        return
+    end
+    _user_ignored[element_name] = nil
+    _save_user_ignored()
+    self:_apply_ignore_change(element_name)
 end
 
 -- ============================================================================
@@ -772,6 +1404,7 @@ function HudElementCustomizer:reset_node(node_name)
 
     self._default_node_settings[node_name] = default_node_settings
     self:_apply_node_settings_live(node_name, node_settings)
+    self:_sort_panel_normal_list()
 end
 
 function HudElementCustomizer:_init_node_settings(node_name)
@@ -812,6 +1445,11 @@ function HudElementCustomizer:_init_node_settings(node_name)
 end
 
 
+-- Normalizes the in-memory table and marks it dirty. The actual mod:set is
+-- deferred to _flush_saved_settings: DMF deep-clones table settings on every
+-- set, and this runs per drag/resize frame, so persisting here caused an
+-- allocation storm while dragging. Normalization mutates tables in place for
+-- the same reason.
 function HudElementCustomizer:_persist_saved_settings()
     local saved = self._saved_node_settings or {}
 
@@ -827,20 +1465,32 @@ function HudElementCustomizer:_persist_saved_settings()
                 node_settings.z = node_settings.z or 0
             end
 
-            node_settings.position = { node_settings.x, node_settings.y, node_settings.z }
+            local position = node_settings.position
+            if position then
+                position[1], position[2], position[3] = node_settings.x, node_settings.y, node_settings.z
+            else
+                node_settings.position = { node_settings.x, node_settings.y, node_settings.z }
+            end
             node_settings.vertical_alignment = nil
             node_settings.horizontal_alignment = nil
 
-            if node_settings.size then
-                node_settings.size = {
-                    node_settings.size[1] or 0,
-                    node_settings.size[2] or 0,
-                }
+            local size = node_settings.size
+            if size then
+                size[1] = size[1] or 0
+                size[2] = size[2] or 0
             end
         end
     end
 
-    mod:set("saved_node_settings", saved)
+    self._settings_dirty = true
+    self._apply_needed = true
+end
+
+function HudElementCustomizer:_flush_saved_settings()
+    if self._settings_dirty then
+        self._settings_dirty = false
+        mod:set("saved_node_settings", self._saved_node_settings or {})
+    end
 end
 
 function HudElementCustomizer:_get_selected_node_settings(node_name)
@@ -1231,6 +1881,13 @@ function HudElementCustomizer:_process_widget_press_right(node_name)
             element:set_visible(not should_hide)
         end
         element._is_hidden = should_hide
+        -- _is_hidden only takes effect through the instance draw hook; install it
+        -- now so the hide is immediate (base-class draw hooks may not exist).
+        -- Unhiding needs no hook: an existing one passes through, and without
+        -- one the element just draws normally.
+        if should_hide then
+            _ensure_element_draw_hook(element)
+        end
     end
 
     local saved_node_settings = self._saved_node_settings
@@ -1240,6 +1897,7 @@ function HudElementCustomizer:_process_widget_press_right(node_name)
     end
     node_settings.is_hidden = should_hide
     self:_persist_saved_settings()
+    self:_sort_panel_normal_list()
 end
 
 function HudElementCustomizer:_handle_widget_presses()
@@ -1318,7 +1976,13 @@ function HudElementCustomizer:set_visible(status)
             self:_deactivate_mouse_cursor()
         end
 
-        self:_apply_saved_node_settings()
+        -- set_visible(false) fires on EVERY visibility-group change (comm wheel,
+        -- tactical overlay, death/spectate), not just when leaving edit mode.
+        -- The full apply pass (pcalls per node + whole-table persist) only needs
+        -- to run when the layout actually changed since the last apply.
+        if self._apply_needed or self._settings_dirty then
+            self:_apply_saved_node_settings()
+        end
     end
 end
 
@@ -1326,6 +1990,12 @@ function HudElementCustomizer:destroy()
     if self._using_cursor then
         self:_deactivate_mouse_cursor()
     end
+    -- pcall: destroy runs inside UIHud.destroy's element loop, and UIHud.destroy
+    -- nils _elements partway through its own teardown while UIManager clears its
+    -- _hud reference only after destroy returns. Anything thrown from here would
+    -- strand a gutted HUD. Losing one settings flush is preferable to that (and
+    -- update() already flushes on mouse-release, so nothing is normally pending).
+    pcall(self._flush_saved_settings, self)
 end
 
 function HudElementCustomizer:_update_group_visibility()
@@ -1506,6 +2176,37 @@ function HudElementCustomizer:_handle_input(input_service)
         self._start_dragging = false
     end
 
+    -- Edge-triggered nav direction (one tick per tap), shared by stepped arrow
+    -- move, resize, and z-order. Edges are detected from the navigation axis so
+    -- holding does not auto-repeat.
+    local step_nav_x, step_nav_y = 0, 0
+    do
+        local axis = input_service:get("navigation_keys_virtual_axis")
+        local nx = (axis and axis[1]) or 0
+        local ny = (axis and axis[2]) or 0
+        nx = (nx > 0 and 1) or (nx < 0 and -1) or 0
+        ny = (ny > 0 and 1) or (ny < 0 and -1) or 0
+        local prev = self._arrow_axis_prev
+        local pnx = (prev and prev[1]) or 0
+        local pny = (prev and prev[2]) or 0
+        if nx ~= 0 and nx ~= pnx then step_nav_x = nx end
+        if ny ~= 0 and ny ~= pny then step_nav_y = ny end
+        if not prev then
+            prev = {}
+            self._arrow_axis_prev = prev
+        end
+        prev[1] = nx
+        prev[2] = ny
+    end
+
+    -- Fixed-step arrow movement reuses the shared edge so a tap moves a fixed
+    -- pixel step (shared across all selected nodes).
+    local fixed_move_dx, fixed_move_dy = 0, 0
+    if _cached_fixed_arrow_move then
+        fixed_move_dx = step_nav_x * _cached_arrow_move_step
+        fixed_move_dy = step_nav_y * _cached_arrow_move_step
+    end
+
     local should_clear_cursor_positions = false
 
     for i, node_name in ipairs(selected_node_list) do
@@ -1643,9 +2344,16 @@ function HudElementCustomizer:_handle_input(input_service)
                 local alt_held = is_alt_held()
 
                 if alt_held then
-                    -- Alt + Arrow keys = resize
-                    local dw = input[1]
-                    local dh = -input[2]
+                    -- Alt + Arrow keys = resize. Fixed-step mode resizes by the
+                    -- configured step per tap; otherwise ±1px while held.
+                    local dw, dh
+                    if _cached_fixed_arrow_move then
+                        dw = step_nav_x * _cached_resize_step
+                        dh = -step_nav_y * _cached_resize_step
+                    else
+                        dw = input[1]
+                        dh = -input[2]
+                    end
                     if dw ~= 0 or dh ~= 0 then
                         local current_size = node_settings.size or { size[1], size[2] }
                         local new_w = math.max(current_size[1] + dw, 5)
@@ -1660,10 +2368,18 @@ function HudElementCustomizer:_handle_input(input_service)
                         self:_set_scenegraph_size(node_name, new_w, new_h)
                     end
                 elseif is_shift_held() then
-                    -- Shift + Up/Down = z-order
-                    node_settings.z = (node_settings.z or self:scenegraph_position(node_name)[3]) + input[2]
+                    -- Shift + Up/Down = z-order. Fixed-step mode changes depth by
+                    -- the configured step per tap; otherwise ±1 while held.
+                    local dz = _cached_fixed_arrow_move and (step_nav_y * _cached_z_step) or input[2]
+                    if dz ~= 0 then
+                        node_settings.z = (node_settings.z or self:scenegraph_position(node_name)[3]) + dz
+                    end
+                elseif _cached_fixed_arrow_move then
+                    -- Arrow keys = move a fixed pixel step per tap
+                    node_settings.x = node_settings.x + fixed_move_dx
+                    node_settings.y = node_settings.y - fixed_move_dy
                 else
-                    -- Arrow keys = move
+                    -- Arrow keys = move ±1px while held
                     node_settings.x = node_settings.x + input[1]
                     node_settings.y = node_settings.y - input[2]
                 end
@@ -1742,6 +2458,20 @@ end
 -- Update / Draw
 -- ============================================================================
 
+-- Re-read grid / snap settings each frame so the options-menu checkboxes apply
+-- live (they are otherwise only read once at setup). Runs only in edit mode since
+-- the element updates only while customizing.
+function HudElementCustomizer:_sync_live_settings()
+    local dg = mod:get("display_grid")
+    self._display_grid = (dg == nil) and true or (dg and true or false)
+    local sg = mod:get("snap_to_grid")
+    self._snap_to_grid = (sg == nil) and true or (sg and true or false)
+    local se = mod:get("snap_to_elements")
+    self._snap_to_elements = (se == nil) and true or (se and true or false)
+    self._num_cols = math.max(1, math.floor(tonumber(mod:get("grid_cols")) or self._num_cols or 3))
+    self._num_rows = math.max(1, math.floor(tonumber(mod:get("grid_rows")) or self._num_rows or 3))
+end
+
 function HudElementCustomizer:update(dt, t, ui_renderer, render_settings, input_service)
     if not self._setup_complete then
         self:_setup_elements(render_settings)
@@ -1749,6 +2479,8 @@ function HudElementCustomizer:update(dt, t, ui_renderer, render_settings, input_
     end
 
     self._inverse_scale = render_settings.inverse_scale
+
+    self:_sync_live_settings()
 
     local using_cursor = self._using_cursor
     if not using_cursor and mod.is_customizing then
@@ -1762,7 +2494,7 @@ function HudElementCustomizer:update(dt, t, ui_renderer, render_settings, input_
 
     -- Handle panel input before widget presses so clicks on the panel do not leak
     -- through to HUD element hotspots underneath it.
-    local panel_consumed = self:_handle_panel_input(input_service)
+    local panel_consumed = self:_handle_panel_input(input_service, t)
 
     if panel_consumed then
         table.clear(self._widget_press_stack)
@@ -1773,12 +2505,21 @@ function HudElementCustomizer:update(dt, t, ui_renderer, render_settings, input_
 
     HudElementCustomizer.super.update(self, dt, t, ui_renderer, render_settings, input_service)
     self:_sync_panel_hover_preview()
+
+    -- Deferred persistence: push pending layout changes through mod:set only
+    -- once the mouse button is up, so drags/resizes cost one deep-clone at
+    -- release instead of one per frame.
+    if self._settings_dirty and not input_service:get("left_hold") then
+        self:_flush_saved_settings()
+    end
 end
 
 function HudElementCustomizer:_draw_widgets(dt, t, input_service, ui_renderer, render_settings)
     HudElementCustomizer.super._draw_widgets(self, dt, t, input_service, ui_renderer, render_settings)
 
     self:_draw_grid(ui_renderer)
+    self:_draw_box_outlines(ui_renderer)
+    self:_draw_selection_outlines(ui_renderer)
     self:_draw_resize_handles(ui_renderer)
     self:_draw_info_panel(ui_renderer, input_service)
 end
@@ -1873,15 +2614,79 @@ function HudElementCustomizer:_draw_resize_handles(ui_renderer)
     end
 end
 
+-- No-fill mode: outline every visible (non-stashed) box so elements stay
+-- locatable once the grey fill is removed. Stashed boxes have widget.visible
+-- false and are skipped.
+function HudElementCustomizer:_draw_box_outlines(ui_renderer)
+    if _cached_box_fill_mode ~= 2 then
+        return
+    end
+
+    local widgets_by_name = self._widgets_by_name
+    if not widgets_by_name then
+        return
+    end
+
+    local inverse_scale = self._inverse_scale or 1
+    local draw_layer = 999
+    local thickness = math.max(1, BOX_OUTLINE_THICKNESS * inverse_scale)
+    local color = BOX_OUTLINE_COLOR
+
+    for node_name, widget in pairs(widgets_by_name) do
+        if widget.visible ~= false then
+            local pos = self:scenegraph_world_position(node_name)
+            local size = self:scenegraph_size(node_name)
+            if pos and size then
+                local x, y = pos[1], pos[2]
+                local w, h = size[1], size[2]
+                UIRenderer.draw_rect(ui_renderer, Vector3(x, y, draw_layer), Vector2(w, thickness), color)
+                UIRenderer.draw_rect(ui_renderer, Vector3(x, y + h - thickness, draw_layer), Vector2(w, thickness), color)
+                UIRenderer.draw_rect(ui_renderer, Vector3(x, y, draw_layer), Vector2(thickness, h), color)
+                UIRenderer.draw_rect(ui_renderer, Vector3(x + w - thickness, y, draw_layer), Vector2(thickness, h), color)
+            end
+        end
+    end
+end
+
+-- Border outline for every selected node. Uses scenegraph bounds directly, so it
+-- shows even when the node's editor box widget is hidden (stashed / hidden).
+function HudElementCustomizer:_draw_selection_outlines(ui_renderer)
+    local selected_node_list = self._selected_node_list
+    if not selected_node_list or #selected_node_list == 0 then
+        return
+    end
+
+    local inverse_scale = self._inverse_scale or 1
+    local draw_layer = 999
+    local thickness = math.max(1, SELECTION_OUTLINE_THICKNESS * inverse_scale)
+    local color = SELECTION_OUTLINE_COLOR
+
+    for i = 1, #selected_node_list do
+        local node_name = selected_node_list[i]
+        local pos = self:scenegraph_world_position(node_name)
+        local size = self:scenegraph_size(node_name)
+        if pos and size then
+            local x, y = pos[1], pos[2]
+            local w, h = size[1], size[2]
+            UIRenderer.draw_rect(ui_renderer, Vector3(x, y, draw_layer), Vector2(w, thickness), color)
+            UIRenderer.draw_rect(ui_renderer, Vector3(x, y + h - thickness, draw_layer), Vector2(w, thickness), color)
+            UIRenderer.draw_rect(ui_renderer, Vector3(x, y, draw_layer), Vector2(thickness, h), color)
+            UIRenderer.draw_rect(ui_renderer, Vector3(x + w - thickness, y, draw_layer), Vector2(thickness, h), color)
+        end
+    end
+end
+
 -- ============================================================================
 -- Info panel
 -- ============================================================================
 
 function HudElementCustomizer:_get_panel_position(inverse_scale)
     -- Compute only the two values we need directly, avoiding a _get_panel_metrics
-    -- call that would overwrite the shared pool mid-use by callers.
-    local ps_is = _cached_panel_scale * inverse_scale
-    local panel_w = PANEL_WIDTH * ps_is
+    -- call that would overwrite the shared pool mid-use by callers. Sizes fold in
+    -- the resolution factor (matching _get_panel_metrics); the screen-edge term
+    -- (width * inverse_scale) stays on the raw inverse_scale.
+    local ps_is = _cached_panel_scale * _panel_res_factor() * inverse_scale
+    local panel_w = _cached_panel_width * ps_is
     local panel_margin = PANEL_MARGIN * ps_is
     local width = RESOLUTION_LOOKUP.width
     local default_x = (width * inverse_scale) - panel_w - panel_margin
@@ -1939,9 +2744,15 @@ function HudElementCustomizer:_sync_panel_hover_preview()
     end
 end
 
-function HudElementCustomizer:_handle_panel_input(input_service)
+function HudElementCustomizer:_handle_panel_input(input_service, t)
+    t = t or 0
     self._panel_mouse_over = false
     self._panel_hover_preview_node = nil
+    self._ignore_hovered_index = nil
+    self._ignore_btn_hover = false
+    self._reveal_btn_hover = false
+    self._legend_btn_hover = false
+    self._edit_toggle_hover_element = nil
 
     if not self._show_info_panel then
         return false
@@ -1959,7 +2770,7 @@ function HudElementCustomizer:_handle_panel_input(input_service)
 
     local cursor_arr = Vector3.to_array(cursor)
     local inverse_scale = self._inverse_scale or RESOLUTION_LOOKUP.inverse_scale
-    local total_nodes = #self._panel_all_node_names
+    local total_nodes = #self._panel_normal_list
     local has_selected = #self._selected_node_list > 0
     local has_active_edit = self._panel_active_field ~= nil
     local metrics = _get_panel_metrics(inverse_scale, has_selected, has_active_edit)
@@ -1969,9 +2780,12 @@ function HudElementCustomizer:_handle_panel_input(input_service)
     local list_height = visible_count * metrics.line_h
     local panel_h = metrics.header_h + list_height + metrics.detail_h
     local hh = metrics.header_h
+    local line_h = metrics.line_h
 
     local cx = cursor_arr[1] * inverse_scale
     local cy = cursor_arr[2] * inverse_scale
+
+    local left_pressed = input_service:get("left_pressed")
 
     local in_panel = cx >= px and cx <= px + panel_w and cy >= py and cy <= py + panel_h
     local in_header = cx >= px and cx <= px + panel_w and cy >= py and cy <= py + hh
@@ -1993,7 +2807,7 @@ function HudElementCustomizer:_handle_panel_input(input_service)
         end
     end
 
-    if input_service:get("left_pressed") and self._panel_active_field then
+    if left_pressed and self._panel_active_field then
         local clicked_field = false
         for _, box in ipairs(self._panel_field_targets or {}) do
             if _point_in_rect(cx, cy, box.x, box.y, box.w, box.h) then
@@ -2006,7 +2820,95 @@ function HudElementCustomizer:_handle_panel_input(input_service)
         end
     end
 
-    if in_header and input_service:get("left_pressed") then
+    -- Ignore-list toggle button (rect computed + stored during draw).
+    local btn_rect = self._ignore_btn_rect
+    if btn_rect then
+        self._ignore_btn_hover = _point_in_rect(cx, cy, btn_rect[1], btn_rect[2], btn_rect[3], btn_rect[4])
+        if left_pressed and self._ignore_btn_hover then
+            self._show_ignore_panel = not self._show_ignore_panel
+            self._ignore_hovered_index = nil
+            return true
+        end
+    end
+
+    -- Reveal toggle button (rect computed + stored during draw).
+    local reveal_rect = self._reveal_btn_rect
+    if reveal_rect then
+        self._reveal_btn_hover = _point_in_rect(cx, cy, reveal_rect[1], reveal_rect[2], reveal_rect[3], reveal_rect[4])
+        if left_pressed and self._reveal_btn_hover then
+            self:_toggle_reveal_edit_hidden()
+            return true
+        end
+    end
+
+    -- Legend button (rect computed + stored during draw).
+    local legend_rect = self._legend_btn_rect
+    if legend_rect then
+        self._legend_btn_hover = _point_in_rect(cx, cy, legend_rect[1], legend_rect[2], legend_rect[3], legend_rect[4])
+        if left_pressed and self._legend_btn_hover then
+            self._show_legend = not self._show_legend
+            return true
+        end
+    end
+
+    -- Legend side panel: read-only, but consume hits so clicks do not fall through
+    -- to the HUD behind it.
+    if self._show_legend then
+        local lcount = #_LEGEND_ROWS
+        local lpx, lpy, lpw, lph = _get_legend_panel_rect(px, py, line_h, lcount, metrics.scale, inverse_scale)
+        if cx >= lpx and cx <= lpx + lpw and cy >= lpy and cy <= lpy + lph then
+            self._panel_mouse_over = true
+            if left_pressed or input_service:get("left_hold")
+                or input_service:get("right_pressed") or input_service:get("right_hold") then
+                return true
+            end
+        end
+    end
+
+    -- Per-row edit-hide toggles (rects computed + stored during draw). Tested
+    -- before row selection so a toggle click never selects the row.
+    for _, box in ipairs(self._panel_edit_toggle_targets or {}) do
+        if _point_in_rect(cx, cy, box.x, box.y, box.w, box.h) then
+            self._edit_toggle_hover_element = box.node_name
+            if left_pressed then
+                self:_toggle_edit_hidden_by_node(box.node_name)
+                return true
+            end
+            break
+        end
+    end
+
+    -- Ignore-list side panel: drawn outside the main panel, so test it before the
+    -- main-panel early-out. Double-click a row to restore the element.
+    if self._show_ignore_panel then
+        local ignore_list = self._panel_ignore_list
+        local icount = #ignore_list
+        local ipx, ipy, ipw, iph = _get_ignore_panel_rect(px, py, panel_w, line_h, icount, metrics.scale, inverse_scale)
+        if cx >= ipx and cx <= ipx + ipw and cy >= ipy and cy <= ipy + iph then
+            self._panel_mouse_over = true
+            local rows_start_y = ipy + _side_header_h(metrics.scale, inverse_scale)
+            if icount > 0 and cy >= rows_start_y and cy < rows_start_y + icount * line_h then
+                local idx = math.floor((cy - rows_start_y) / line_h) + 1
+                if idx >= 1 and idx <= icount then
+                    self._ignore_hovered_index = idx
+                    if left_pressed then
+                        local key = "i:" .. idx
+                        if self._panel_dclick_key == key and (t - self._panel_dclick_t) <= PANEL_DCLICK_TIME then
+                            self._panel_dclick_key = nil
+                            self:_restore_element(ignore_list[idx])
+                        else
+                            self._panel_dclick_key = key
+                            self._panel_dclick_t = t
+                        end
+                        return true
+                    end
+                end
+            end
+            return panel_text_consumed or left_pressed or input_service:get("left_hold")
+        end
+    end
+
+    if in_header and left_pressed then
         self._panel_dragging = true
         self._panel_drag_offset = { cx - px, cy - py }
         self._panel_hovered_index = nil
@@ -2019,7 +2921,6 @@ function HudElementCustomizer:_handle_panel_input(input_service)
     end
 
     local list_start_y = py + hh
-    local line_h = metrics.line_h
     if cy >= list_start_y and cy < list_start_y + list_height then
         local rel_y = cy - list_start_y
         local line_index = math.floor(rel_y / line_h) + 1 + self._panel_scroll_offset
@@ -2034,10 +2935,10 @@ function HudElementCustomizer:_handle_panel_input(input_service)
 
     self._panel_mouse_over = true
     if self._panel_hovered_index then
-        self._panel_hover_preview_node = self._panel_all_node_names[self._panel_hovered_index]
+        self._panel_hover_preview_node = self._panel_normal_list[self._panel_hovered_index]
     end
 
-    if input_service:get("left_pressed") then
+    if left_pressed then
         for _, box in ipairs(self._panel_field_targets or {}) do
             if _point_in_rect(cx, cy, box.x, box.y, box.w, box.h) then
                 self:_activate_panel_field(box.node_name, box.group, box.key)
@@ -2046,8 +2947,17 @@ function HudElementCustomizer:_handle_panel_input(input_service)
         end
 
         if self._panel_hovered_index then
-            local node_name = self._panel_all_node_names[self._panel_hovered_index]
+            local node_name = self._panel_normal_list[self._panel_hovered_index]
             if node_name and self._widgets_by_name[node_name] then
+                -- Double-click a row to move the element to the ignore list.
+                local key = "n:" .. self._panel_hovered_index
+                if self._panel_dclick_key == key and (t - self._panel_dclick_t) <= PANEL_DCLICK_TIME then
+                    self._panel_dclick_key = nil
+                    self:_ignore_element_by_node(node_name)
+                    return true
+                end
+                self._panel_dclick_key = key
+                self._panel_dclick_t = t
                 self:_cancel_panel_field()
                 self:_process_widget_press_left(node_name)
                 return true
@@ -2058,7 +2968,7 @@ function HudElementCustomizer:_handle_panel_input(input_service)
     end
 
     if input_service:get("right_pressed") and self._panel_hovered_index then
-        local node_name = self._panel_all_node_names[self._panel_hovered_index]
+        local node_name = self._panel_normal_list[self._panel_hovered_index]
         if node_name and self._widgets_by_name[node_name] then
             self:_cancel_panel_field()
             self:_process_widget_press_right(node_name)
@@ -2075,11 +2985,21 @@ function HudElementCustomizer:_handle_panel_input(input_service)
     end
 
     local mouse_over_panel = in_panel and (
-        input_service:get("left_pressed") or input_service:get("left_hold") or
+        left_pressed or input_service:get("left_hold") or
         input_service:get("right_pressed") or input_service:get("right_hold")
     )
 
     return panel_text_consumed or mouse_over_panel
+end
+
+function HudElementCustomizer:_measure_text_size(ui_renderer, text, font_size)
+    -- UIRenderer.text_size(self, text, font_type, font_size, ...) -> width, height
+    local ok, w, h = pcall(UIRenderer.text_size, ui_renderer, text, PANEL_FONT_TYPE, font_size)
+    if ok and type(w) == "number" and w > 0 then
+        return w, (type(h) == "number" and h or font_size)
+    end
+    -- Fallback estimate if measurement is unavailable.
+    return #text * font_size * 0.5, font_size
 end
 
 function HudElementCustomizer:_draw_info_panel(ui_renderer, input_service)
@@ -2088,7 +3008,7 @@ function HudElementCustomizer:_draw_info_panel(ui_renderer, input_service)
     end
 
     local inverse_scale = self._inverse_scale or RESOLUTION_LOOKUP.inverse_scale
-    local all_node_names = self._panel_all_node_names
+    local all_node_names = self._panel_normal_list
     local total_nodes = #all_node_names
     local saved_settings = self._saved_node_settings
     local selected_list = self._selected_node_list
@@ -2113,19 +3033,115 @@ function HudElementCustomizer:_draw_info_panel(ui_renderer, input_service)
     UIRenderer.draw_rect(ui_renderer, Vector3(px, py, draw_layer), Vector2(pw, ph), PANEL_BG_COLOR)
     UIRenderer.draw_rect(ui_renderer, Vector3(px, py, draw_layer + 1), Vector2(pw, hh), PANEL_HEADER_COLOR)
 
+    -- Two-row header: title band on top (full width), button band below holding
+    -- the Legend + Stash + Ignore toggles, left-aligned. Buttons wrap their
+    -- measured label so the text reads centered; rects are stored for hit-testing.
+    -- Keep all draws within draw_layer+2 -- higher layers are clipped by the
+    -- element's layer range.
+    local ps_is = metrics.scale * inverse_scale
+    local title_band = PANEL_HEADER_TITLE_BAND * ps_is
+    local ignore_pad = 5 * ps_is
+    local btn_band_top = py + title_band
+    local btn_bh = hh - title_band - 2 * ignore_pad
+    local btn_by = btn_band_top + ignore_pad
+    local b_border = math.max(1, 1 * ps_is)
+
+    -- Title (top band, full width).
     _safe_draw_text(
         ui_renderer,
-        string.format("Custom HUD Panel (%d)  [drag header]", total_nodes),
+        string.format("Custom HUD Panel (%d)", total_nodes),
         PANEL_FONT_TYPE,
         metrics.font,
-        Vector3(px + 10 * metrics.scale * inverse_scale, py + 3 * metrics.scale * inverse_scale, draw_layer + 2),
-        Vector2(pw - 20 * metrics.scale * inverse_scale, hh - 6 * metrics.scale * inverse_scale),
+        Vector3(px + 10 * ps_is, py + 2 * ps_is, draw_layer + 2),
+        Vector2(math.max(0, pw - 20 * ps_is), title_band),
         PANEL_TEXT_COLOR,
         "left",
         "center"
     )
 
+    -- Each button is sized to fit its label (see PANEL_BTN_PAD note). The text
+    -- inset is the actual-pixel pad converted to pass space (* inverse_scale).
+    local btn_text_lead = PANEL_BTN_PAD * inverse_scale
+    local function _draw_btn(bx, bw, label, tw, th, fill)
+        UIRenderer.draw_rect(ui_renderer, Vector3(bx, btn_by, draw_layer + 1), Vector2(bw, btn_bh), IGNORE_BTN_BORDER_COLOR)
+        UIRenderer.draw_rect(ui_renderer, Vector3(bx + b_border, btn_by + b_border, draw_layer + 1), Vector2(bw - 2 * b_border, btn_bh - 2 * b_border), fill)
+        local ty = btn_by + math.max(0, (btn_bh - th) * 0.5)
+        -- Give the text box the full button width (not the exact measured width):
+        -- at scale 1 a box equal to the text width can wrap the last word.
+        _safe_draw_text(ui_renderer, label, PANEL_FONT_TYPE, metrics.font_small,
+            Vector3(bx + btn_text_lead, ty, draw_layer + 2), Vector2(bw, th), IGNORE_BTN_TEXT_COLOR, "left", "top")
+    end
+
+    local edit_hidden_count = 0
+    for _ in pairs(_user_edit_hidden) do edit_hidden_count = edit_hidden_count + 1 end
+
+    local legend_label = string.format("Legend %s", self._show_legend and ">" or "<")
+    local reveal_label = string.format("Stash (%d) %s", edit_hidden_count, self._reveal_edit_hidden and "On" or "Off")
+    local ignore_label = string.format("Ignore (%d) %s", #self._panel_ignore_list, self._show_ignore_panel and "<" or ">")
+
+    local legend_tw, legend_th = self:_measure_text_size(ui_renderer, legend_label, metrics.font_small)
+    local reveal_tw, reveal_th = self:_measure_text_size(ui_renderer, reveal_label, metrics.font_small)
+    local ignore_tw, ignore_th = self:_measure_text_size(ui_renderer, ignore_label, metrics.font_small)
+
+    -- Button width = (text px + 2*pad) converted from actual pixels to pass space.
+    -- Resolution-independent: wraps the label identically at any resolution.
+    local btn_pad2 = 2 * PANEL_BTN_PAD
+    local legend_bw = (legend_tw + btn_pad2) * inverse_scale
+    local reveal_bw = (reveal_tw + btn_pad2) * inverse_scale
+    local ignore_bw = (ignore_tw + btn_pad2) * inverse_scale
+
+    local cursor_x = px + ignore_pad
+    local legend_bx = cursor_x
+    cursor_x = cursor_x + legend_bw + ignore_pad
+    local reveal_bx = cursor_x
+    cursor_x = cursor_x + reveal_bw + ignore_pad
+    local ignore_bx = cursor_x
+
+    local legend_rect = self._legend_btn_rect or {}
+    legend_rect[1], legend_rect[2], legend_rect[3], legend_rect[4] = legend_bx, btn_by, legend_bw, btn_bh
+    self._legend_btn_rect = legend_rect
+
+    local reveal_rect = self._reveal_btn_rect or {}
+    reveal_rect[1], reveal_rect[2], reveal_rect[3], reveal_rect[4] = reveal_bx, btn_by, reveal_bw, btn_bh
+    self._reveal_btn_rect = reveal_rect
+
+    local btn_rect = self._ignore_btn_rect or {}
+    btn_rect[1], btn_rect[2], btn_rect[3], btn_rect[4] = ignore_bx, btn_by, ignore_bw, btn_bh
+    self._ignore_btn_rect = btn_rect
+
+    -- Legend button.
+    local legend_fill
+    if self._show_legend then
+        legend_fill = self._legend_btn_hover and IGNORE_BTN_COLOR_OPEN_HOVER or IGNORE_BTN_COLOR_OPEN
+    else
+        legend_fill = self._legend_btn_hover and IGNORE_BTN_COLOR_HOVER or IGNORE_BTN_COLOR
+    end
+    _draw_btn(legend_bx, legend_bw, legend_label, legend_tw, legend_th, legend_fill)
+
+    -- Stash button.
+    local reveal_btn_fill
+    if self._reveal_edit_hidden then
+        reveal_btn_fill = self._reveal_btn_hover and REVEAL_BTN_COLOR_ON_HOVER or REVEAL_BTN_COLOR_ON
+    else
+        reveal_btn_fill = self._reveal_btn_hover and IGNORE_BTN_COLOR_HOVER or IGNORE_BTN_COLOR
+    end
+    _draw_btn(reveal_bx, reveal_bw, reveal_label, reveal_tw, reveal_th, reveal_btn_fill)
+
+    -- Ignore button.
+    local ignore_btn_fill
+    if self._show_ignore_panel then
+        ignore_btn_fill = self._ignore_btn_hover and IGNORE_BTN_COLOR_OPEN_HOVER or IGNORE_BTN_COLOR_OPEN
+    else
+        ignore_btn_fill = self._ignore_btn_hover and IGNORE_BTN_COLOR_HOVER or IGNORE_BTN_COLOR
+    end
+    _draw_btn(ignore_bx, ignore_bw, ignore_label, ignore_tw, ignore_th, ignore_btn_fill)
+
+    -- Legend side panel (drawn to the left of the main panel).
+    self:_draw_legend_panel(ui_renderer, px, py, metrics, inverse_scale, draw_layer)
+
     local scroll = self._panel_scroll_offset
+    local edit_targets = self._panel_edit_toggle_targets
+    for i = #edit_targets, 1, -1 do edit_targets[i] = nil end
     for i = 1, visible_count do
         local data_index = i + scroll
         if data_index > total_nodes then
@@ -2133,12 +3149,14 @@ function HudElementCustomizer:_draw_info_panel(ui_renderer, input_service)
         end
 
         local node_name = all_node_names[data_index]
+        local element_name = split_node_name(node_name)
         local short_name = short_element_name(node_name)
         local line_y = py + hh + (i - 1) * lh
         local is_selected = selected_lookup[node_name]
         local is_hovered = (self._panel_hovered_index == data_index)
         local node_settings = saved_settings[node_name]
         local is_hidden = node_settings and node_settings.is_hidden
+        local edit_hidden = _is_element_edit_hidden(element_name)
 
         local line_color = PANEL_LINE_COLOR
         if is_selected then
@@ -2152,15 +3170,67 @@ function HudElementCustomizer:_draw_info_panel(ui_renderer, input_service)
                 Vector2(pw - 4 * inverse_scale, lh - 1 * inverse_scale), line_color)
         end
 
-        local text_color = is_hidden and PANEL_TEXT_HIDDEN_COLOR or PANEL_TEXT_COLOR
-        local suffix = is_hidden and " [hidden]" or ""
+        -- Tags + color coding (shared by the row text and the end-of-row box):
+        -- [H] hidden from live HUD, [S] stashed from edit mode.
+        local text_color = PANEL_TEXT_COLOR
+        local box_fill = EDIT_TOGGLE_SHOWN_COLOR
+        local box_icon = TOGGLE_ICON_NORMAL
+        local box_icon_scale = TOGGLE_ICON_SCALE_NORMAL
+        local suffix = ""
+        if is_hidden and edit_hidden then
+            text_color = ROW_COLOR_BOTH
+            box_fill = ROW_COLOR_BOTH
+            box_icon = TOGGLE_ICON_BOTH
+            box_icon_scale = TOGGLE_ICON_SCALE_BOTH
+            suffix = " [S][H]"
+        elseif is_hidden then
+            text_color = ROW_COLOR_HIDDEN
+            box_fill = ROW_COLOR_HIDDEN
+            box_icon = TOGGLE_ICON_HIDDEN
+            box_icon_scale = TOGGLE_ICON_SCALE_HIDDEN
+            suffix = " [H]"
+        elseif edit_hidden then
+            text_color = ROW_COLOR_EDIT
+            box_fill = ROW_COLOR_EDIT
+            box_icon = TOGGLE_ICON_STASHED
+            box_icon_scale = TOGGLE_ICON_SCALE_STASHED
+            suffix = " [S]"
+        end
+
+        -- Per-row stash toggle: a small square at the right edge, filled with the
+        -- row's tag color. Hit rect is stored for the input handler; text width is
+        -- shrunk to clear it.
+        local tgl_size = lh - 5 * ps_is
+        local tgl_x = px + pw - tgl_size - 5 * ps_is
+        local tgl_y = line_y + 2.5 * ps_is
+        local tgl_hovered = (self._edit_toggle_hover_element == node_name)
+        local tgl_border = tgl_hovered and EDIT_TOGGLE_HOVER_BORDER_COLOR or EDIT_TOGGLE_BORDER_COLOR
+        local tgl_border_w = math.max(1, 1 * ps_is)
+        UIRenderer.draw_rect(ui_renderer, Vector3(tgl_x, tgl_y, draw_layer + 1), Vector2(tgl_size, tgl_size), tgl_border)
+        UIRenderer.draw_rect(ui_renderer, Vector3(tgl_x + tgl_border_w, tgl_y + tgl_border_w, draw_layer + 1),
+            Vector2(tgl_size - 2 * tgl_border_w, tgl_size - 2 * tgl_border_w), box_fill)
+
+        if box_icon then
+            local icon_size = tgl_size * box_icon_scale
+            local icon_off = (tgl_size - icon_size) * 0.5
+            pcall(UIRenderer.draw_texture, ui_renderer, box_icon,
+                Vector3(tgl_x + icon_off, tgl_y + icon_off, draw_layer + 2),
+                Vector2(icon_size, icon_size),
+                TOGGLE_ICON_COLOR)
+        end
+
+        edit_targets[#edit_targets + 1] = {
+            x = tgl_x, y = tgl_y, w = tgl_size, h = tgl_size, node_name = node_name
+        }
+
+        local text_left = px + 10 * metrics.scale * inverse_scale
         _safe_draw_text(
             ui_renderer,
             short_name .. suffix,
             PANEL_FONT_TYPE,
             metrics.font_small,
-            Vector3(px + 10 * metrics.scale * inverse_scale, line_y, draw_layer + 2),
-            Vector2(pw - 20 * metrics.scale * inverse_scale, lh),
+            Vector3(text_left, line_y, draw_layer + 2),
+            Vector2(math.max(0, tgl_x - text_left - 4 * ps_is), lh),
             text_color,
             "left",
             "center"
@@ -2322,6 +3392,129 @@ function HudElementCustomizer:_draw_info_panel(ui_renderer, input_service)
             "center"
         )
     end
+
+    if self._show_ignore_panel then
+        self:_draw_ignore_panel(ui_renderer, px, py, pw, metrics, inverse_scale, draw_layer)
+    end
+end
+
+function HudElementCustomizer:_draw_legend_panel(ui_renderer, px, py, metrics, inverse_scale, draw_layer)
+    if not self._show_legend then
+        return
+    end
+
+    local lh = metrics.line_h
+    local scale = metrics.scale
+    local ps_is = scale * inverse_scale
+    local hh = _side_header_h(scale, inverse_scale)
+    local count = #_LEGEND_ROWS
+
+    local lpx, lpy, lpw, lph = _get_legend_panel_rect(px, py, lh, count, scale, inverse_scale)
+
+    UIRenderer.draw_rect(ui_renderer, Vector3(lpx, lpy, draw_layer), Vector2(lpw, lph), PANEL_BG_COLOR)
+    UIRenderer.draw_rect(ui_renderer, Vector3(lpx, lpy, draw_layer + 1), Vector2(lpw, hh), PANEL_HEADER_COLOR)
+
+    _safe_draw_text(
+        ui_renderer,
+        mod:localize("legend_title"),
+        PANEL_FONT_TYPE,
+        metrics.font,
+        Vector3(lpx + 10 * ps_is, lpy + 2 * ps_is, draw_layer + 2),
+        Vector2(math.max(0, lpw - 20 * ps_is), hh),
+        PANEL_TEXT_COLOR,
+        "left",
+        "center"
+    )
+
+    local pad_x = 10 * ps_is
+    local key_w = LEGEND_KEY_COL * ps_is
+    for i = 1, count do
+        local row = _LEGEND_ROWS[i]
+        local ry = lpy + hh + (i - 1) * lh
+        if row.section then
+            _safe_draw_text(
+                ui_renderer, mod:localize(row.section), PANEL_FONT_TYPE, metrics.font_small,
+                Vector3(lpx + pad_x, ry, draw_layer + 2), Vector2(math.max(0, lpw - 2 * pad_x), lh),
+                PANEL_LEGEND_SECTION_COLOR, "left", "center"
+            )
+        else
+            _safe_draw_text(
+                ui_renderer, row.key, PANEL_FONT_TYPE, metrics.font_small,
+                Vector3(lpx + pad_x, ry, draw_layer + 2), Vector2(key_w, lh),
+                PANEL_LEGEND_KEY_COLOR, "left", "center"
+            )
+            _safe_draw_text(
+                ui_renderer, mod:localize(row.action), PANEL_FONT_TYPE, metrics.font_small,
+                Vector3(lpx + pad_x + key_w + 6 * ps_is, ry, draw_layer + 2),
+                Vector2(math.max(0, lpw - 2 * pad_x - key_w - 6 * ps_is), lh),
+                PANEL_TEXT_COLOR, "left", "center"
+            )
+        end
+    end
+end
+
+function HudElementCustomizer:_draw_ignore_panel(ui_renderer, px, py, pw, metrics, inverse_scale, draw_layer)
+    local lh = metrics.line_h
+    local scale = metrics.scale
+    local hh = _side_header_h(scale, inverse_scale)
+    local ignore_list = self._panel_ignore_list
+    local count = #ignore_list
+
+    local ipx, ipy, ipw, iph = _get_ignore_panel_rect(px, py, pw, lh, count, scale, inverse_scale)
+
+    UIRenderer.draw_rect(ui_renderer, Vector3(ipx, ipy, draw_layer), Vector2(ipw, iph), PANEL_BG_COLOR)
+    UIRenderer.draw_rect(ui_renderer, Vector3(ipx, ipy, draw_layer + 1), Vector2(ipw, hh), PANEL_HEADER_COLOR)
+
+    _safe_draw_text(
+        ui_renderer,
+        string.format("Ignore List (%d)", count),
+        PANEL_FONT_TYPE,
+        metrics.font_small,
+        Vector3(ipx + 10 * scale * inverse_scale, ipy + 3 * scale * inverse_scale, draw_layer + 2),
+        Vector2(ipw - 20 * scale * inverse_scale, hh - 6 * scale * inverse_scale),
+        PANEL_TEXT_COLOR,
+        "left",
+        "center"
+    )
+
+    if count == 0 then
+        _safe_draw_text(
+            ui_renderer,
+            "Double-click a row on the left to ignore it.",
+            PANEL_FONT_TYPE,
+            math.max(8, metrics.font_small - 1),
+            Vector3(ipx + 10 * scale * inverse_scale, ipy + hh + 4 * scale * inverse_scale, draw_layer + 2),
+            Vector2(ipw - 20 * scale * inverse_scale, lh * 2),
+            PANEL_DETAIL_LABEL_COLOR,
+            "left",
+            "top"
+        )
+        return
+    end
+
+    for i = 1, count do
+        local element_name = ignore_list[i]
+        local short = (element_name:gsub("^HudElement", ""):gsub("^ConstantElement", "C:"))
+        local line_y = ipy + hh + (i - 1) * lh
+        local is_hovered = (self._ignore_hovered_index == i)
+
+        if is_hovered then
+            UIRenderer.draw_rect(ui_renderer, Vector3(ipx + 2 * inverse_scale, line_y, draw_layer + 1),
+                Vector2(ipw - 4 * inverse_scale, lh - 1 * inverse_scale), PANEL_LINE_HOVER_COLOR)
+        end
+
+        _safe_draw_text(
+            ui_renderer,
+            short,
+            PANEL_FONT_TYPE,
+            metrics.font_small,
+            Vector3(ipx + 10 * scale * inverse_scale, line_y, draw_layer + 2),
+            Vector2(ipw - 20 * scale * inverse_scale, lh),
+            PANEL_TEXT_COLOR,
+            "left",
+            "center"
+        )
+    end
 end
 
 -- ============================================================================
@@ -2329,16 +3522,29 @@ end
 -- ============================================================================
 
 function HudElementCustomizer:_apply_saved_node_settings()
+    if not _mod_enabled() then
+        return
+    end
+
     local saved_node_settings = self._saved_node_settings
     if not saved_node_settings then
         return
     end
 
+    mod._position_overrides = {}
     local inverse_hud_scale = self:_get_inverse_hud_scale()
     for node_name, node_settings in pairs(saved_node_settings) do
         local element_name, scenegraph_id = split_node_name(node_name)
-        local element = self:_get_element(element_name)
-        if element and type(element._ui_scenegraph) == "table" then
+        if _excluded_element_names[element_name] then
+            saved_node_settings[node_name] = nil
+        elseif _user_ignored[element_name] then
+            -- User-ignored: keep saved settings so customization returns on restore,
+            -- but skip applying so the element renders at its vanilla position.
+        else
+            local element = self:_get_element(element_name)
+            if element and type(element._ui_scenegraph) == "table" then
+            -- rawget bypasses strict-readonly __index that ferrors on missing keys.
+            -- Saved layouts may reference scenegraph nodes from now-disabled mods.
             local has_scenegraph_id = rawget(element._ui_scenegraph, scenegraph_id) ~= nil
 
             if has_scenegraph_id then
@@ -2355,39 +3561,102 @@ function HudElementCustomizer:_apply_saved_node_settings()
                     element._hidden_scenegraphs = {}
                 end
 
-                local ok = pcall(element.set_scenegraph_position, element, scenegraph_id, x, y, z, "left", "top")
+                local ok = mod._set_element_sg_position and mod._set_element_sg_position(element, scenegraph_id, x, y, z)
                 if ok then
                     local is_tactical_overlay_node = element_name == "HudElementTacticalOverlay" and scenegraph_id ~= nil and scenegraph_id ~= ""
                     if not is_tactical_overlay_node then
                         element._is_hidden = node_settings.is_hidden
                     end
 
-                    local hooked_elements = mod._hooked_elements
-                    if not hooked_elements[element] then
-                        mod:hook(element, "draw", function(func, self, ...)
-                            if self._is_hidden then
-                                return
+                    local pos_overrides = mod._position_overrides
+                    local entry = pos_overrides[element]
+                    if not entry then
+                        entry = { nodes = {}, has_delta = false }
+                        pos_overrides[element] = entry
+                    end
+                    local defaults = node_settings.default_settings
+                    local default_pos = defaults and defaults.position or {}
+                    local delta_x = x - (default_pos[1] or 0)
+                    local delta_y = y - (default_pos[2] or 0)
+                    entry.nodes[scenegraph_id] = { x, y, z, delta_x = delta_x, delta_y = delta_y }
+                    -- Precomputed so the per-frame _draw_widgets hook doesn't
+                    -- rescan every override each frame. Overrides are rebuilt
+                    -- from scratch on every apply, so this never goes stale.
+                    if delta_x ~= 0 or delta_y ~= 0 then
+                        entry.has_delta = true
+                    end
+
+                    -- Draw hook only for elements that are actually hidden
+                    -- (position pinning is handled by the central repin pass;
+                    -- opacity by the lazily installed base-class hooks).
+                    if node_settings.is_hidden then
+                        _ensure_element_draw_hook(element)
+                    end
+
+                    local class_name = element.__class_name
+
+                    -- For elements like HudElementWeaponCounter that compute widget positions
+                    -- in _draw_widgets from crosshair/aim rather than scenegraph, the scenegraph
+                    -- pivot is math-cancelled and set_scenegraph_position has no visual effect.
+                    -- Hook _draw_widgets to redraw slot widgets at crosshair + delta offset.
+                    -- Gated on the element actually HAVING slot widgets and a nonzero delta:
+                    -- _draw_widgets is inherited by every element, so hooking it per customized
+                    -- class (the old behavior) added a permanent per-frame DMF chain to each.
+                    local hooked_dw = mod._hooked_element_draw_widgets
+                    if class_name and CLASS and CLASS[class_name]
+                        and element._slot_widgets and entry.has_delta
+                        and CLASS[class_name]._draw_widgets
+                        and not hooked_dw[class_name] then
+                        mod:hook(CLASS[class_name], "_draw_widgets", function(func, self, dt, t, input_service, ui_renderer, render_settings)
+                            -- has_delta is precomputed at apply time; the common
+                            -- per-frame case reduces to two table lookups.
+                            local entry = mod._position_overrides[self]
+                            local has_delta = entry and entry.has_delta and self._slot_widgets ~= nil
+                                and _mod_enabled()
+
+                            -- Suppress vanilla slot_widget draw so we can reposition them.
+                            -- Swap to empty table: pairs({}) = no iterations, no draw.
+                            local slot_widgets
+                            if has_delta then
+                                slot_widgets = self._slot_widgets
+                                self._slot_widgets = {}
                             end
 
-                            local element_render_settings = select(4, ...)
-                            local opacity = mod._cached_opacity()
-                            if opacity ~= 1 then
-                                if type(element_render_settings) == "table" then
-                                    element_render_settings.alpha_multiplier = opacity
+                            func(self, dt, t, input_service, ui_renderer, render_settings)
+
+                            if has_delta then
+                                self._slot_widgets = slot_widgets
+                                local scale = ui_renderer.scale
+                                for _, pos in pairs(entry.nodes) do
+                                    local dx = pos.delta_x
+                                    local dy = pos.delta_y
+                                    if dx and dy and (dx ~= 0 or dy ~= 0) then
+                                        local cx = self._crosshair_position_x + dx * scale
+                                        local cy = self._crosshair_position_y + dy * scale
+                                        for _, widget in pairs(slot_widgets) do
+                                            local wo = widget.offset
+                                            wo[1] = cx
+                                            wo[2] = cy
+                                            UIWidget.draw(widget, ui_renderer)
+                                        end
+                                    end
                                 end
                             end
-
-                            return func(self, ...)
                         end)
-                        hooked_elements[element] = true
+                        hooked_dw[class_name] = true
                     end
                 end
             else
                 saved_node_settings[node_name] = nil
             end
+            end
         end
     end
 
+    -- One persist per apply (also prunes entries dropped above). Clears both
+    -- flags: overrides are now current and the table is flushed.
+    self._apply_needed = false
+    self._settings_dirty = false
     mod:set("saved_node_settings", saved_node_settings)
 end
 
