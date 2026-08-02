@@ -1,0 +1,25 @@
+== First Person Body: diagnostics ==
+version 1.4.0
+
+option: true | hook calls: 0 | poll calls: 0 | full passes: 0 | units shown last pass: never | restores: 0
+hide tag carried by: none
+spoof lies so far: 0 | fade defeats: 0
+engine apis: get_child_units=function is_mesh_visible=nil
+mesh re-show hits: 0
+nuke test: not run
+wielded set respawns observed: 0 (last at t=never)
+fov boost frames: 0 (setting: -15%)
+camera pitch: current=0.0 deg | session max down=0.0 deg (positive = down)
+pitch clamp: on=true sign=uncalibrated accepted=0.0 active=false fires=0
+sprint: option=nil detected=false hide frames=0 | raw: none
+re-shower: none caught
+first person camera: true
+gate: false | forced_3p: true | wants_1p_cam: false | equip_mode_1p: false
+slots: slot_attachment_1+ slot_attachment_2+ slot_attachment_3+ slot_body_arms+ slot_body_face+ slot_body_legs+ slot_companion_gear_full+ slot_gear_extra_cosmetic+ slot_gear_head+ slot_gear_lowerbody+ slot_gear_upperbody+ slot_grenade_ability[w]+ slot_primary[w]+ slot_secondary[w]+ slot_unarmed[w]+
+map unit positions: near player=0 far=0 (none)
+wielded slot_unarmed: meshes=0 scale=1.0000 map_keys=1 map_units=0 alive=0 dead=0 map_meshes=0 children=0
+slot_gear_lowerbody: content/items/characters/player/human/gear_lowerbody/cryptic_lowerbody_deluxe_var_01 1p=missing 3p=alive hidden_1p=nil hidden_3p=false
+slot_body_legs: content/items/characters/player/human/cryptic_base_legs/base_legs_deluxe 1p=missing 3p=alive hidden_1p=nil hidden_3p=false
+slot_body_torso: none 1p=missing 3p=missing hidden_1p=nil hidden_3p=nil
+slot_body_arms: content/items/characters/player/human/cryptic_base_arms/base_arms_deluxe 1p=alive 3p=alive hidden_1p=true hidden_3p=false
+slot_gear_upperbody: content/items/characters/player/human/gear_upperbody/cryptic_upperbody_c_var_02 1p=alive 3p=alive hidden_1p=true hidden_3p=false

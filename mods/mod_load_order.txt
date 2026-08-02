@@ -51,6 +51,7 @@ PlayerOutlines
 enemies_improved
 danger_zone
 PlasmaChargebar
+FirstPersonBody
 
 -- Fancy stuff
 ForTheEmperor
