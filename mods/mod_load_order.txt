@@ -8,6 +8,7 @@ SMOG
 -- Gameplay
 AutoMark
 SimpleSequencer
+-- Skitarius
 SimpleAbilities
 SimpleMovement
 guarantee_weapon_swap
