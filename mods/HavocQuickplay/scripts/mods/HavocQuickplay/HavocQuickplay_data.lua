@@ -14,6 +14,13 @@ return {
 				tooltip = "hq_auto_accept_desc",
 			},
 			{
+				setting_id = "hq_auto_decline",
+				type = "checkbox",
+				default_value = true,
+				title = "hq_auto_decline",
+				tooltip = "hq_auto_decline_desc",
+			},
+			{
 				setting_id = "hq_auto_accept_mission",
 				type = "checkbox",
 				default_value = false,
@@ -26,6 +33,15 @@ return {
 				default_value = false,
 				title = "hq_auto_start",
 				tooltip = "hq_auto_start_desc",
+			},
+			{
+				setting_id = "hq_cancel_keybind",
+				type = "keybind",
+				default_value = {},
+				keybind_trigger = "pressed",
+				keybind_type = "function_call",
+				function_name = "cancel_queue_keybind",
+				title = "hq_cancel_keybind",
 			},
 			{
 				setting_id = "hq_disable_bl_button",

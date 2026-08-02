@@ -277,25 +277,24 @@ mod.host_sweep = function()
 		S.host_seen_active = true
 	end
 
-	if mod.setting("hq_auto_accept") then
+	local auto_accept = mod.setting("hq_auto_accept")
+	local auto_decline = mod.setting("hq_auto_decline")
+
+	if auto_accept or auto_decline then
 		local ok, requests = pcall(party_manager.advertisement_request_to_join_list, party_manager)
 
 		if ok and type(requests) == "table" then
 			local slots = open_slots()
 
 			for account_id, join_request in pairs(requests) do
-				if slots <= 0 then
-					break
-				end
-
 				if join_request.presence_synced then
 					local verdict = decide(join_request)
 
-					if verdict == "accept" then
+					if verdict == "accept" and auto_accept and slots > 0 then
 						if respond(party_id, account_id, true) then
 							slots = slots - 1
 						end
-					elseif verdict == "decline" then
+					elseif verdict == "decline" and auto_decline then
 						respond(party_id, account_id, false)
 					end
 				end

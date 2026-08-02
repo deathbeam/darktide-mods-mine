@@ -166,7 +166,31 @@ mod.leave_and_blacklist = function()
 	return true
 end
 
+local function cancel_keybind()
+	local keys = mod.setting("hq_cancel_keybind")
+
+	if type(keys) ~= "table" or keys[1] == nil then
+		return nil
+	end
+
+	return keys
+end
+
+mod.cancel_keybind = cancel_keybind
+
 local function cancel_key_text()
+	local keys = cancel_keybind()
+
+	if keys then
+		local parts = {}
+
+		for i = #keys, 1, -1 do
+			parts[#parts + 1] = string.upper(tostring(keys[i]))
+		end
+
+		return "[" .. table.concat(parts, " + ") .. "]"
+	end
+
 	local ok, text = pcall(InputUtils.input_text_for_current_input_device, "View", C.CANCEL_ACTION, true)
 
 	return ok and text or "?"
@@ -519,6 +543,7 @@ mod.add_offer = function(party_id, invite_token)
 
 		mod.set_state(STATE.COUNTDOWN)
 		refresh_notification(true)
+		mod.arm_taskbar_flash()
 	end
 
 	mod.debug("offer from %s (%d held)", tostring(party_id), offer_count())
@@ -639,6 +664,10 @@ mod.finish_queue = function()
 end
 
 local function cancel_pressed()
+	if cancel_keybind() then
+		return false
+	end
+
 	local ui_manager = Managers.ui
 
 	if not ui_manager or not ui_manager.input_service then

@@ -3,12 +3,11 @@
 -- Base
 Alfs_DMF_Extensions
 MoreGraphicsOptions
-LocalizationExport
 SMOG
 
 -- Gameplay
-Skitarius
 AutoMark
+SimpleSequencer
 SimpleAbilities
 SimpleMovement
 guarantee_weapon_swap
@@ -16,9 +15,10 @@ guarantee_special_action
 guarantee_ability_activation
 
 -- Debugging
+LocalizationExport
+IconBrowser
 controlled_chaos
 ImprovedMeatGrinder
-show_crit_chance
 CharacterStats
 CombatStats
 EnemyStats

@@ -23,8 +23,9 @@ enemies_improved 809 2.0.14
 guarantee_ability_activation 336 1.4.1
 guarantee_special_action 351 1.1.13
 guarantee_weapon_swap 331 1.4.4
-HavocQuickplay 1116 4
+HavocQuickplay 1116 5
 ImprovedMeatGrinder 1013 1.6.0
+IconBrowser 820 1.0.3
 LetThereBeLight 1099 1.1.3
 LoadoutPreviews 1038 1.5.5
 LocalizationExport 975 2
@@ -35,8 +36,6 @@ PlasmaChargebar 1104 1
 PlayerOutlines 734 0.0.3
 RecolorBossHealthBars 314 2.4
 RemoveTagSkulls 423 1.2.1
-show_crit_chance 279 1.1.3
-Skitarius 510 2.2.4
 SMOG 847 1.2
 state_your_name 1068 1.3
 vfx_swapper 678 1.2.2

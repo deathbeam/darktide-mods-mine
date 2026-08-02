@@ -1,7 +1,7 @@
 local mod = get_mod("HavocQuickplay")
 local TaskbarFlash = require("scripts/utilities/taskbar_flash")
 
-mod.VERSION = "2.5.1"
+mod.VERSION = "2.7.0"
 
 mod.C = {
 	MAX_HAVOC_RANK      = 40,
@@ -378,6 +378,16 @@ mod.update = function(dt)
 	if S.state ~= mod.STATE.IDLE then
 		mod.queue_sweep()
 	end
+end
+
+mod.cancel_queue_keybind = function()
+	if mod.is_queued() then
+		mod.cancel_queue(mod.loc("hq_notify_cancelled"))
+	end
+end
+
+mod.arm_taskbar_flash = function()
+	mod.S.flash_until = mod.now() + mod.C.FLASH_TIMEOUT
 end
 
 mod.on_game_state_changed = function(status, state_name)

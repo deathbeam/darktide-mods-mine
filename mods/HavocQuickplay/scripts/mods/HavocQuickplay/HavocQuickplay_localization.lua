@@ -16,13 +16,22 @@ return {
 		en = "Accepts when the lobby host puts up a havoc mission.",
 	},
 	hq_auto_accept_desc = {
-		en = "Auto accepts players that meet the havoc assignment rank requirements that you set in the mission terminal (or in this mod's settings).",
+		en = "Auto-Accepts based on your minimum/maximum havoc rank setting. Reads their TRUE havoc assignment rank, not their clearance one.",
+	},
+	hq_auto_decline = {
+		en = "Auto-Decline Join Requests",
+	},
+	hq_auto_decline_desc = {
+		en = "Auto-Declines based on your minimum/maximum havoc rank setting. Reads their TRUE havoc assignment rank, not their clearance one.",
 	},
 	hq_auto_start = {
 		en = "Auto-Start on Full Lobby",
 	},
 	hq_auto_start_desc = {
 		en = "Automatically puts up your current havoc mission when your lobby reaches 4 players. Will stop if someone declines.",
+	},
+	hq_cancel_keybind = {
+		en = "Cancel Queue Keybind",
 	},
 	hq_disable_bl_button = {
 		en = "Disable Blacklist Button",
