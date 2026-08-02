@@ -470,6 +470,29 @@ PO.dmf_mod:hook("PlayerUnitHologramExtension", "update", function(func, self, un
     end
     func(self, unit, dt, t)
 end)
+PO.dmf_mod.on_setting_changed = function(setting_id)
+    PO.update_settings_cache()
+    if setting_id == "show_hologram"
+                or setting_id == "show_mesh"
+                or setting_id == "show_outline"
+                or setting_id == "show_in_hub" then
+            table.clear(PO._body_slots_dirty)
+            PO._rebuild_all_outlines()
+            if setting_id == "show_hologram" or setting_id == "show_in_hub" then
+                for _, player in pairs(Managers.player:players()) do
+                    PO._remove_hologram(player.player_unit)
+                end
+            end
+        elseif setting_id == "mission_nameplates_max_distance" and
+                PlayerOutlines.instances.wmt_nameplate_combat then
+            PlayerOutlines.instances.wmt_nameplate_combat.max_distance =
+                PO.dmf_mod.settings["mission_nameplates_max_distance"]
+        elseif setting_id == "assist_marker_max_distance" and
+                PlayerOutlines.instances.wmt_player_assistance then
+            PlayerOutlines.instances.wmt_player_assistance.max_distance =
+                PO.dmf_mod.settings["assist_marker_max_distance"]
+        end
+end
 PO.dmf_mod:hook_require("scripts/ui/hud/elements/world_markers/templates/world_marker_template_player_assistance", function(instance)
     PO.instances.wmt_player_assistance = instance
     PO.dmf_mod.on_setting_changed("assist_marker_max_distance")
@@ -521,28 +544,5 @@ PO._force_show_body_slots = function(self)
             Unit.set_unit_visibility(slot.unit_3p, true, true)
         end
     end
-end
-PO.dmf_mod.on_setting_changed = function(setting_id)
-    PO.update_settings_cache()
-    if setting_id == "show_hologram"
-                or setting_id == "show_mesh"
-                or setting_id == "show_outline"
-                or setting_id == "show_in_hub" then
-            table.clear(PO._body_slots_dirty)
-            PO._rebuild_all_outlines()
-            if setting_id == "show_hologram" or setting_id == "show_in_hub" then
-                for _, player in pairs(Managers.player:players()) do
-                    PO._remove_hologram(player.player_unit)
-                end
-            end
-        elseif setting_id == "mission_nameplates_max_distance" and
-                PlayerOutlines.instances.wmt_nameplate_combat then
-            PlayerOutlines.instances.wmt_nameplate_combat.max_distance =
-                PO.dmf_mod.settings["mission_nameplates_max_distance"]
-        elseif setting_id == "assist_marker_max_distance" and
-                PlayerOutlines.instances.wmt_player_assistance then
-            PlayerOutlines.instances.wmt_player_assistance.max_distance =
-                PO.dmf_mod.settings["assist_marker_max_distance"]
-        end
 end
 PO.dmf_mod.on_unload = PlayerOutlines.clear_all_outlines

@@ -3,9 +3,10 @@ local mod = get_mod("SMOG")
 local Managers = Managers
 local Application = Application
 local collectgarbage = collectgarbage
-local math_floor = math.floor
 local math_abs = math.abs
+local math_floor = math.floor
 local math_max = math.max
+local math_min = math.min
 local string_format = string.format
 local tostring = tostring
 local tonumber = tonumber
@@ -14,25 +15,39 @@ local type = type
 local os_clock = os and os.clock
 local dmf = get_mod("DMF")
 local check_interval = 1
+local heap_sample_interval = 0.5
 local interval_clean_time = 600
 local manual_clear_cooldown = 3
+local convenient_collect_cooldown_seconds = 5
+local gentle_step_kb = 16
+local gentle_max_steps = 8
+local gentle_budget_seconds = 0.0005
 local over_eighty_pause = 80
 local over_eighty_stepmul = 500
-local over_eighty_boost_pause = 70
-local over_eighty_boost_stepmul = 650
+local over_eighty_boost_pause = 65
+local over_eighty_boost_stepmul = 700
 local saved_gc_pause = nil
 local saved_gc_stepmul = nil
 local staged_step_kb = 32
 local staged_max_steps = 16
 local staged_budget_seconds = 0.001
 local over_eighty_delay_seconds = 5
+local over_eighty_boost_delay_seconds = 25
+local mourningstar_clean_delay_seconds = 180
+local gameplay_exit_clean_delay_seconds = 2
 local warning_return_delay_seconds = 2
 local growth_window_seconds = 30
 local auto_notification_seconds = 5
 local manual_notification_seconds = 6
 local notification_fade_seconds = 1
 local live_memory_warning_percent = 80
+local target_frame_seconds = 1 / 60
+local minimum_gc_frame_scale = 0.25
+local maximum_gc_frame_scale = 1.5
+local elapsed_time = 0
+local smoothed_frame_time = target_frame_seconds
 local accumulator = 0
+local heap_sample_accumulator = heap_sample_interval
 local interval_accumulator = 0
 local growth_accumulator = 0
 local scheduled_delays = {}
@@ -40,12 +55,17 @@ local scheduled_reasons = {}
 local due_reasons = {}
 local scheduled_count = 0
 local next_manual_clear_t = 0
-local over_eighty_since = nil
-local over_eighty_active = false
-local over_eighty_tuned = false
-local over_eighty_boosted = false
-local over_eighty_last_mb = 0
-local over_eighty_no_progress_t = 0
+local pressure_state = "normal"
+local pressure_wait_started_t = nil
+local pressure_boost_elapsed = 0
+local gc_tuning_active = false
+local gc_tuning_profile = nil
+local last_convenient_collect_t = nil
+local last_post_collect_mb = nil
+local last_collect_low_yield = false
+local routine_collect_suppressed = false
+local gameplay_exit_clean_pending = false
+local gameplay_exit_clean_delay = nil
 local high_threshold_cycle_active = false
 local warning_acknowledged = false
 local ninety_collect_done = false
@@ -53,36 +73,36 @@ local ninetyfive_collect_done = false
 local pending_warning_return_delay = nil
 local previous_game_mode_name = nil
 local previous_safe_zone_state = nil
+local mourningstar_visit_state = "unseen"
 local notification_text = nil
 local notification_tail = nil
 local notification_green_text = false
 local notification_good = true
 local notification_expiry = 0
-local notification_duration = auto_notification_seconds
 local notification_manual = false
 local threshold_notification_text = nil
 local threshold_notification_red_text = false
-local notification_queue_text = {}
-local notification_queue_tail = {}
-local notification_queue_green_text = {}
-local notification_queue_good = {}
-local notification_queue_duration = {}
-local notification_queue_count = 0
+local notification_queue = {}
 local notification_queue_limit = 3
 local first_update_done = false
 local last_persisted_heap_state = nil
-local hud_registered = false
-local hud_register_retry_t = 0
+local context_snapshot = {
+hud_allowed = false,
+collection_allowed = true,
+exit_cinematic_active = false,
+}
+local collection_context_was_blocked = false
 mod.cleaning_permitted = mod:get("cleaning_permitted") ~= false
 mod.convenient_moment_cleans = mod:get("auto_clean_on_start")
 mod.auto_clean_every_ten_minutes = mod:get("auto_clean_every_ten_minutes")
 mod.automatic_notifications = mod:get("notifications") ~= false
 mod._smog_hud_visible = mod._smog_hud_visible == true
+mod._smog_hud_format = mod:get("hud_format") == "digital" and "digital" or "analogue"
 mod._smog_notification_active = false
 mod._smog_hud_x_axis = tonumber(mod:get("hud_x_axis")) or 5
 mod._smog_hud_y_axis = tonumber(mod:get("hud_y_axis")) or 65
 mod._smog_notification_y_axis = tonumber(mod:get("notification_y_axis")) or 85
-local function memory_usage_mb()
+local function read_memory_usage_mb()
 local used_kb = collectgarbage("count") or 0
 return used_kb / 1024
 end
@@ -94,17 +114,7 @@ local sign = value >= 0 and "-" or "+"
 return sign .. fmt_mb(math_abs(value or 0))
 end
 local function current_time()
-local time_manager = Managers and Managers.time
-if time_manager and time_manager.time then
-local ok,value = pcall(time_manager.time,time_manager,"main")
-if ok and value then
-return value
-end
-end
-if os_clock then
-return os_clock()
-end
-return 0
+return elapsed_time
 end
 local function heap_size_mb()
 local size = 1024
@@ -127,21 +137,41 @@ end
 return size
 end
 local detected_heap_mb = heap_size_mb()
-local threshold_thirty_mb = detected_heap_mb * 0.3
+local threshold_thirtyfive_mb = detected_heap_mb * 0.35
+local threshold_sixtyeight_mb = detected_heap_mb * 0.68
+local threshold_seventy_mb = detected_heap_mb * 0.7
+local threshold_seventyeight_mb = detected_heap_mb * 0.78
 local threshold_eighty_mb = detected_heap_mb * 0.8
 local threshold_eightyfive_mb = detected_heap_mb * 0.85
 local threshold_ninety_mb = detected_heap_mb * 0.9
 local threshold_ninetyfive_mb = detected_heap_mb * 0.95
-local growth_sample_mb = memory_usage_mb()
+local low_collection_yield_mb = math_max(detected_heap_mb * 0.01,8)
+local rising_post_collect_mb = math_max(detected_heap_mb * 0.005,4)
+local current_heap_mb = read_memory_usage_mb()
+local current_heap_percent = detected_heap_mb > 0 and current_heap_mb / detected_heap_mb * 100 or 0
+local heap_sample_revision = 1
+local growth_sample_mb = current_heap_mb
 local function usage_percent(usage_mb)
 if detected_heap_mb <= 0 then
 return 0
 end
-return (usage_mb or memory_usage_mb()) / detected_heap_mb * 100
+return (usage_mb or current_heap_mb) / detected_heap_mb * 100
 end
-mod._smog_usage_percent = function()
-return usage_percent()
+local function set_heap_sample(sample_mb)
+current_heap_mb = sample_mb
+current_heap_percent = usage_percent(sample_mb)
+heap_sample_revision = heap_sample_revision + 1
+mod._smog_hud_sample_mb = current_heap_mb
+mod._smog_hud_sample_percent = current_heap_percent
+mod._smog_hud_sample_revision = heap_sample_revision
+return current_heap_mb
 end
+local function refresh_heap_sample()
+return set_heap_sample(read_memory_usage_mb())
+end
+mod._smog_hud_sample_mb = current_heap_mb
+mod._smog_hud_sample_percent = current_heap_percent
+mod._smog_hud_sample_revision = heap_sample_revision
 local function save_settings_now()
 if dmf and dmf.save_unsaved_settings_to_file then
 pcall(dmf.save_unsaved_settings_to_file)
@@ -162,9 +192,9 @@ local function mark_unclean_start()
 local previous_clean = mod:get("_smog_clean_shutdown")
 local previous_percent = tonumber(mod:get("_smog_last_heap_percent")) or 0
 if previous_clean == false and previous_percent < live_memory_warning_percent then
-mod:echo("It looks like you crashed out from a live memory problem last time. This is not a Lua heap issue so SMOG could not help.")
+mod:echo(mod:localize("unclean_shutdown"))
 end
-local state = heap_state(usage_percent())
+local state = heap_state(usage_percent(refresh_heap_sample()))
 last_persisted_heap_state = state
 mod:set("_smog_clean_shutdown",false)
 mod:set("_smog_last_heap_percent",state)
@@ -172,26 +202,20 @@ save_settings_now()
 end
 mark_unclean_start()
 local function update_notification_active()
-mod._smog_notification_active = threshold_notification_text ~= nil or notification_text ~= nil or notification_queue_count > 0
+mod._smog_notification_active = threshold_notification_text ~= nil or notification_text ~= nil or #notification_queue > 0
 end
 local function clear_notification()
 notification_text = nil
 notification_tail = nil
 notification_green_text = false
 notification_expiry = 0
-notification_duration = auto_notification_seconds
 notification_manual = false
 update_notification_active()
 end
 local function clear_queued_notifications()
-for i = 1,notification_queue_count do
-notification_queue_text[i] = nil
-notification_queue_tail[i] = nil
-notification_queue_green_text[i] = nil
-notification_queue_good[i] = nil
-notification_queue_duration[i] = nil
+for i = #notification_queue,1,-1 do
+notification_queue[i] = nil
 end
-notification_queue_count = 0
 update_notification_active()
 end
 local function clear_threshold_notification()
@@ -212,45 +236,35 @@ clear_queued_notifications()
 clear_threshold_notification()
 end
 local function queue_notification(text,good,duration,tail,green_text)
-if notification_queue_count >= notification_queue_limit then
+local queue_count = #notification_queue
+if queue_count >= notification_queue_limit then
 return
 end
-notification_queue_count = notification_queue_count + 1
-notification_queue_text[notification_queue_count] = text
-notification_queue_tail[notification_queue_count] = tail
-notification_queue_green_text[notification_queue_count] = green_text == true
-notification_queue_good[notification_queue_count] = good ~= false
-notification_queue_duration[notification_queue_count] = duration or auto_notification_seconds
+notification_queue[queue_count + 1] = {
+text = text,
+tail = tail,
+green_text = green_text == true,
+good = good ~= false,
+duration = duration or auto_notification_seconds,
+}
 update_notification_active()
 end
 local function pop_notification(now)
-if notification_queue_count <= 0 then
+local queue_count = #notification_queue
+if queue_count <= 0 then
 clear_notification()
 return false
 end
-local text = notification_queue_text[1]
-local tail = notification_queue_tail[1]
-local good = notification_queue_good[1]
-local green_text = notification_queue_green_text[1]
-local duration = notification_queue_duration[1] or auto_notification_seconds
-for i = 1,notification_queue_count - 1 do
-notification_queue_text[i] = notification_queue_text[i + 1]
-notification_queue_tail[i] = notification_queue_tail[i + 1]
-notification_queue_green_text[i] = notification_queue_green_text[i + 1]
-notification_queue_good[i] = notification_queue_good[i + 1]
-notification_queue_duration[i] = notification_queue_duration[i + 1]
+local queued = notification_queue[1]
+for i = 1,queue_count - 1 do
+notification_queue[i] = notification_queue[i + 1]
 end
-notification_queue_text[notification_queue_count] = nil
-notification_queue_tail[notification_queue_count] = nil
-notification_queue_green_text[notification_queue_count] = nil
-notification_queue_good[notification_queue_count] = nil
-notification_queue_duration[notification_queue_count] = nil
-notification_queue_count = notification_queue_count - 1
-notification_text = text
-notification_tail = tail
-notification_green_text = green_text == true
-notification_good = good ~= false
-notification_duration = duration
+notification_queue[queue_count] = nil
+local duration = queued.duration or auto_notification_seconds
+notification_text = queued.text
+notification_tail = queued.tail
+notification_green_text = queued.green_text == true
+notification_good = queued.good ~= false
 notification_expiry = (now or current_time()) + duration
 notification_manual = false
 update_notification_active()
@@ -264,7 +278,6 @@ notification_text = text
 notification_tail = tail
 notification_green_text = green_text == true
 notification_good = good ~= false
-notification_duration = manual_notification_seconds
 notification_expiry = now + manual_notification_seconds
 notification_manual = true
 update_notification_active()
@@ -284,24 +297,21 @@ notification_text = text
 notification_tail = tail
 notification_green_text = green_text == true
 notification_good = good ~= false
-notification_duration = auto_notification_seconds
 notification_expiry = now + auto_notification_seconds
 notification_manual = false
 update_notification_active()
 end
 local hud_notification_state = {}
-mod._smog_get_notification = function(now)
-now = now or current_time()
+mod._smog_get_notification = function()
+local now = current_time()
 if threshold_notification_text then
 hud_notification_state.text = threshold_notification_text
 hud_notification_state.tail = nil
 hud_notification_state.green_text = false
 hud_notification_state.red_text = threshold_notification_red_text == true
 hud_notification_state.good = false
-hud_notification_state.expiry = now + 3600
-hud_notification_state.duration = 3600
-hud_notification_state.manual = true
 hud_notification_state.fade_seconds = notification_fade_seconds
+hud_notification_state.remaining = 3600
 return hud_notification_state
 end
 if not notification_text then
@@ -318,17 +328,15 @@ hud_notification_state.tail = notification_tail
 hud_notification_state.green_text = notification_green_text == true
 hud_notification_state.red_text = false
 hud_notification_state.good = notification_good ~= false
-hud_notification_state.expiry = notification_expiry
-hud_notification_state.duration = notification_duration
-hud_notification_state.manual = notification_manual == true
 hud_notification_state.fade_seconds = notification_fade_seconds
+hud_notification_state.remaining = math_max(notification_expiry - now,0)
 return hud_notification_state
 end
 local function cleaning_allowed()
 return mod.cleaning_permitted ~= false
 end
 local function show_cleaning_not_permitted()
-show_notification("Cleaning not permitted; change in options menu.",false,true)
+show_notification(mod:localize("cleaning_not_permitted"),false,true)
 end
 local function clear_scheduled_cleans()
 for i = 1,scheduled_count do
@@ -338,39 +346,89 @@ end
 scheduled_count = 0
 end
 local function reset_growth_window(after_mb)
-growth_sample_mb = after_mb or memory_usage_mb()
+growth_sample_mb = after_mb or current_heap_mb
 growth_accumulator = 0
 end
 local function cleaned_message(before_mb,after_mb,freed_mb)
 local before_percent = usage_percent(before_mb)
 local after_percent = usage_percent(after_mb)
 local cleaned_percent = math_max(before_percent - after_percent,0)
-return string_format("Cleaned %.1f%%",cleaned_percent),string_format(" (%s MB > %s MB) (%s MB)",fmt_mb(before_mb),fmt_mb(after_mb),fmt_delta(freed_mb))
+return mod:localize("cleaned_percent",cleaned_percent),string_format(" (%s MB  %s MB) (%s MB)",fmt_mb(before_mb),fmt_mb(after_mb),fmt_delta(freed_mb))
+end
+local function reset_collection_tracking()
+last_post_collect_mb = nil
+last_collect_low_yield = false
+routine_collect_suppressed = false
+end
+local function track_collection_result(before_mb,after_mb,freed_mb)
+if before_mb < threshold_seventy_mb or after_mb < threshold_seventy_mb then
+reset_collection_tracking()
+return false
+end
+local low_yield = freed_mb < low_collection_yield_mb
+local rising_baseline = last_post_collect_mb and after_mb >= last_post_collect_mb + rising_post_collect_mb
+local retained_pattern = low_yield and last_collect_low_yield and rising_baseline == true
+if not low_yield then
+routine_collect_suppressed = false
+end
+last_post_collect_mb = after_mb
+last_collect_low_yield = low_yield
+if retained_pattern and not routine_collect_suppressed then
+routine_collect_suppressed = true
+show_notification(mod:localize("post_clean_heap_rising"),false,false)
+return true
+end
+return false
 end
 local function perform_collect(notification_mode)
-local before_mb = memory_usage_mb()
+if not context_snapshot.collection_allowed then
+return current_heap_mb,current_heap_mb,0,false
+end
 if not cleaning_allowed() then
 if notification_mode == "manual" then
 show_cleaning_not_permitted()
 end
+return current_heap_mb,current_heap_mb,0,false
+end
+local before_mb = refresh_heap_sample()
+local routine_collect = notification_mode == "auto" or notification_mode == "auto_silent"
+if routine_collect and routine_collect_suppressed then
+if before_mb < threshold_seventy_mb then
+reset_collection_tracking()
+else
 return before_mb,before_mb,0,false
 end
+end
 collectgarbage("collect")
-local after_mb = memory_usage_mb()
+local after_mb = refresh_heap_sample()
+heap_sample_accumulator = 0
 local freed_mb = before_mb - after_mb
+local retained_pattern = track_collection_result(before_mb,after_mb,freed_mb)
 if notification_mode == "manual" then
 local message,tail = cleaned_message(before_mb,after_mb,freed_mb)
 show_notification(message,freed_mb >= 0,true,tail,true)
-elseif notification_mode == "auto" then
-show_notification("Routine cleaning...",true,false)
+elseif notification_mode == "auto" and not retained_pattern then
+show_notification(mod:localize("routine_cleaning"),true,false)
 end
 reset_growth_window(after_mb)
 return before_mb,after_mb,freed_mb,true
 end
-local function apply_over_eighty_tuning(boosted)
-local pause = boosted and over_eighty_boost_pause or over_eighty_pause
-local stepmul = boosted and over_eighty_boost_stepmul or over_eighty_stepmul
-if not over_eighty_tuned then
+local function perform_convenient_collect(notification_mode)
+local now = current_time()
+if last_convenient_collect_t and now - last_convenient_collect_t < convenient_collect_cooldown_seconds then
+return false
+end
+local _,_,_,performed = perform_collect(notification_mode or "auto")
+if performed then
+last_convenient_collect_t = now
+end
+return performed
+end
+local function apply_gc_tuning(profile,pause,stepmul)
+if gc_tuning_active and gc_tuning_profile == profile then
+return
+end
+if not gc_tuning_active then
 local pause_ok,previous_pause = pcall(collectgarbage,"setpause",pause)
 local stepmul_ok,previous_stepmul = pcall(collectgarbage,"setstepmul",stepmul)
 if pause_ok then
@@ -384,10 +442,11 @@ pcall(collectgarbage,"setpause",pause)
 pcall(collectgarbage,"setstepmul",stepmul)
 end
 pcall(collectgarbage,"restart")
-over_eighty_tuned = true
+gc_tuning_active = true
+gc_tuning_profile = profile
 end
-local function restore_over_eighty_tuning()
-if not over_eighty_tuned then
+local function restore_gc_tuning()
+if not gc_tuning_active then
 return
 end
 if saved_gc_pause then
@@ -397,7 +456,8 @@ if saved_gc_stepmul then
 pcall(collectgarbage,"setstepmul",saved_gc_stepmul)
 end
 pcall(collectgarbage,"restart")
-over_eighty_tuned = false
+gc_tuning_active = false
+gc_tuning_profile = nil
 saved_gc_pause = nil
 saved_gc_stepmul = nil
 end
@@ -409,121 +469,124 @@ ninetyfive_collect_done = false
 pending_warning_return_delay = nil
 clear_threshold_notification()
 end
-local function stop_over_eighty_process()
-over_eighty_active = false
-over_eighty_boosted = false
-over_eighty_no_progress_t = 0
-restore_over_eighty_tuning()
+local function apply_pressure_tuning()
+if pressure_state == "boosted" then
+apply_gc_tuning("boosted",over_eighty_boost_pause,over_eighty_boost_stepmul)
+elseif pressure_state == "high" then
+apply_gc_tuning("eighty",over_eighty_pause,over_eighty_stepmul)
+else
+restore_gc_tuning()
 end
-local function finish_over_eighty_process()
-local was_active = over_eighty_active
-stop_over_eighty_process()
-over_eighty_since = nil
+end
+local function lower_pressure_state(usage_mb)
+if usage_mb < threshold_sixtyeight_mb then
+return "normal"
+end
+return "gentle"
+end
+local function set_pressure_state(next_state,show_recovery)
+if pressure_state == next_state then
+return
+end
+local previous_state = pressure_state
+pressure_state = next_state
+if next_state == "waiting" then
+pressure_wait_started_t = current_time()
+pressure_boost_elapsed = 0
+elseif next_state == "high" then
+pressure_wait_started_t = nil
+pressure_boost_elapsed = 0
+elseif next_state == "boosted" then
+pressure_wait_started_t = nil
+elseif next_state == "normal" or next_state == "gentle" then
+pressure_wait_started_t = nil
+pressure_boost_elapsed = 0
+end
+apply_pressure_tuning()
+if next_state == "high" then
+show_notification(mod:localize("heap_remained_above_eighty"),false,false)
+elseif next_state == "boosted" then
+show_notification(mod:localize("heap_increasing_incremental_cleaning"),false,false)
+elseif previous_state == "waiting" or previous_state == "high" or previous_state == "boosted" then
 reset_high_threshold_cycle()
-if was_active then
-show_notification("Now under 80%.",true,false)
+if show_recovery and (previous_state == "high" or previous_state == "boosted") then
+show_notification(mod:localize("heap_now_under_eighty"),true,false)
 end
 end
-local function begin_over_eighty_process(usage_mb)
-if not cleaning_allowed() or over_eighty_active then
-return
 end
-over_eighty_active = true
-over_eighty_boosted = false
-over_eighty_last_mb = usage_mb or memory_usage_mb()
-over_eighty_no_progress_t = 0
-apply_over_eighty_tuning(false)
-show_notification("Heap remained above 80%. Incremental cleaning...",false,false)
+local function reset_pressure_controller()
+pressure_state = "normal"
+pressure_wait_started_t = nil
+pressure_boost_elapsed = 0
+restore_gc_tuning()
+reset_high_threshold_cycle()
 end
-local function tick_over_eighty_staged(dt)
-if not over_eighty_active then
-return
-end
-if not cleaning_allowed() then
-stop_over_eighty_process()
-return
-end
-local usage_mb = memory_usage_mb()
-if usage_mb < threshold_eighty_mb then
-finish_over_eighty_process()
-return
-end
+local function run_staged_gc_steps(step_kb,max_steps,budget_seconds)
 local start_time = os_clock and os_clock() or nil
 local steps = 0
+local wanted_step_kb = step_kb or staged_step_kb
+local frame_scale = target_frame_seconds / math_max(smoothed_frame_time,0.001)
+if frame_scale < minimum_gc_frame_scale then
+frame_scale = minimum_gc_frame_scale
+elseif frame_scale > maximum_gc_frame_scale then
+frame_scale = maximum_gc_frame_scale
+end
+local wanted_max_steps = math_max(1,math_floor((max_steps or staged_max_steps) * frame_scale + 0.5))
+local wanted_budget_seconds = (budget_seconds or staged_budget_seconds) * frame_scale
 repeat
-local finished = collectgarbage("step",staged_step_kb)
+local finished = collectgarbage("step",wanted_step_kb)
 steps = steps + 1
 if finished then
 break
 end
-if start_time and os_clock and os_clock() - start_time >= staged_budget_seconds then
+if start_time and os_clock and os_clock() - start_time >= wanted_budget_seconds then
 break
 end
-until steps >= staged_max_steps
-local after_step_mb = memory_usage_mb()
-if after_step_mb < threshold_eighty_mb then
-finish_over_eighty_process()
+until steps >= wanted_max_steps
+return steps > 0
+end
+local function update_pressure_state(usage_mb,dt,allow_entry,show_recovery)
+local state = pressure_state
+if usage_mb < threshold_sixtyeight_mb then
+set_pressure_state("normal",show_recovery)
+reset_collection_tracking()
 return
 end
-if not over_eighty_boosted then
-if after_step_mb >= over_eighty_last_mb then
-over_eighty_no_progress_t = over_eighty_no_progress_t + (dt or 0)
-if over_eighty_no_progress_t >= growth_window_seconds then
-over_eighty_boosted = true
-over_eighty_no_progress_t = 0
-apply_over_eighty_tuning(true)
-show_notification("Heap is not falling. Increasing incremental cleaning.",false,false)
+if (state == "waiting" or state == "high" or state == "boosted") and usage_mb < threshold_seventyeight_mb then
+set_pressure_state(lower_pressure_state(usage_mb),show_recovery)
+return
 end
-else
-over_eighty_no_progress_t = 0
+if state == "normal" then
+if allow_entry and usage_mb >= threshold_eighty_mb then
+set_pressure_state("waiting",false)
+elseif allow_entry and usage_mb >= threshold_seventy_mb then
+set_pressure_state("gentle",false)
+end
+elseif state == "gentle" then
+if allow_entry and usage_mb >= threshold_eighty_mb then
+set_pressure_state("waiting",false)
+end
+elseif state == "waiting" then
+if pressure_wait_started_t and current_time() - pressure_wait_started_t >= over_eighty_delay_seconds then
+set_pressure_state("high",false)
+end
+elseif state == "high" then
+pressure_boost_elapsed = pressure_boost_elapsed + (dt or 0)
+if pressure_boost_elapsed >= over_eighty_boost_delay_seconds then
+set_pressure_state("boosted",false)
 end
 end
-over_eighty_last_mb = after_step_mb
+end
+local function run_pressure_incremental_action()
+if pressure_state == "gentle" or pressure_state == "waiting" then
+return run_staged_gc_steps(gentle_step_kb,gentle_max_steps,gentle_budget_seconds)
+elseif pressure_state == "high" or pressure_state == "boosted" then
+return run_staged_gc_steps(staged_step_kb,staged_max_steps,staged_budget_seconds)
+end
+return false
 end
 local function game_mode_manager()
 return Managers and Managers.state and Managers.state.game_mode
-end
-local function game_mode_name()
-local manager = game_mode_manager()
-if not manager then
-return nil
-end
-if manager.game_mode_name then
-local ok,name = pcall(manager.game_mode_name,manager)
-if ok and name then
-return name
-end
-end
-if manager.game_mode then
-local ok,game_mode = pcall(manager.game_mode,manager)
-if ok and game_mode and game_mode.name then
-local ok_name,name = pcall(game_mode.name,game_mode)
-if ok_name then
-return name
-end
-end
-end
-return nil
-end
-local function game_mode_state()
-local manager = game_mode_manager()
-if manager and manager.game_mode_state then
-local ok,state = pcall(manager.game_mode_state,manager)
-if ok then
-return state
-end
-end
-return nil
-end
-local function cinematic_active()
-local cinematic = Managers and Managers.state and Managers.state.cinematic
-if cinematic and cinematic.cinematic_active then
-local ok,active = pcall(cinematic.cinematic_active,cinematic)
-if ok and active then
-return true
-end
-end
-return false
 end
 local function hud_blocked_text(value)
 if value == nil then
@@ -532,59 +595,65 @@ end
 local text = type(value) == "string" and value or tostring(value)
 return text:find("[Ll]oading") ~= nil or text:find("[Cc]inematic") ~= nil or text:find("[Cc]utscene") ~= nil or text:find("[Vv]alkyrie") ~= nil or text:find("[Bb]riefing") ~= nil
 end
-local function hud_view_active(view_name)
+local function read_context_values()
+local manager = game_mode_manager()
 local ui_manager = Managers and Managers.ui
-if not ui_manager or not ui_manager.has_active_view then
-return false
-end
-local ok,active = pcall(ui_manager.has_active_view,ui_manager,view_name)
-return ok and active == true
-end
-local function hud_blocked_view_active()
-return hud_view_active("cinematic_view") or hud_view_active("cutscene_view") or hud_view_active("loading_view") or hud_view_active("mission_intro_view") or hud_view_active("mission_outro_view") or hud_view_active("lobby_view")
-end
-local function ui_state_name()
-local ui_manager = Managers and Managers.ui
-if not ui_manager or not ui_manager.get_current_state_name then
-return nil
-end
-local ok,name = pcall(ui_manager.get_current_state_name,ui_manager)
-if ok then
-return name
-end
-return nil
-end
-local function hud_context_allowed()
-if not game_mode_manager() then
-return false
-end
-if cinematic_active() or hud_blocked_view_active() then
-return false
-end
-local ui_state = ui_state_name()
-if ui_state == "StateLoading" or ui_state == "GameplayStateInit" or ui_state == "StateExitToMainMenu" or ui_state == "StateMissionServerExit" or hud_blocked_text(ui_state) then
-return false
-end
-local name = game_mode_name()
-if hud_blocked_text(name) then
-return false
-end
-local state = game_mode_state()
-if state == "leaving_game" or state == "done" or hud_blocked_text(state) then
-return false
-end
-return true
-end
-local function clean_dmf_chat_notifications()
-local event_manager = Managers and Managers.event
-if event_manager and event_manager.trigger then
-pcall(event_manager.trigger,event_manager,"event_clear_notifications")
+local cinematic = Managers and Managers.state and Managers.state.cinematic
+local is_cinematic_active = cinematic and cinematic.cinematic_active and cinematic:cinematic_active() == true or false
+local cinematic_view = ui_manager and ui_manager.view_active and ui_manager:view_active("cinematic_view") == true or false
+local cutscene_view = ui_manager and ui_manager.view_active and ui_manager:view_active("cutscene_view") == true or false
+local loading_view = ui_manager and ui_manager.view_active and ui_manager:view_active("loading_view") == true or false
+local mission_intro_view = ui_manager and ui_manager.view_active and ui_manager:view_active("mission_intro_view") == true or false
+local mission_outro_view = ui_manager and ui_manager.view_active and ui_manager:view_active("mission_outro_view") == true or false
+local lobby_view = ui_manager and ui_manager.view_active and ui_manager:view_active("lobby_view") == true or false
+local end_view = ui_manager and ui_manager.view_active and ui_manager:view_active("end_view") == true or false
+local end_player_view = ui_manager and ui_manager.view_active and ui_manager:view_active("end_player_view") == true or false
+local ui_state = ui_manager and ui_manager.get_current_state_name and ui_manager:get_current_state_name() or nil
+local name
+local state
+if manager then
+if manager.game_mode_name then
+name = manager:game_mode_name()
+elseif manager.game_mode then
+local game_mode = manager:game_mode()
+if game_mode and game_mode.name then
+name = game_mode:name()
 end
 end
-mod._smog_hud_context_allowed = hud_context_allowed
+if manager.game_mode_state then
+state = manager:game_mode_state()
+end
+end
+return manager ~= nil,is_cinematic_active,cinematic_view,cutscene_view,loading_view,mission_intro_view,mission_outro_view,lobby_view,end_view,end_player_view,ui_state,name,state
+end
+local function refresh_context_snapshot()
+local ok,manager_present,is_cinematic_active,cinematic_view,cutscene_view,loading_view,mission_intro_view,mission_outro_view,lobby_view,end_view,end_player_view,ui_state,name,state = pcall(read_context_values)
+if not ok then
+context_snapshot.hud_allowed = false
+context_snapshot.collection_allowed = false
+context_snapshot.exit_cinematic_active = true
+context_snapshot.game_mode_name = nil
+return context_snapshot
+end
+local blocked_view_active = cinematic_view or cutscene_view or loading_view or mission_intro_view or mission_outro_view or lobby_view
+local transition_blocked = ui_state == "StateLoading" or ui_state == "GameplayStateInit" or ui_state == "StateExitToMainMenu" or ui_state == "StateMissionServerExit" or hud_blocked_text(ui_state) or hud_blocked_text(name) or state == "leaving_game" or state == "done" or hud_blocked_text(state)
+context_snapshot.hud_allowed = manager_present and not is_cinematic_active and not blocked_view_active and not transition_blocked
+if is_cinematic_active or blocked_view_active then
+context_snapshot.collection_allowed = false
+elseif end_view or end_player_view then
+context_snapshot.collection_allowed = true
+else
+context_snapshot.collection_allowed = not transition_blocked
+end
+context_snapshot.exit_cinematic_active = is_cinematic_active or cinematic_view or cutscene_view or mission_outro_view
+context_snapshot.game_mode_name = name
+return context_snapshot
+end
+refresh_context_snapshot()
+mod._smog_context_snapshot = context_snapshot
 local hud_element_definition = {
-class_name = "HudElementSMOGDisplay",
-filename = "SMOG/scripts/mods/SMOG/SMOG_HUD",
+class_name = "HudElementSMOGController",
+filename = "SMOG/scripts/mods/SMOG/SMOG_Cont",
 use_hud_scale = true,
 visibility_groups = {
 "dead",
@@ -598,27 +667,18 @@ visibility_groups = {
 "popup",
 },
 }
-local function register_smog_hud_element()
-if hud_registered then
-return true
+local hud_registered = mod:register_hud_element(hud_element_definition)
+if hud_registered ~= true then
+mod:error("SMOG HUD element registration failed. See the preceding DMF Custom HUD Elements error for details.")
 end
-if not mod.register_hud_element then
-return false
-end
-local ok,result = pcall(mod.register_hud_element,mod,hud_element_definition)
-if ok and result then
-hud_registered = true
-if dmf and dmf.inject_hud_elements then
-pcall(dmf.inject_hud_elements,mod)
-end
-return true
-end
-return false
-end
-register_smog_hud_element()
 mod.toggle_hud = function()
 mod._smog_hud_visible = not mod._smog_hud_visible
-clean_dmf_chat_notifications()
+if mod._smog_hud_visible then
+refresh_heap_sample()
+heap_sample_accumulator = 0
+else
+heap_sample_accumulator = heap_sample_interval
+end
 end
 local function game_mode_object()
 local manager = game_mode_manager()
@@ -660,7 +720,7 @@ end
 local function is_expedition_mode(name)
 return name == "expedition"
 end
-local function manual_clear_action()
+local function manual_clear_method()
 local binding = mod:get("manual_clear_key")
 if type(binding) == "table" and #binding > 0 then
 local keys = {}
@@ -671,22 +731,31 @@ keys[#keys + 1] = string.upper(key)
 end
 end
 if #keys > 0 then
-return "press [" .. table.concat(keys," + ") .. "]"
+return "key",table.concat(keys," + ")
 end
 elseif type(binding) == "string" and binding ~= "" then
-return "press [" .. string.upper(binding) .. "]"
+return "key",string.upper(binding)
 end
-return "type /smog"
+return "command"
+end
+local function localized_manual_warning(key_id,command_id)
+local method,key_text = manual_clear_method()
+if method == "key" then
+return mod:localize(key_id,key_text)
+end
+return mod:localize(command_id)
 end
 local function warning_eightyfive_text()
-return "Heap above 85%: " .. manual_clear_action() .. " urgently."
+return localized_manual_warning("warning_eightyfive_key","warning_eightyfive_command")
 end
 local function warning_post_ninety_text()
-return "Automatic cleaning did not lower the heap below 80%: " .. manual_clear_action() .. " urgently."
+return localized_manual_warning("warning_post_ninety_key","warning_post_ninety_command")
 end
 local function warning_ninetyfive_text()
-local exit_text = is_hub_mode(game_mode_name()) and "leave the game" or "leave the mission"
-return "You are likely to crash unless you " .. manual_clear_action() .. " or " .. exit_text .. "."
+if is_hub_mode(context_snapshot.game_mode_name) then
+return localized_manual_warning("warning_ninetyfive_hub_key","warning_ninetyfive_hub_command")
+end
+return localized_manual_warning("warning_ninetyfive_mission_key","warning_ninetyfive_mission_command")
 end
 local function trigger_eightyfive_warning()
 high_threshold_cycle_active = true
@@ -699,25 +768,27 @@ mod._smog_hud_visible = true
 end
 local function trigger_ninety_collect()
 if ninety_collect_done or warning_acknowledged or not threshold_notification_text then
-return
+return nil,false
 end
 ninety_collect_done = true
 pending_warning_return_delay = nil
-set_threshold_notification("Heap reached 90%. Cleaning automatically...",false)
-local _,after_mb = perform_collect(false)
-if after_mb >= threshold_eighty_mb then
+set_threshold_notification(mod:localize("heap_reached_ninety"),false)
+local _,after_mb,_,performed = perform_collect(false)
+if performed and after_mb >= threshold_eighty_mb then
 pending_warning_return_delay = warning_return_delay_seconds
 end
+return after_mb,performed
 end
 local function trigger_ninetyfive_collect()
 if ninetyfive_collect_done then
-return
+return nil,false
 end
 ninetyfive_collect_done = true
 ninety_collect_done = true
 pending_warning_return_delay = nil
 set_threshold_notification(warning_ninetyfive_text(),true)
-perform_collect(false)
+local _,after_mb,_,performed = perform_collect(false)
+return after_mb,performed
 end
 local function tick_pending_warning_return(dt)
 if not pending_warning_return_delay then
@@ -728,7 +799,7 @@ if pending_warning_return_delay > 0 then
 return
 end
 pending_warning_return_delay = nil
-if not warning_acknowledged and memory_usage_mb() >= threshold_eighty_mb then
+if not warning_acknowledged and current_heap_mb >= threshold_eighty_mb then
 set_threshold_notification(warning_post_ninety_text(),false)
 end
 end
@@ -746,16 +817,85 @@ scheduled_count = scheduled_count + 1
 scheduled_reasons[scheduled_count] = reason
 scheduled_delays[scheduled_count] = delay
 end
+local function has_scheduled_clean(reason)
+for i = 1,scheduled_count do
+if scheduled_reasons[i] == reason then
+return true
+end
+end
+return false
+end
+local function remove_scheduled_clean(index)
+for i = index,scheduled_count - 1 do
+scheduled_delays[i] = scheduled_delays[i + 1]
+scheduled_reasons[i] = scheduled_reasons[i + 1]
+end
+scheduled_delays[scheduled_count] = nil
+scheduled_reasons[scheduled_count] = nil
+scheduled_count = scheduled_count - 1
+end
+local function remove_scheduled_reason(reason)
+for i = scheduled_count,1,-1 do
+if scheduled_reasons[i] == reason then
+remove_scheduled_clean(i)
+end
+end
+end
+local function schedule_gameplay_exit_clean()
+if not mod.convenient_moment_cleans or not cleaning_allowed() then
+return
+end
+gameplay_exit_clean_pending = true
+gameplay_exit_clean_delay = nil
+end
+local function clear_gameplay_exit_clean()
+gameplay_exit_clean_pending = false
+gameplay_exit_clean_delay = nil
+end
+local function tick_gameplay_exit_clean(dt)
+if not gameplay_exit_clean_pending then
+return false
+end
+if not mod.convenient_moment_cleans or not cleaning_allowed() then
+clear_gameplay_exit_clean()
+return false
+end
+if context_snapshot.exit_cinematic_active then
+gameplay_exit_clean_delay = nil
+return false
+end
+if gameplay_exit_clean_delay == nil then
+gameplay_exit_clean_delay = gameplay_exit_clean_delay_seconds
+return false
+end
+gameplay_exit_clean_delay = gameplay_exit_clean_delay - (dt or 0)
+if gameplay_exit_clean_delay <= 0 then
+clear_gameplay_exit_clean()
+return perform_convenient_collect("auto_silent")
+end
+return false
+end
 local function check_convenient_transitions()
-local name = game_mode_name()
+local name = context_snapshot.game_mode_name
 if name ~= previous_game_mode_name then
 if previous_game_mode_name and (is_training_mode(previous_game_mode_name) or is_mortis_mode(previous_game_mode_name) or is_expedition_mode(previous_game_mode_name)) then
-schedule_convenient_clean("activity_end",1)
+schedule_gameplay_exit_clean()
 end
 if is_hub_mode(name) then
-schedule_convenient_clean("mourningstar",30)
-elseif is_training_mode(name) or is_mortis_mode(name) or is_expedition_mode(name) then
+if mourningstar_visit_state == "unseen" then
+mourningstar_visit_state = "waiting"
+schedule_convenient_clean("mourningstar",mourningstar_clean_delay_seconds)
+else
+remove_scheduled_reason("mourningstar")
+end
+else
+if mourningstar_visit_state == "waiting" then
+mourningstar_visit_state = "expired"
+end
+remove_scheduled_reason("mourningstar")
+if is_training_mode(name) or is_mortis_mode(name) or is_expedition_mode(name) then
 schedule_convenient_clean("activity_start",1)
+end
 end
 previous_game_mode_name = name
 end
@@ -767,37 +907,32 @@ if safe_zone ~= nil then
 previous_safe_zone_state = safe_zone
 end
 end
-local function remove_scheduled_clean(index)
-for i = index,scheduled_count - 1 do
-scheduled_delays[i] = scheduled_delays[i + 1]
-scheduled_reasons[i] = scheduled_reasons[i + 1]
-end
-scheduled_delays[scheduled_count] = nil
-scheduled_reasons[scheduled_count] = nil
-scheduled_count = scheduled_count - 1
-end
 local function run_convenient_clean(reason)
 if not mod.convenient_moment_cleans or not cleaning_allowed() then
-return
+return false
 end
-local name = game_mode_name()
+local name = context_snapshot.game_mode_name
 if reason == "mourningstar" then
-if is_hub_mode(name) then
-perform_collect("auto")
+if mourningstar_visit_state == "waiting" and is_hub_mode(name) and perform_convenient_collect() then
+mourningstar_visit_state = "completed"
+return true
 end
 elseif reason == "gameplay_enter" then
 if is_hub_mode(name) then
-schedule_convenient_clean("mourningstar",30)
-else
-perform_collect("auto")
+if mourningstar_visit_state == "waiting" and not has_scheduled_clean("mourningstar") then
+schedule_convenient_clean("mourningstar",mourningstar_clean_delay_seconds)
 end
 else
-perform_collect("auto")
+return perform_convenient_collect()
 end
+else
+return perform_convenient_collect()
+end
+return false
 end
 local function tick_scheduled_clean(dt)
 if scheduled_count <= 0 then
-return
+return false
 end
 local due_count = 0
 for i = scheduled_count,1,-1 do
@@ -808,68 +943,67 @@ due_reasons[due_count] = scheduled_reasons[i]
 remove_scheduled_clean(i)
 end
 end
-if due_count > 0 then
+local performed = false
 for i = 1,due_count do
 local reason = due_reasons[i]
 due_reasons[i] = nil
-run_convenient_clean(reason)
+if not performed and run_convenient_clean(reason) then
+performed = true
 end
 end
+return performed
 end
-local function check_growth_trigger(usage_mb)
+local function growth_collect_due(usage_mb)
 growth_accumulator = growth_accumulator + check_interval
 if growth_accumulator < growth_window_seconds then
-return
+return false
 end
 local previous_mb = growth_sample_mb or usage_mb
 local delta_mb = usage_mb - previous_mb
 local delta_percent = delta_mb / detected_heap_mb * 100
 growth_sample_mb = usage_mb
 growth_accumulator = 0
-if cleaning_allowed() and usage_mb > threshold_thirty_mb and delta_percent >= 15 then
-show_notification("Heap jumped over 15% in 30 seconds. Cleaning...",false,false)
-perform_collect(false)
+return cleaning_allowed() and usage_mb > threshold_thirtyfive_mb and delta_percent >= 15
 end
-end
-local function check_thresholds()
-local usage_mb = memory_usage_mb()
-if not cleaning_allowed() then
-stop_over_eighty_process()
-over_eighty_since = nil
-reset_high_threshold_cycle()
-check_growth_trigger(usage_mb)
-return
-end
-if usage_mb < threshold_eighty_mb then
-finish_over_eighty_process()
-check_growth_trigger(usage_mb)
-return
-end
-local now = current_time()
-if not over_eighty_since then
-over_eighty_since = now
-end
-if usage_mb >= threshold_eightyfive_mb and not high_threshold_cycle_active then
+local function run_pressure_controller(dt,check_due,gc_action_taken)
+local usage_mb = current_heap_mb
+update_pressure_state(usage_mb,dt,check_due,true)
+if check_due and usage_mb >= threshold_eightyfive_mb and not high_threshold_cycle_active then
 trigger_eightyfive_warning()
 end
+if check_due and not gc_action_taken then
+local after_mb = nil
+local performed = false
 if usage_mb >= threshold_ninetyfive_mb and not ninetyfive_collect_done then
-trigger_ninetyfive_collect()
+after_mb,performed = trigger_ninetyfive_collect()
 elseif usage_mb >= threshold_ninety_mb and high_threshold_cycle_active and not ninety_collect_done and not warning_acknowledged then
-trigger_ninety_collect()
+after_mb,performed = trigger_ninety_collect()
 end
-usage_mb = memory_usage_mb()
-if usage_mb < threshold_eighty_mb then
-finish_over_eighty_process()
-check_growth_trigger(usage_mb)
-return
+if performed then
+update_pressure_state(after_mb,0,true,true)
+return true
 end
-if not over_eighty_active and now - over_eighty_since >= over_eighty_delay_seconds then
-begin_over_eighty_process(usage_mb)
 end
-check_growth_trigger(usage_mb)
+if check_due and growth_collect_due(usage_mb) and not gc_action_taken then
+show_notification(mod:localize("heap_growth_spike"),false,false)
+local _,after_mb,_,performed = perform_collect(false)
+if performed then
+update_pressure_state(after_mb,0,true,true)
+return true
+end
+end
+if gc_action_taken then
+update_pressure_state(current_heap_mb,0,true,true)
+return true
+end
+return run_pressure_incremental_action()
 end
 mod.manual_clear = function()
 local t = current_time()
+refresh_context_snapshot()
+if not context_snapshot.collection_allowed then
+return
+end
 if not cleaning_allowed() then
 show_cleaning_not_permitted()
 return
@@ -878,7 +1012,6 @@ if t < next_manual_clear_t then
 return
 end
 next_manual_clear_t = t + manual_clear_cooldown
-clean_dmf_chat_notifications()
 if high_threshold_cycle_active then
 warning_acknowledged = true
 ninety_collect_done = true
@@ -886,11 +1019,7 @@ pending_warning_return_delay = nil
 clear_threshold_notification()
 end
 local _,after_mb = perform_collect("manual")
-if after_mb < threshold_eighty_mb then
-stop_over_eighty_process()
-over_eighty_since = nil
-reset_high_threshold_cycle()
-end
+update_pressure_state(after_mb,0,true,false)
 end
 mod:command("smog",mod:localize("command_clear_desc"),function()
 mod.manual_clear()
@@ -899,14 +1028,24 @@ mod.on_setting_changed = function(changed_setting)
 if changed_setting == "cleaning_permitted" then
 mod.cleaning_permitted = mod:get("cleaning_permitted") ~= false
 if not cleaning_allowed() then
-stop_over_eighty_process()
-over_eighty_since = nil
-reset_high_threshold_cycle()
+reset_pressure_controller()
 clear_scheduled_cleans()
+clear_gameplay_exit_clean()
+last_convenient_collect_t = nil
+reset_collection_tracking()
 interval_accumulator = 0
 end
 elseif changed_setting == "auto_clean_on_start" then
 mod.convenient_moment_cleans = mod:get("auto_clean_on_start")
+if mod.convenient_moment_cleans then
+if mourningstar_visit_state == "waiting" and is_hub_mode(context_snapshot.game_mode_name) then
+schedule_convenient_clean("mourningstar",mourningstar_clean_delay_seconds)
+end
+else
+clear_scheduled_cleans()
+clear_gameplay_exit_clean()
+last_convenient_collect_t = nil
+end
 elseif changed_setting == "auto_clean_every_ten_minutes" then
 mod.auto_clean_every_ten_minutes = mod:get("auto_clean_every_ten_minutes")
 interval_accumulator = 0
@@ -918,6 +1057,8 @@ if not notification_manual then
 clear_notification()
 end
 end
+elseif changed_setting == "hud_format" then
+mod._smog_hud_format = mod:get("hud_format") == "digital" and "digital" or "analogue"
 elseif changed_setting == "hud_x_axis" then
 mod._smog_hud_x_axis = tonumber(mod:get("hud_x_axis")) or 5
 elseif changed_setting == "hud_y_axis" then
@@ -931,8 +1072,8 @@ if status == "enter" then
 if state_name == "StateGameplay" then
 schedule_convenient_clean("gameplay_enter",1)
 end
-elseif status == "exit" and state_name == "StateGameplay" and mod.convenient_moment_cleans and cleaning_allowed() then
-perform_collect("auto")
+elseif status == "exit" and state_name == "StateGameplay" then
+schedule_gameplay_exit_clean()
 end
 end
 mod.update = function(dt)
@@ -942,75 +1083,93 @@ end
 if type(dt) ~= "number" or dt <= 0 then
 return
 end
-if not hud_registered then
-hud_register_retry_t = hud_register_retry_t - dt
-if hud_register_retry_t <= 0 then
-hud_register_retry_t = 2
-register_smog_hud_element()
-end
-end
+elapsed_time = elapsed_time + dt
+heap_sample_accumulator = math_min(heap_sample_accumulator + dt,check_interval)
+local frame_dt = math_min(dt,0.1)
+smoothed_frame_time = smoothed_frame_time * 0.9 + frame_dt * 0.1
+refresh_context_snapshot()
 if not first_update_done then
 first_update_done = true
-previous_game_mode_name = game_mode_name()
+previous_game_mode_name = context_snapshot.game_mode_name
 previous_safe_zone_state = in_safe_zone()
 if is_hub_mode(previous_game_mode_name) then
-schedule_convenient_clean("mourningstar",30)
+mourningstar_visit_state = "waiting"
+schedule_convenient_clean("mourningstar",mourningstar_clean_delay_seconds)
 end
+end
+local collection_blocked = not context_snapshot.collection_allowed
+if collection_blocked then
+if not collection_context_was_blocked then
+collection_context_was_blocked = true
+restore_gc_tuning()
+if pressure_state == "waiting" then
+pressure_wait_started_t = nil
+end
+if gameplay_exit_clean_pending then
+gameplay_exit_clean_delay = nil
+end
+end
+return
+elseif collection_context_was_blocked then
+collection_context_was_blocked = false
+if pressure_state == "waiting" then
+pressure_wait_started_t = current_time()
+elseif pressure_state == "high" or pressure_state == "boosted" then
+apply_pressure_tuning()
+end
+end
+local wanted_heap_sample_interval = (mod._smog_hud_visible or pressure_state ~= "normal") and heap_sample_interval or check_interval
+if heap_sample_accumulator >= wanted_heap_sample_interval then
+refresh_heap_sample()
+heap_sample_accumulator = 0
 end
 accumulator = accumulator + dt
 local check_due = false
 if accumulator >= check_interval then
 accumulator = accumulator - check_interval
-persist_heap_state(usage_percent())
+persist_heap_state(current_heap_percent)
 check_due = true
 end
 if not cleaning_allowed() then
-stop_over_eighty_process()
-over_eighty_since = nil
-reset_high_threshold_cycle()
-interval_accumulator = 0
-clear_scheduled_cleans()
 return
 end
-tick_scheduled_clean(dt)
+local gc_action_taken = tick_scheduled_clean(dt)
+if not gc_action_taken then
+gc_action_taken = tick_gameplay_exit_clean(dt)
+end
 if mod.auto_clean_every_ten_minutes then
 interval_accumulator = interval_accumulator + dt
 if interval_accumulator >= interval_clean_time then
 interval_accumulator = 0
-perform_collect("auto")
+if not gc_action_taken then
+local _,_,_,performed = perform_collect("auto")
+gc_action_taken = performed
+end
 end
 else
 interval_accumulator = 0
 end
 tick_pending_warning_return(dt)
-tick_over_eighty_staged(dt)
 if check_due then
 check_convenient_transitions()
-check_thresholds()
 end
+run_pressure_controller(dt,check_due,gc_action_taken)
 end
 local function clean_shutdown()
-local state = heap_state(usage_percent())
+local state = heap_state(usage_percent(refresh_heap_sample()))
 last_persisted_heap_state = state
 mod:set("_smog_clean_shutdown",true)
 mod:set("_smog_last_heap_percent",state)
 save_settings_now()
 end
-mod.on_unload = function(exit_game)
-stop_over_eighty_process()
-over_eighty_since = nil
-reset_high_threshold_cycle()
+local function cleanup_mod()
+collection_context_was_blocked = false
+reset_pressure_controller()
 clear_scheduled_cleans()
+clear_gameplay_exit_clean()
 clear_all_notifications()
 mod._smog_hud_visible = false
 clean_shutdown()
 end
-mod.on_disabled = function(initial_call)
-stop_over_eighty_process()
-over_eighty_since = nil
-reset_high_threshold_cycle()
-clear_scheduled_cleans()
-clear_all_notifications()
-mod._smog_hud_visible = false
-clean_shutdown()
-end
+mod.on_unload = cleanup_mod
+mod.on_disabled = cleanup_mod
