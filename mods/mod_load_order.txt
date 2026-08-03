@@ -9,6 +9,7 @@ SMOG
 SimpleSequencer
 SimpleAbilities
 SimpleMovement
+SimpleCharging
 
 -- Stats mods
 CharacterStats
@@ -53,7 +54,6 @@ BetterNameplate
 PlayerOutlines
 enemies_improved
 danger_zone
-SimpleCharging
 FirstPersonBody
 
 -- Fancy stuff
