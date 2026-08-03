@@ -1,6 +1,7 @@
 # Garbage
 .vscode/
 syn_*.txt
+fpb_*.txt
 
 # Compiled Lua sources
 luac.out
