@@ -33,7 +33,7 @@ local mod = get_mod("FirstPersonBody")
 -- Compatible with Perspectives: its third person mode sets the game's own
 -- _force_third_person_mode flag, which this mod treats as "hands off".
 
-mod.version = "1.6.0"
+mod.version = "1.7.0"
 
 mod._poll_ttl = 0
 mod._diag_delay = 5
@@ -150,11 +150,31 @@ local function for_each_attachment(map, fn)
 	end
 end
 
--- Full render wake-up for one unit: unit level visibility, object level,
--- then every mesh forced visible by index (same API the EWC hide fixes use,
--- in reverse), so a latched flow fade cannot keep a mesh dark.
-local function wake_unit_render(unit)
+-- Render wake-up for one unit, in two strengths.
+--
+-- DEEP (the default): unit visibility, then object visibility, then every
+-- mesh forced visible by index. Needed for SKINNED units (the first person
+-- rig, arms, sleeves, legs), because per-unit visibility is ignored for
+-- those and per-mesh is the only channel that reaches them.
+--
+-- GENTLE (deep == false): unit visibility only, which is exactly the channel
+-- the game itself uses to hide and show first person weapons. Used for
+-- WEAPONS, and the reason is a bug report from a user running the public
+-- Extended Weapon Customization (v1.7.0): the deep wake was too strong for
+-- rigid weapon parts. Customization mods hide the parts a kitbash replaces
+-- by making their meshes invisible, and switch flashlight lamps off by
+-- disabling unit objects. Forcing every mesh and object back on therefore
+-- un-did all of that, and their weapon showed a stub revolver body and its
+-- replacement at once, spare placeholder parts, and a flashlight that could
+-- not be turned off. Rigid parts obey plain unit visibility, so the gentle
+-- wake reaches the weapon without touching anything another mod has hidden.
+local function wake_unit_render(unit, deep)
 	Unit.set_unit_visibility(unit, true, true)
+
+	if deep == false then
+		return
+	end
+
 	pcall(Unit.set_unit_objects_visibility, unit, true, true)
 
 	local ok, num_meshes = pcall(Unit.num_meshes, unit)
@@ -521,16 +541,18 @@ end
 
 -- Wake a slot's first person side (viewmodel: weapon, arms, sleeves).
 -- This is the direction the floating arms bug proved renders under 3p mode.
-local function reveal_slot_1p(slot)
+local function reveal_slot_1p(slot, deep)
 	local unit_1p = slot and slot.unit_1p
 
 	if not unit_1p or not Unit.alive(unit_1p) then
 		return false
 	end
 
-	wake_unit_render(unit_1p)
+	wake_unit_render(unit_1p, deep)
 
-	for_each_attachment(slot.attachments_by_unit_1p, wake_unit_render)
+	for_each_attachment(slot.attachments_by_unit_1p, function(attachment_unit)
+		wake_unit_render(attachment_unit, deep)
+	end)
 
 	if slot.hidden_1p ~= false then
 		slot.hidden_1p = false
@@ -1143,7 +1165,10 @@ function mod.fp_reveal_pass(ext, force)
 
 	local wielded_slot = wielded_slot_name and equipment[wielded_slot_name]
 
-	if wielded_slot and reveal_slot_1p(wielded_slot) then
+	-- Gentle on the weapon: see wake_unit_render. Weapon parts are rigid and
+	-- answer to plain unit visibility, so nothing another mod hid on them
+	-- (kitbash leftovers, flashlight lamps) gets forced back on.
+	if wielded_slot and reveal_slot_1p(wielded_slot, mod:get("fp_deep_weapon_wake") == true) then
 		shown = shown + 1
 	end
 
@@ -1259,9 +1284,19 @@ mod:hook(CLASS.PlayerUnitFxExtension, "update", function(func, self, unit, dt, t
 	return ok and result or nil
 end)
 
--- Weapon effect sources: put them back on the viewmodel weapon.
-local function fp_repoint_weapon_fx(ext)
-	if not WeaponTemplate or not mod:get("fp_fx_sources") then
+-- Weapon effect sources: park them on the perspective that is actually being
+-- rendered. want_1p true while the body reveal runs, false to hand them back.
+--
+-- The handing back matters (v1.6.1, reported: gunfire coming from in front of
+-- the character in third person). The game only moves these sources when its
+-- own first person flag CHANGES, and while the reveal runs that flag already
+-- reads false. Switching to a real third person camera therefore changes it
+-- from false to false, the game does nothing, and any source this mod had
+-- moved to the viewmodel stayed there, firing from a weapon parented to the
+-- camera, out in front of the character. So whatever this mod moves, this
+-- mod has to move back the moment the reveal stops.
+local function fp_sync_weapon_fx(ext, want_1p)
+	if not WeaponTemplate then
 		return
 	end
 
@@ -1275,8 +1310,11 @@ local function fp_repoint_weapon_fx(ext)
 
 	for slot_name, slot in pairs(equipment) do
 		local sources = all_sources[slot_name]
+		local wanted = want_1p and slot.unit_1p or slot.unit_3p
+		local attachments = want_1p and slot.attachments_by_unit_1p or slot.attachments_by_unit_3p
+		local lookup = want_1p and slot.attachment_id_lookup_1p or slot.attachment_id_lookup_3p
 
-		if sources and slot.equipped and slot.wieldable and slot.unit_1p and Unit.alive(slot.unit_1p) then
+		if sources and slot.equipped and slot.wieldable and wanted and Unit.alive(wanted) then
 			local t_ok, template = pcall(WeaponTemplate.weapon_template_from_item, slot.item)
 			local config = t_ok and template and template.fx_sources
 
@@ -1285,27 +1323,52 @@ local function fp_repoint_weapon_fx(ext)
 					local node_name = config[alias]
 
 					if node_name then
-						-- Where does this source sit right now? A source
-						-- already on the viewmodel is left alone: moving one
-						-- restarts any looping effect hanging off it.
+						-- Where does this source sit right now? One that is
+						-- already in the right place is left alone: moving a
+						-- source restarts any looping effect hanging off it.
 						local r_ok, current = pcall(function()
 							local u = fx:vfx_spawner_unit_and_node(source_name)
 
 							return u
 						end)
 
-						if r_ok and current ~= nil and current ~= slot.unit_1p then
-							pcall(fx.move_vfx_spawner, fx, source_name, slot.unit_1p,
-								slot.attachments_by_unit_1p, slot.attachment_id_lookup_1p, node_name)
+						if r_ok and current ~= nil and current ~= wanted then
+							pcall(fx.move_vfx_spawner, fx, source_name, wanted, attachments, lookup, node_name)
 
 							mod._fp_fx_moves = (mod._fp_fx_moves or 0) + 1
-							mod._fp_fx_last = string.format("%s.%s -> 1p", tostring(slot_name), tostring(alias))
+							mod._fp_fx_last = string.format("%s.%s -> %s", tostring(slot_name), tostring(alias),
+								want_1p and "1p" or "3p")
 						end
 					end
 				end
 			end
 		end
 	end
+
+	mod._fp_fx_owned = want_1p
+end
+
+-- Hand the weapon sources back to wherever the game's own flag says they
+-- belong, which outside the reveal is the honest answer and with the option
+-- switched off mid-reveal is simply the untouched behaviour. Only does
+-- anything if this mod moved them in the first place.
+local function fp_release_weapon_fx(unit)
+	if not mod._fp_fx_owned then
+		return
+	end
+
+	local ext = ScriptUnit.has_extension(unit, "visual_loadout_system")
+	local fp_ext = ScriptUnit.has_extension(unit, "first_person_system")
+
+	if not ext or not fp_ext then
+		return
+	end
+
+	local game_says_1p = fp_ext:is_in_first_person_mode() == true
+
+	pcall(fp_sync_weapon_fx, ext, game_says_1p)
+
+	mod._fp_fx_owned = false
 end
 
 local function poll_reveal(force)
@@ -1321,6 +1384,10 @@ local function poll_reveal(force)
 		if fp_active then
 			pcall(restore_revealed)
 		end
+
+		-- Effects too: give the weapon sources back to the game's own choice
+		-- of perspective, or third person keeps firing from the viewmodel.
+		pcall(fp_release_weapon_fx, unit)
 
 		return
 	end
@@ -1338,7 +1405,11 @@ local function poll_reveal(force)
 	mod._fp_last_shown = mod.fp_reveal_pass(ext, force)
 
 	if ext then
-		pcall(fp_repoint_weapon_fx, ext)
+		if mod:get("fp_fx_sources") then
+			pcall(fp_sync_weapon_fx, ext, true)
+		else
+			pcall(fp_release_weapon_fx, unit)
+		end
 	end
 end
 
@@ -1363,7 +1434,9 @@ mod:hook_safe(CLASS.PlayerUnitVisualLoadoutExtension, "_update_item_visibility",
 
 	-- This is the moment the game itself moves weapon effect sources to the
 	-- third person weapon, so correct them in the same breath.
-	pcall(fp_repoint_weapon_fx, self)
+	if mod:get("fp_fx_sources") then
+		pcall(fp_sync_weapon_fx, self, true)
+	end
 end)
 
 
@@ -1579,7 +1652,7 @@ local function write_diagnostics()
 		string.format("fov boost frames: %s (setting: %s%%)", tostring(mod._fp_fov_frames or 0), tostring(mod:get("fp_fov_boost") or 0)),
 		string.format("camera pitch: current=%.1f deg | session max down=%.1f deg (positive = down)", mod._fp_pitch_deg or 0, mod._fp_pitch_max or 0),
 		string.format("pitch clamp: on=%s sign=%s accepted=%.1f active=%s fires=%s", tostring(mod:get("fp_pitch_clamp")), tostring(mod._fp_clamp_sign or "uncalibrated"), mod._fp_pitch_prev or 0, tostring(mod._fp_clamp_active or false), tostring(mod._fp_clamp_fires or 0)),
-		string.format("fx sources: on=%s truth frames=%s weapon moves=%s last=%s", tostring(mod:get("fp_fx_sources")), tostring(mod._fp_fx_truth_frames or 0), tostring(mod._fp_fx_moves or 0), tostring(mod._fp_fx_last or "none")),
+		string.format("fx sources: on=%s truth frames=%s weapon moves=%s owned=%s last=%s", tostring(mod:get("fp_fx_sources")), tostring(mod._fp_fx_truth_frames or 0), tostring(mod._fp_fx_moves or 0), tostring(mod._fp_fx_owned or false), tostring(mod._fp_fx_last or "none")),
 		string.format("sprint: option=%s detected=%s hide frames=%s | raw: %s", tostring(mod:get("fp_hide_sprint")), tostring(mod._fp_sprint_is or false), tostring(mod._fp_sprint_hides or 0), tostring(mod._fp_sprint_raw or "none")),
 		string.format("re-shower: %s", tostring(mod._fp_reshow_trace or "none caught")),
 	}

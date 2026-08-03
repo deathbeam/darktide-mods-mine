@@ -56,6 +56,12 @@ return {
 	fp_fx_sources_tooltip = {
 		en = "Visual effects attach to named points that exist on both your first person viewmodel and your third person body. While the body is shown, the game moves them to the third person copy, which sits slightly lower, so hand effects (Psyker warp effects, the Thunder Hammer charge and similar) appear below where they belong. This keeps them on the viewmodel where you see them. Leave on unless an effect misbehaves.",
 	},
+	fp_deep_weapon_wake = {
+		en = "Force every weapon part visible",
+	},
+	fp_deep_weapon_wake_tooltip = {
+		en = "Off by default, and best left off. When the body is shown, this mod wakes your first person weapon back up using the same channel the game uses, which leaves parts that other mods have deliberately hidden alone. Turning this on additionally forces every mesh and light on the weapon visible, which can reveal replaced parts twice over and lock flashlights on when weapon customization mods are installed. Only turn it on if part of your weapon is invisible in first person.",
+	},
 	fp_diagnostics = {
 		en = "Write the diagnostics file",
 	},

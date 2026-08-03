@@ -79,6 +79,12 @@ return {
 				tooltip = "fp_fx_sources_tooltip",
 			},
 			{
+				setting_id = "fp_deep_weapon_wake",
+				type = "checkbox",
+				default_value = false,
+				tooltip = "fp_deep_weapon_wake_tooltip",
+			},
+			{
 				setting_id = "fp_diagnostics",
 				type = "checkbox",
 				default_value = false,
