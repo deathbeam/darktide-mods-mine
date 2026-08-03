@@ -21,6 +21,23 @@ return {
 				tooltip = "fp_fov_boost_tooltip",
 			},
 			{
+				setting_id = "fp_ads_reveal",
+				type = "checkbox",
+				default_value = true,
+				tooltip = "fp_ads_reveal_tooltip",
+				sub_widgets = {
+					{
+						setting_id = "fp_ads_angle",
+						type = "numeric",
+						default_value = 42.1,
+						range = { 10, 80 },
+						decimals_number = 1,
+						step_size_value = 0.1,
+						tooltip = "fp_ads_angle_tooltip",
+					},
+				},
+			},
+			{
 				setting_id = "fp_pitch_clamp",
 				type = "checkbox",
 				default_value = true,
@@ -54,6 +71,18 @@ return {
 						tooltip = "fp_pitch_sprint_tooltip",
 					},
 				},
+			},
+			{
+				setting_id = "fp_fx_sources",
+				type = "checkbox",
+				default_value = true,
+				tooltip = "fp_fx_sources_tooltip",
+			},
+			{
+				setting_id = "fp_diagnostics",
+				type = "checkbox",
+				default_value = false,
+				tooltip = "fp_diagnostics_tooltip",
 			},
 		},
 	},

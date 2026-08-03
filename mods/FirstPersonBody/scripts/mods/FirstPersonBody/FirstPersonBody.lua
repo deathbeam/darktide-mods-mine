@@ -33,7 +33,7 @@ local mod = get_mod("FirstPersonBody")
 -- Compatible with Perspectives: its third person mode sets the game's own
 -- _force_third_person_mode flag, which this mod treats as "hands off".
 
-mod.version = "1.4.0"
+mod.version = "1.6.0"
 
 mod._poll_ttl = 0
 mod._diag_delay = 5
@@ -595,9 +595,12 @@ mod:hook(CLASS.PlayerUnitFirstPersonExtension, "_update_first_person_mode", func
 			aiming = true
 		end
 
-		if aiming then
-			-- Steep downward pitch, with hysteresis so the mode does not
-			-- flap at the boundary (~30 degrees down engages, ~20 releases).
+		if aiming and mod:get("fp_ads_reveal") then
+			-- Steep downward pitch. The engage angle is a setting (default
+			-- tuned in play to 42.1 degrees down); release sits 8 degrees
+			-- shallower for hysteresis, so the mode does not flap at the
+			-- boundary. The comparison happens in downness space (sine of
+			-- the pitch), the same measure the telemetry reads.
 			local body_can_be_in_frame = false
 			local p_ok, downness = pcall(function()
 				local fp_unit = self._first_person_unit
@@ -607,7 +610,10 @@ mod:hook(CLASS.PlayerUnitFirstPersonExtension, "_update_first_person_mode", func
 			end)
 
 			if p_ok and type(downness) == "number" then
-				local threshold = mod._fp_ads_lying and 0.35 or 0.5
+				local angle = tonumber(mod:get("fp_ads_angle")) or 42.1
+				local engage = math.sin(math.rad(angle))
+				local release = math.sin(math.rad(math.max(5, angle - 8)))
+				local threshold = mod._fp_ads_lying and release or engage
 
 				if downness > threshold then
 					body_can_be_in_frame = true
@@ -1193,6 +1199,115 @@ function mod.fp_reveal_pass(ext, force)
 	return shown
 end
 
+-- ---------------------------------------------------------------------------
+-- Effects follow the LIE, so they have to be pulled back (v1.6.0)
+-- ---------------------------------------------------------------------------
+-- Reported: Psyker hand effects and the Thunder Hammer charge spawn slightly
+-- BELOW where they belong. Cause found in the engine, and it is our own lie
+-- coming home.
+--
+-- Effects do not float in the world, they are attached to named "fx source"
+-- nodes on a unit, and the game keeps two copies of every such node: one on
+-- the first person viewmodel you actually see, one on the third person body
+-- that stands in the world. Which copy an effect uses is decided by asking
+-- the first person extension is_in_first_person_mode(), and that function
+-- returns the exact flag this mod spoofs to false. So both effect owners
+-- move their sources onto the third person rig: the hands effects onto the
+-- real body's hands (a little lower than the viewmodel arms, hence "a bit
+-- below"), and weapon effects onto the third person weapon.
+--
+-- Two owners, two repairs:
+--   1. The player's own effect sources (hands, body, breed effects) are
+--      re-pointed inside PlayerUnitFxExtension.update, which reads the flag
+--      directly. There, and only there, the flag is told the truth for the
+--      duration of the call, so the game moves those sources to the
+--      viewmodel by itself. The lie is restored immediately afterwards.
+--   2. Weapon effect sources cannot be fixed that way, because the visual
+--      loadout reads the same flag in the same breath as the item visibility
+--      that IS the body reveal. So the game is allowed to move them to the
+--      third person weapon, and then they are moved back here, using the
+--      weapon's own source list. This only fires when a mismatch is actually
+--      seen, so no effect is restarted needlessly.
+local WeaponTemplate = nil
+
+do
+	local ok, lib = pcall(require, "scripts/utilities/weapon/weapon_template")
+
+	if ok then
+		WeaponTemplate = lib
+	end
+end
+
+mod:hook(CLASS.PlayerUnitFxExtension, "update", function(func, self, unit, dt, t)
+	local fp_ext = self._first_person_extension
+	local spoofing = fp_ext
+		and fp_ext._is_local_unit
+		and fp_ext._show_1p_equipment == false
+		and fp_ext._wants_1p_camera == true
+
+	if not spoofing or not mod:get("fp_lower_body") or not mod:get("fp_fx_sources") then
+		return func(self, unit, dt, t)
+	end
+
+	fp_ext._show_1p_equipment = true
+
+	local ok, result = pcall(func, self, unit, dt, t)
+
+	fp_ext._show_1p_equipment = false
+	mod._fp_fx_truth_frames = (mod._fp_fx_truth_frames or 0) + 1
+
+	return ok and result or nil
+end)
+
+-- Weapon effect sources: put them back on the viewmodel weapon.
+local function fp_repoint_weapon_fx(ext)
+	if not WeaponTemplate or not mod:get("fp_fx_sources") then
+		return
+	end
+
+	local fx = ext._fx_extension
+	local equipment = ext._equipment
+	local all_sources = ext._fx_sources
+
+	if not fx or not equipment or not all_sources then
+		return
+	end
+
+	for slot_name, slot in pairs(equipment) do
+		local sources = all_sources[slot_name]
+
+		if sources and slot.equipped and slot.wieldable and slot.unit_1p and Unit.alive(slot.unit_1p) then
+			local t_ok, template = pcall(WeaponTemplate.weapon_template_from_item, slot.item)
+			local config = t_ok and template and template.fx_sources
+
+			if config then
+				for alias, source_name in pairs(sources) do
+					local node_name = config[alias]
+
+					if node_name then
+						-- Where does this source sit right now? A source
+						-- already on the viewmodel is left alone: moving one
+						-- restarts any looping effect hanging off it.
+						local r_ok, current = pcall(function()
+							local u = fx:vfx_spawner_unit_and_node(source_name)
+
+							return u
+						end)
+
+						if r_ok and current ~= nil and current ~= slot.unit_1p then
+							pcall(fx.move_vfx_spawner, fx, source_name, slot.unit_1p,
+								slot.attachments_by_unit_1p, slot.attachment_id_lookup_1p, node_name)
+
+							mod._fp_fx_moves = (mod._fp_fx_moves or 0) + 1
+							mod._fp_fx_last = string.format("%s.%s -> 1p", tostring(slot_name), tostring(alias))
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
 local function poll_reveal(force)
 	local unit = local_player_unit()
 
@@ -1221,6 +1336,10 @@ local function poll_reveal(force)
 
 	mod._fp_poll_calls = (mod._fp_poll_calls or 0) + 1
 	mod._fp_last_shown = mod.fp_reveal_pass(ext, force)
+
+	if ext then
+		pcall(fp_repoint_weapon_fx, ext)
+	end
 end
 
 -- The game re-evaluates equipment visibility on every equip and wield change
@@ -1241,6 +1360,10 @@ mod:hook_safe(CLASS.PlayerUnitVisualLoadoutExtension, "_update_item_visibility",
 	mod._fp_hook_calls = (mod._fp_hook_calls or 0) + 1
 	mod._fp_burst = 1
 	mod._fp_last_shown = mod.fp_reveal_pass(self, true)
+
+	-- This is the moment the game itself moves weapon effect sources to the
+	-- third person weapon, so correct them in the same breath.
+	pcall(fp_repoint_weapon_fx, self)
 end)
 
 
@@ -1423,7 +1546,11 @@ function mod.update(dt)
 
 	pcall(poll_reveal)
 
-	if mod._diag_delay then
+	-- The periodic diagnostics file is opt-in (a release build should not be
+	-- writing to disk every few seconds). The /fpb command still reports on
+	-- demand regardless, and the pitch telemetry the clamp calibrates against
+	-- runs either way; only the file writing is gated here.
+	if mod._diag_delay and mod:get("fp_diagnostics") then
 		mod._diag_delay = mod._diag_delay - 0.5
 
 		if mod._diag_delay <= 0 then
@@ -1452,6 +1579,7 @@ local function write_diagnostics()
 		string.format("fov boost frames: %s (setting: %s%%)", tostring(mod._fp_fov_frames or 0), tostring(mod:get("fp_fov_boost") or 0)),
 		string.format("camera pitch: current=%.1f deg | session max down=%.1f deg (positive = down)", mod._fp_pitch_deg or 0, mod._fp_pitch_max or 0),
 		string.format("pitch clamp: on=%s sign=%s accepted=%.1f active=%s fires=%s", tostring(mod:get("fp_pitch_clamp")), tostring(mod._fp_clamp_sign or "uncalibrated"), mod._fp_pitch_prev or 0, tostring(mod._fp_clamp_active or false), tostring(mod._fp_clamp_fires or 0)),
+		string.format("fx sources: on=%s truth frames=%s weapon moves=%s last=%s", tostring(mod:get("fp_fx_sources")), tostring(mod._fp_fx_truth_frames or 0), tostring(mod._fp_fx_moves or 0), tostring(mod._fp_fx_last or "none")),
 		string.format("sprint: option=%s detected=%s hide frames=%s | raw: %s", tostring(mod:get("fp_hide_sprint")), tostring(mod._fp_sprint_is or false), tostring(mod._fp_sprint_hides or 0), tostring(mod._fp_sprint_raw or "none")),
 		string.format("re-shower: %s", tostring(mod._fp_reshow_trace or "none caught")),
 	}
