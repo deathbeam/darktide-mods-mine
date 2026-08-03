@@ -5,11 +5,19 @@ Alfs_DMF_Extensions
 MoreGraphicsOptions
 SMOG
 
--- Gameplay
-AutoMark
+-- Simple mods
 SimpleSequencer
 SimpleAbilities
 SimpleMovement
+
+-- Stats mods
+CharacterStats
+CombatStats
+EnemyStats
+WeaponStats
+
+-- Gameplay
+AutoMark
 guarantee_weapon_swap
 guarantee_special_action
 guarantee_ability_activation
@@ -19,10 +27,6 @@ LocalizationExport
 IconBrowser
 controlled_chaos
 ImprovedMeatGrinder
-CharacterStats
-CombatStats
-EnemyStats
-WeaponStats
 
 -- General HUD
 custom_hud
