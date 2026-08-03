@@ -1,6 +1,7 @@
 local mod = get_mod('SimpleSequencer')
 local Profiles = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceProfiles')
 local WeaponContext = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/WeaponContext')
+local ProfileSchema = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ProfileSchema')
 
 local ModeManager = class('SimpleSequencerModeManager')
 
@@ -57,6 +58,19 @@ local function _display_value(value, default_value)
     return value
 end
 
+local function _display_settings(mod_instance, mode)
+    local defaults = DISPLAY_DEFAULTS[mode] or DISPLAY_DEFAULTS.mode_1
+    local default_color = defaults.color
+
+    return {
+        name = _display_value(mod_instance:get(_display_setting_key(mode, 'name')), defaults.name),
+        icon = _display_value(mod_instance:get(_display_setting_key(mode, 'icon')), defaults.icon),
+        color_r = tonumber(mod_instance:get(_display_setting_key(mode, 'color_r'))) or default_color[1],
+        color_g = tonumber(mod_instance:get(_display_setting_key(mode, 'color_g'))) or default_color[2],
+        color_b = tonumber(mod_instance:get(_display_setting_key(mode, 'color_b'))) or default_color[3],
+    }
+end
+
 local function _mode_index(mode)
     return tonumber(string.match(mode or '', '%d+')) or 1
 end
@@ -81,19 +95,11 @@ function ModeManager:init(mod_instance)
     self.editing_mode = mod_instance:get('editing_mode') or 'mode_1'
 
     for _, mode in ipairs(MODES) do
-        local defaults = DISPLAY_DEFAULTS[mode]
-        local color = defaults.color
-        local name = _display_value(mod_instance:get(_display_setting_key(mode, 'name')), defaults.name)
-        local icon = _display_value(mod_instance:get(_display_setting_key(mode, 'icon')), defaults.icon)
-        local red = tonumber(mod_instance:get(_display_setting_key(mode, 'color_r'))) or color[1]
-        local green = tonumber(mod_instance:get(_display_setting_key(mode, 'color_g'))) or color[2]
-        local blue = tonumber(mod_instance:get(_display_setting_key(mode, 'color_b'))) or color[3]
+        local values = _display_settings(mod_instance, mode)
 
-        mod_instance:set(_display_setting_key(mode, 'name'), name, false)
-        mod_instance:set(_display_setting_key(mode, 'icon'), icon, false)
-        mod_instance:set(_display_setting_key(mode, 'color_r'), red, false)
-        mod_instance:set(_display_setting_key(mode, 'color_g'), green, false)
-        mod_instance:set(_display_setting_key(mode, 'color_b'), blue, false)
+        for _, key in ipairs(DISPLAY_KEYS) do
+            mod_instance:set(_display_setting_key(mode, key), values[key], false)
+        end
     end
     self.data = Profiles.ensure(mod_instance:get(PROFILE_DATA_KEY))
     self.selected_weapons = mod_instance:get(SELECTED_WEAPONS_KEY) or {}
@@ -118,20 +124,12 @@ function ModeManager:active()
 end
 
 function ModeManager:display(mode)
-    mode = mode or self.active_mode
-
-    local defaults = DISPLAY_DEFAULTS[mode] or DISPLAY_DEFAULTS.mode_1
-    local default_color = defaults.color
-    local name = _display_value(self.mod:get(_display_setting_key(mode, 'name')), defaults.name)
-    local icon = _display_value(self.mod:get(_display_setting_key(mode, 'icon')), defaults.icon)
-    local red = tonumber(self.mod:get(_display_setting_key(mode, 'color_r'))) or default_color[1]
-    local green = tonumber(self.mod:get(_display_setting_key(mode, 'color_g'))) or default_color[2]
-    local blue = tonumber(self.mod:get(_display_setting_key(mode, 'color_b'))) or default_color[3]
+    local values = _display_settings(self.mod, mode or self.active_mode)
 
     return {
-        name = tostring(name),
-        icon = icon,
-        color = { 255, red, green, blue },
+        name = tostring(values.name),
+        icon = values.icon,
+        color = { 255, values.color_r, values.color_g, values.color_b },
     }
 end
 
@@ -222,7 +220,7 @@ function ModeManager:_edit_profile(kind, create_override)
     local global_key = kind == 'MELEE' and 'global_melee' or 'global_ranged'
 
     if create_override and weapon_key ~= global_key and not profiles[weapon_key] then
-        profiles[weapon_key] = Profiles.clone(profiles[global_key])
+        profiles[weapon_key] = ProfileSchema.clone(profiles[global_key])
     end
 
     return profiles[weapon_key] or profiles[global_key]
@@ -243,29 +241,16 @@ function ModeManager:_sync_kind(kind)
 
     self.mod:set(prefix .. 'weapon_selection', self.selected_weapons[self.editing_mode][kind], false)
 
-    for _, key in ipairs(Profiles.keys(kind)) do
+    for _, key in ipairs(ProfileSchema.keys(kind)) do
         self.mod:set(prefix .. key, profile[key], false)
     end
 end
 
 function ModeManager:_sync_display()
-    local defaults = DISPLAY_DEFAULTS[self.editing_mode] or DISPLAY_DEFAULTS.mode_1
+    local values = _display_settings(self.mod, self.editing_mode)
 
     for _, key in ipairs(DISPLAY_KEYS) do
-        local value = self.mod:get(_display_setting_key(self.editing_mode, key))
-
-        if value == nil then
-            if key == 'name' then
-                value = defaults.name
-            elseif key == 'icon' then
-                value = defaults.icon
-            else
-                local color_index = key == 'color_r' and 1 or key == 'color_g' and 2 or 3
-                value = defaults.color[color_index]
-            end
-        end
-
-        self.mod:set(DISPLAY_SETTING_PREFIX .. key, value, false)
+        self.mod:set(DISPLAY_SETTING_PREFIX .. key, values[key], false)
     end
 end
 

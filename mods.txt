@@ -33,7 +33,6 @@ LocalizationExport 975 2
 markers_aio 447 2.14.2
 modular_menu_buttons 166 1.2.9
 MoreGraphicsOptions 236 1.0.0.5
-PlasmaChargebar 1104 1
 PlayerOutlines 734 0.0.4
 RecolorBossHealthBars 314 2.4
 RemoveTagSkulls 423 1.2.1

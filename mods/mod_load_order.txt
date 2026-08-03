@@ -8,7 +8,6 @@ SMOG
 -- Gameplay
 AutoMark
 SimpleSequencer
--- Skitarius
 SimpleAbilities
 SimpleMovement
 guarantee_weapon_swap
@@ -50,7 +49,7 @@ BetterNameplate
 PlayerOutlines
 enemies_improved
 danger_zone
-PlasmaChargebar
+SimpleCharging
 FirstPersonBody
 
 -- Fancy stuff

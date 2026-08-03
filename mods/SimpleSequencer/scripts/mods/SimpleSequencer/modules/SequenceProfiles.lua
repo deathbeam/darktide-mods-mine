@@ -1,9 +1,6 @@
+local mod = get_mod('SimpleSequencer')
+local ProfileSchema = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ProfileSchema')
 local Profiles = {}
-
-local WeaponTemplates
-
-local SEQUENCE_STEP_COUNT = 6
-local SEQUENCE_STEP_PREFIX = 'sequence_step_'
 
 -- Profile commands expand into the action states observed by the weapon system.
 local COMMAND_STEPS = {
@@ -23,66 +20,26 @@ local COMMAND_STEPS = {
     special_standard = { 'special_action', 'shoot', 'idle' },
 }
 
-local function _has_ranged_special_attack(weapon_name)
-    if not WeaponTemplates then
-        WeaponTemplates = require('scripts/settings/equipment/weapon_templates/weapon_templates')
-    end
-    local template = weapon_name and WeaponTemplates[weapon_name]
-    local action_inputs = template and template.action_inputs
-
-    return action_inputs
-        and (
-                action_inputs.special_action
-                or action_inputs.special_action_hold
-                or action_inputs.special_action_light
-                or action_inputs.special_action_heavy
-            )
-            ~= nil
+local function _new_profile(kind)
+    return ProfileSchema.clone(ProfileSchema.defaults[kind])
 end
 
-local function _clone(value)
-    if type(value) ~= 'table' then
-        return value
+local function _merge_defaults(profile, defaults)
+    for key, value in pairs(defaults) do
+        if profile[key] == nil then
+            profile[key] = value
+        end
     end
-
-    local result = {}
-
-    for key, child in pairs(value) do
-        result[key] = _clone(child)
-    end
-
-    return result
-end
-
-local function _new_melee_profile()
-    local profile = {
-        sequence_cycle_point = 'sequence_step_1',
-    }
-
-    for i = 1, SEQUENCE_STEP_COUNT do
-        profile[SEQUENCE_STEP_PREFIX .. i] = 'none'
-    end
-
-    return profile
-end
-
-local function _new_ranged_profile()
-    return {
-        automatic_fire_hip = 'none',
-        automatic_fire_ads = 'none',
-        auto_charge_threshold = 100,
-        rate_of_fire_hip = 0,
-        rate_of_fire_ads = 0,
-    }
 end
 
 local function _ensure_profile(data, mode, kind, weapon_key)
-    data[mode] = data[mode] or { MELEE = {}, RANGED = {} }
-    data[mode][kind] = data[mode][kind] or {}
-    data[mode][kind][weapon_key] = data[mode][kind][weapon_key]
-        or _clone(kind == 'MELEE' and _new_melee_profile() or _new_ranged_profile())
+    local mode_data = data[mode] or {}
+    local profiles = mode_data[kind] or {}
+    mode_data[kind] = profiles
+    data[mode] = mode_data
+    profiles[weapon_key] = profiles[weapon_key] or _new_profile(kind)
 
-    return data[mode][kind][weapon_key]
+    return profiles[weapon_key]
 end
 
 function Profiles.new_data()
@@ -91,8 +48,8 @@ function Profiles.new_data()
     for i = 1, 4 do
         local mode = 'mode_' .. i
         data[mode] = {
-            MELEE = { global_melee = _new_melee_profile() },
-            RANGED = { global_ranged = _new_ranged_profile() },
+            MELEE = { global_melee = _new_profile('MELEE') },
+            RANGED = { global_ranged = _new_profile('RANGED') },
         }
     end
 
@@ -104,63 +61,24 @@ function Profiles.ensure(data)
 
     for i = 1, 4 do
         local mode = 'mode_' .. i
-        local melee = _ensure_profile(data, mode, 'MELEE', 'global_melee')
-        local ranged = _ensure_profile(data, mode, 'RANGED', 'global_ranged')
-        local melee_defaults = _new_melee_profile()
-        local ranged_defaults = _new_ranged_profile()
+        local mode_data = data[mode] or {}
+        data[mode] = mode_data
 
-        for key, value in pairs(melee_defaults) do
-            if melee[key] == nil then
-                melee[key] = value
-            end
-        end
+        for _, kind in ipairs(ProfileSchema.kinds) do
+            local profiles = mode_data[kind] or {}
+            mode_data[kind] = profiles
 
-        for key, value in pairs(ranged_defaults) do
-            if ranged[key] == nil then
-                ranged[key] = value
-            end
-        end
+            local global_key = kind == 'MELEE' and 'global_melee' or 'global_ranged'
+            _ensure_profile(data, mode, kind, global_key)
 
-        for _, profile in pairs(data[mode].MELEE) do
-            for key, value in pairs(melee_defaults) do
-                if profile[key] == nil then
-                    profile[key] = value
-                end
-            end
-        end
-
-        for _, profile in pairs(data[mode].RANGED) do
-            for key, value in pairs(ranged_defaults) do
-                if profile[key] == nil then
-                    profile[key] = value
-                end
+            local defaults = ProfileSchema.defaults[kind]
+            for _, profile in pairs(profiles) do
+                _merge_defaults(profile, defaults)
             end
         end
     end
 
     return data
-end
-
-function Profiles.clone(value)
-    return _clone(value)
-end
-
-function Profiles.keys(kind)
-    if kind == 'MELEE' then
-        local keys = {}
-        for i = 1, SEQUENCE_STEP_COUNT do
-            keys[#keys + 1] = SEQUENCE_STEP_PREFIX .. i
-        end
-        return keys
-    end
-
-    return {
-        'automatic_fire_hip',
-        'automatic_fire_ads',
-        'auto_charge_threshold',
-        'rate_of_fire_hip',
-        'rate_of_fire_ads',
-    }
 end
 
 function Profiles.get(data, mode, kind, weapon_name)
@@ -191,7 +109,7 @@ local function _append_expansion(queue, action)
     end
 end
 
-function Profiles.build(profile, kind, weapon_name, ranged_mode)
+function Profiles.build(profile, kind, ranged_mode, has_special)
     if not profile then
         return {}, 0, false
     end
@@ -199,19 +117,19 @@ function Profiles.build(profile, kind, weapon_name, ranged_mode)
     local queue = {}
     local cycle_index = 0
     local repeating = false
-    local cycle_point = profile.sequence_cycle_point or 'sequence_step_1'
+    local cycle_point = profile.sequence_cycle_point or ProfileSchema.defaults.MELEE.sequence_cycle_point
     local no_repeat = cycle_point == 'no_repeat'
 
     if kind == 'MELEE' then
         repeating = not no_repeat
         local cycle_step = tonumber(string.match(cycle_point, '%d+')) or 1
 
-        for i = 1, SEQUENCE_STEP_COUNT do
+        for i = 1, ProfileSchema.sequence_step_count do
             if not no_repeat and cycle_step == i then
                 cycle_index = #queue + 1
             end
 
-            local action = profile[SEQUENCE_STEP_PREFIX .. i]
+            local action = profile[ProfileSchema.sequence_step_prefix .. i]
 
             if action and action ~= 'none' then
                 _append_expansion(queue, action)
@@ -228,9 +146,9 @@ function Profiles.build(profile, kind, weapon_name, ranged_mode)
             return queue, cycle_index, repeating
         end
 
-        if fire_mode == 'special' and not _has_ranged_special_attack(weapon_name) then
+        if fire_mode == 'special' and not has_special then
             fire_mode = 'special_standard'
-        elseif fire_mode == 'special_charged' and not _has_ranged_special_attack(weapon_name) then
+        elseif fire_mode == 'special_charged' and not has_special then
             fire_mode = 'special_standard'
         end
 
