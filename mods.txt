@@ -7,7 +7,7 @@ Alfs_DMF_Extensions 864 1.2.02
 AutoMark 736 2.2.8
 BetterNameplate 827 1.0.7
 ConstantFov 91 1.9
-CurioHunter 875 7
+CurioHunter 875 8
 DisableScreenEffects 17 26.02.08-1
 DumpStatFinder 368 0.94.2
 DynamicCrosshair 110 1.7
