@@ -1,8 +1,8 @@
 SimpleCharging 1141 0.0.2
-CharacterStats 1093 0.2.6
-CombatStats 661 0.5.10
-EnemyStats 1054 0.3.2
-WeaponStats 999 0.2.7
+CharacterStats 1093 0.2.7
+CombatStats 661 0.5.11
+EnemyStats 1054 0.3.3
+WeaponStats 999 0.2.8
 Alfs_DMF_Extensions 864 1.2.02
 AutoMark 736 2.2.8
 BetterNameplate 827 1.0.7
