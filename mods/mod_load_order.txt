@@ -36,7 +36,6 @@ state_your_name
 LoadoutPreviews
 DumpStatFinder
 BetterInventory
-CurioHunter
 
 -- Performance
 vfx_swapper

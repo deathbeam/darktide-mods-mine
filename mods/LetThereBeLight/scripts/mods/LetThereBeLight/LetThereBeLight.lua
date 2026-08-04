@@ -35,7 +35,14 @@ local function active_theme_is(theme_tag)
     local circumstance_manager = Managers.state and Managers.state.circumstance
     local circumstance_template = circumstance_manager and circumstance_manager:template()
 
-    return circumstance_template and circumstance_template.theme_tag == theme_tag
+    if circumstance_template and circumstance_template.theme_tag == theme_tag then
+        return true
+    end
+
+    local difficulty_manager = Managers.state and Managers.state.difficulty
+    local havoc_data = difficulty_manager and difficulty_manager:get_parsed_havoc_data()
+
+    return havoc_data and havoc_data.theme == theme_tag
 end
 
 local function darkness_active()
