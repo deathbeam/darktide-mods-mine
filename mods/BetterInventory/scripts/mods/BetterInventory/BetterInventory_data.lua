@@ -1,4 +1,4 @@
-local MOD_VERSION = "1.3.4"
+local MOD_VERSION = "1.4.0"
 local mod = get_mod("BetterInventory")
 local DEFAULT_OPERATIVE_SLOT_CAPACITY = 10
 local MAX_REASONABLE_OPERATIVE_SLOT_CAPACITY = 64
@@ -722,6 +722,16 @@ return {
 						range = {
 							8,
 							20,
+						},
+					},
+					{
+						setting_id = "quick_look_card_single_column_label_value_gap",
+						tooltip = "quick_look_card_single_column_label_value_gap_tooltip",
+						type = "numeric",
+						default_value = 1,
+						range = {
+							0,
+							16,
 						},
 					},
 					{
