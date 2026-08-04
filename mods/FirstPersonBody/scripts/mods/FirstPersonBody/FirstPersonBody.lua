@@ -33,7 +33,7 @@ local mod = get_mod("FirstPersonBody")
 -- Compatible with Perspectives: its third person mode sets the game's own
 -- _force_third_person_mode flag, which this mod treats as "hands off".
 
-mod.version = "1.10.3"
+mod.version = "1.10.4"
 
 mod._poll_ttl = 0
 mod._diag_delay = 5
@@ -1459,6 +1459,25 @@ local ROOT_ATTACH_NAME = ""
 local MAX_TRACKED_PARTICLES = 24
 local tracked_particles = {}
 
+-- Reported from a live mission end (Nexus, 4 August 2026): asking the engine
+-- whether a particle is still playing FAULTS if the world that particle
+-- belonged to has gone away, and a mission ending tears its world down while
+-- this list still holds ids from it. Engine faults of that kind are not
+-- catchable from Lua, pcall or no pcall, so the only safe course is never to
+-- ask about a particle that could belong to a dead world. Every entry
+-- carries the generation it was born in; leaving gameplay bumps the
+-- generation and empties the list, so nothing from a previous world is ever
+-- queried again.
+local particle_generation = 0
+
+local function fp_forget_particles()
+	for i = #tracked_particles, 1, -1 do
+		tracked_particles[i] = nil
+	end
+
+	particle_generation = particle_generation + 1
+end
+
 local function fp_spawner_for(ext, spawner_name, attach_name)
 	local spawners = ext._vfx_spawners and ext._vfx_spawners[spawner_name]
 
@@ -1481,6 +1500,7 @@ mod:hook(CLASS.PlayerUnitFxExtension, "_spawn_unit_particles", function(func, se
 			tracked_particles[#tracked_particles + 1] = {
 				ext = self,
 				id = particle_id,
+				gen = particle_generation,
 				spawner = spawner_name,
 				attach = optional_attachment_name,
 				orphaned = orphaned_policy,
@@ -1507,11 +1527,21 @@ local function fp_relink_particles(want_1p)
 		local entry = tracked_particles[i]
 		local drop = true
 
+		if entry.gen ~= particle_generation then
+			table.remove(tracked_particles, i)
+		else
 		pcall(function()
 			local ext = entry.ext
 			local world = ext and ext._world
+			local owner = ext and ext._unit
 
-			if not world or not World.are_particles_playing(world, entry.id) then
+			-- The owning unit going away is the cheap, safe signal that this
+			-- particle's world is on its way out too.
+			if not world or not owner or not Unit.alive(owner) then
+				return
+			end
+
+			if not World.are_particles_playing(world, entry.id) then
 				return
 			end
 
@@ -1557,6 +1587,7 @@ local function fp_relink_particles(want_1p)
 
 		if drop then
 			table.remove(tracked_particles, i)
+		end
 		end
 	end
 end
@@ -2225,3 +2256,11 @@ mod:command("fpb", "Report the First Person Body state", function()
 		mod:echo(report)
 	end
 end)
+
+-- Leaving gameplay takes the mission world with it, so everything tracked
+-- from that world is dropped before anything can ask about it again.
+function mod.on_game_state_changed(status, state_name)
+	if state_name == "StateGameplay" or state_name == "StateLoading" then
+		pcall(fp_forget_particles)
+	end
+end
