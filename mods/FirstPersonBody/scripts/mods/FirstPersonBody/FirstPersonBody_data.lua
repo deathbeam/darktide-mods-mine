@@ -73,10 +73,30 @@ return {
 				},
 			},
 			{
+				setting_id = "fp_hide_holstered",
+				type = "checkbox",
+				default_value = true,
+				tooltip = "fp_hide_holstered_tooltip",
+			},
+			{
+				setting_id = "fp_customization_compat",
+				type = "checkbox",
+				default_value = true,
+				tooltip = "fp_customization_compat_tooltip",
+			},
+			{
 				setting_id = "fp_fx_sources",
 				type = "checkbox",
 				default_value = true,
 				tooltip = "fp_fx_sources_tooltip",
+				sub_widgets = {
+					{
+						setting_id = "fp_fx_relink",
+						type = "checkbox",
+						default_value = true,
+						tooltip = "fp_fx_relink_tooltip",
+					},
+				},
 			},
 			{
 				setting_id = "fp_deep_weapon_wake",

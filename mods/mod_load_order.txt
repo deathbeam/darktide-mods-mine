@@ -2,7 +2,6 @@
 
 -- Base
 Alfs_DMF_Extensions
-MoreGraphicsOptions
 SMOG
 
 -- Simple mods
@@ -36,28 +35,30 @@ modular_menu_buttons
 state_your_name
 LoadoutPreviews
 DumpStatFinder
-ItemSorting
-GlobalStore
+BetterInventory
 CurioHunter
-HavocQuickplay
+
+-- Performance
+vfx_swapper
+DisableScreenEffects
+LessDoT
+FXLimiter
+
+-- Game improvements
+ConstantFov
+markers_aio
+DynamicCrosshair
+stamina_dodge_bars
+BetterNameplate
+FirstPersonBody
+RemoveTagSkulls
+ForTheEmperor
+pointer
+RecolorBossHealthBars
 
 -- In Game HUD
 LetThereBeLight
-DisableScreenEffects
-vfx_swapper
-DynamicCrosshair
-ConstantFov
-markers_aio
 crosshair_hud
-stamina_dodge_bars
-BetterNameplate
 PlayerOutlines
 enemies_improved
 danger_zone
-FirstPersonBody
-
--- Fancy stuff
-ForTheEmperor
-RemoveTagSkulls
-pointer
-RecolorBossHealthBars

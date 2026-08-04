@@ -83,16 +83,6 @@ local PRESERVE_PRIMARY_HOLD_ACTIONS = {
     vent_overheat = true,
 }
 
-local function _time()
-    local time_manager = Managers and Managers.time
-
-    if time_manager and time_manager.time then
-        return time_manager:time('gameplay')
-    end
-
-    return os.clock()
-end
-
 local function _action_token(action, start_t)
     if action == 'idle' then
         return 'idle'
@@ -101,13 +91,19 @@ local function _action_token(action, start_t)
     return action .. ':' .. tostring(start_t or 0)
 end
 
+local function _empty_plan()
+    return {
+        commands = {},
+        cycle_index = 0,
+        repeating = false,
+    }
+end
+
 function SequenceEngine:init(mod, mode_manager)
     self.mod = mod
     self.mode_manager = mode_manager
     self.index = 1
-    self.commands = {}
-    self.cycle_index = 0
-    self.repeating = false
+    self.plan = _empty_plan()
     self.completed = false
     self.context = nil
     self.context_key = nil
@@ -119,7 +115,6 @@ function SequenceEngine:init(mod, mode_manager)
     self.last_action_token = nil
     self.previous_command = nil
     self.idle_match_index = nil
-    self.last_fire_time = 0
     self.fire_token = nil
     self.sweep_state = nil
     self.no_repeat_restored = false
@@ -142,7 +137,7 @@ function SequenceEngine:is_safe_to_switch_mode()
 end
 
 function SequenceEngine:_command()
-    return self.index and self.commands[self.index]
+    return self.index and self.plan.commands[self.index]
 end
 
 function SequenceEngine:reset()
@@ -155,7 +150,6 @@ function SequenceEngine:reset()
     self.last_action_token = nil
     self.previous_command = nil
     self.idle_match_index = nil
-    self.last_fire_time = 0
     self.fire_token = nil
     self.sweep_state = nil
     self.no_repeat_restored = false
@@ -175,13 +169,12 @@ function SequenceEngine:_refresh_context()
 
     self.context_key = key
     self.context = context
-    self.commands, self.cycle_index, self.repeating = {}, 0, false
+    self.plan = _empty_plan()
 
     local profile = context.kind ~= 'none' and self.mode_manager:profile(context.kind, context.name)
 
     if profile then
-        self.commands, self.cycle_index, self.repeating =
-            Profiles.build(profile, context.kind, self.ranged_mode, WeaponContext.has_special(context))
+        self.plan = Profiles.compile(profile, context.kind, self.ranged_mode, WeaponContext.has_special(context))
         self.profile = profile
         self.automatic_fire = context.kind == 'RANGED'
                 and (self.ranged_mode == 'ads' and profile.automatic_fire_ads or profile.automatic_fire_hip)
@@ -207,18 +200,18 @@ function SequenceEngine:_current_action()
     if
         heavy_windup_action
         and (current_action == 'start_attack' or current_action == 'special_start_attack')
-        and WeaponContext.can_chain(action_settings, start_t, 'heavy_attack', self.context.name)
+        and WeaponContext.can_chain(action_settings, start_t, 'heavy_attack', self.context.name, self.context)
     then
         current_action = heavy_windup_action
     end
 
     if action_settings and action_settings.kind == 'sweep' and self.sweep_state == 'after_damage_window' then
-        chain_ready = true
+        chain_ready = WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context.name, self.context)
     elseif current_action == 'light_attack' or current_action == 'heavy_attack' then
-        chain_ready = WeaponContext.can_chain(action_settings, start_t, 'start_attack')
+        chain_ready = WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context.name, self.context)
     elseif current_action == 'shoot' then
         local chain_name = action_settings and action_settings.start_input or 'shoot_pressed'
-        chain_ready = WeaponContext.can_chain(action_settings, start_t, chain_name, self.context.name)
+        chain_ready = WeaponContext.can_chain(action_settings, start_t, chain_name, self.context.name, self.context)
     end
 
     return current_action, start_t, chain_ready, action_settings
@@ -244,9 +237,9 @@ function SequenceEngine:_advance()
         self.previous_command = completed_command
     end
 
-    if self.index >= #self.commands then
-        if self.cycle_index > 0 or self.repeating then
-            self.index = self.cycle_index > 0 and self.cycle_index or 1
+    if self.index >= #self.plan.commands then
+        if self.plan.cycle_index > 0 or self.plan.repeating then
+            self.index = self.plan.cycle_index > 0 and self.plan.cycle_index or 1
             self.completed = false
         else
             self.index = nil
@@ -306,7 +299,7 @@ function SequenceEngine:_maybe_advance(current_action, start_t, chain_ready, act
 end
 
 function SequenceEngine:_restore_after_no_repeat()
-    if not self.completed or self.repeating or self.no_repeat_restored then
+    if not self.completed or self.plan.repeating or self.no_repeat_restored then
         return false
     end
 
@@ -342,17 +335,8 @@ function SequenceEngine:_should_reset_for_interrupt(action_name, value, command)
     return not self:_required(command, action_name)
 end
 
-function SequenceEngine:_fire_delay()
-    local value = self.ranged_mode == 'ads' and self.profile and self.profile.rate_of_fire_ads
-        or self.profile and self.profile.rate_of_fire_hip
-    local configured = (value or 0) / 1000
-
-    return math.max(configured, 0.05)
-end
-
 function SequenceEngine:_fire_pulse(current_action, raw_value, chain_ready)
     if raw_value then
-        self.last_fire_time = _time()
         self.fire_token = self.index
 
         return true
@@ -366,14 +350,6 @@ function SequenceEngine:_fire_pulse(current_action, raw_value, chain_ready)
     if (current_action ~= 'idle' and not can_fire_after_charge) or self.fire_token == self.index then
         return false
     end
-
-    local now = _time()
-
-    if now - self.last_fire_time < self:_fire_delay() then
-        return false
-    end
-
-    self.last_fire_time = now
     self.fire_token = self.index
 
     return true
@@ -384,8 +360,13 @@ function SequenceEngine:_primary_hold_pulse(raw_value, current_action, start_t, 
         return raw_value
     end
 
-    local chain_ready =
-        WeaponContext.can_chain(action_settings, start_t, 'start_attack', self.context and self.context.name)
+    local chain_ready = WeaponContext.can_chain(
+        action_settings,
+        start_t,
+        'start_attack',
+        self.context and self.context.name,
+        self.context
+    )
     if not chain_ready then
         return false
     end

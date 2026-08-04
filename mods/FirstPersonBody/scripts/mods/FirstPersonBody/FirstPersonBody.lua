@@ -33,7 +33,7 @@ local mod = get_mod("FirstPersonBody")
 -- Compatible with Perspectives: its third person mode sets the game's own
 -- _force_third_person_mode flag, which this mod treats as "hands off".
 
-mod.version = "1.7.0"
+mod.version = "1.10.3"
 
 mod._poll_ttl = 0
 mod._diag_delay = 5
@@ -676,6 +676,136 @@ mod:hook(CLASS.PlayerUnitFirstPersonExtension, "_update_first_person_mode", func
 	return show_1p_equipment, wants_1p_camera
 end)
 
+-- ---------------------------------------------------------------------------
+-- Weapon customization mods read the flag this mod lies about (v1.9.0)
+-- ---------------------------------------------------------------------------
+-- Extended Weapon Customization does its own sight alignment: while you aim,
+-- it slides the weapon into the position its sight expects, and it decides
+-- whether to do that by asking is_in_first_person_mode(), which is exactly
+-- the answer this mod spoofs. Told "third person", it slides the offset back
+-- to zero instead, and the sight sits off the crosshair. The same question
+-- picks which flashlight it toggles, the first person lamp or the third
+-- person one, which is how a flashlight ends up stuck.
+--
+-- Those extensions do not care about equipment visibility, they only want to
+-- know whether the player is looking down this weapon, and the honest answer
+-- to that is yes: the camera IS in first person. So they are told the truth,
+-- while the equipment system keeps its lie. This is a compatibility shim, so
+-- it installs only if those classes exist and can be switched off.
+local EWC_FIRST_PERSON_CLASSES = {
+	"SightExtension",
+	"FlashlightExtension",
+	"DamageTypeExtension",
+	"ShieldTransparencyExtension",
+}
+
+local function fp_is_spoofing(fp_ext)
+	return fp_ext ~= nil
+		and fp_ext._is_local_unit == true
+		and fp_ext._show_1p_equipment == false
+		and fp_ext._wants_1p_camera == true
+end
+
+-- v1.10.0: the shim above is not enough, because customization mods do not
+-- all ask through their own classes. EWC's attachment callbacks call the
+-- ENGINE method straight, `self.first_person_extension:is_in_first_person_mode()`,
+-- to pick which copy of an attachment to hide and to fire their
+-- "perspective changed" callbacks. Told third person, they hide the third
+-- person duplicates, which nobody was looking at, and leave both first
+-- person ones on screen: a boltgun wearing two sights at once.
+--
+-- So the lie is narrowed to the one reader that needs it. The stored flag
+-- stays as it was, but the QUESTION now answers honestly for everybody
+-- except the visual loadout's own visibility pass, which is the single
+-- consumer whose "third person" answer is what reveals the body. That pass
+-- is fenced off below, and it caches the answer for its own later work, so
+-- equipping and wielding keep the body too.
+mod:hook(CLASS.PlayerUnitVisualLoadoutExtension, "update", function(func, self, unit, dt, t, ...)
+	local was = mod._fp_in_loadout_update
+
+	-- v1.10.3: the fence is ONE question wide, not the whole call. The
+	-- visual loadout asks once, near the top of its update, and caches the
+	-- answer for the rest of its work, so only that first question needs the
+	-- lie. Everything else running inside this window belongs to other
+	-- systems: Visible Equipment's own extension updates from in here, asks
+	-- the same question to decide whether to show the weapons it puts on your
+	-- body, and a fence that covered the whole call answered "third person",
+	-- which is why holstered weapons reappeared the moment the aiming reveal
+	-- flipped the equipment over.
+	mod._fp_in_loadout_update = true
+
+	local ok, result = pcall(func, self, unit, dt, t, ...)
+
+	mod._fp_in_loadout_update = was
+
+	return ok and result or nil
+end)
+
+mod:hook(CLASS.PlayerUnitFirstPersonExtension, "is_in_first_person_mode", function(func, self)
+	local answer = func(self)
+
+	if answer == false and mod._fp_in_loadout_update then
+		-- Consume the fence: this is the loadout's own question.
+		mod._fp_in_loadout_update = false
+
+		return answer
+	end
+
+	if answer == false
+		and mod:get("fp_lower_body")
+		and mod:get("fp_customization_compat") ~= false
+		and fp_is_spoofing(self)
+	then
+		mod._fp_truth_answers = (mod._fp_truth_answers or 0) + 1
+
+		return true
+	end
+
+	return answer
+end)
+
+local function install_customization_compat()
+	if mod._fp_compat_installed then
+		return
+	end
+
+	local classes = rawget(_G, "CLASS")
+
+	if type(classes) ~= "table" then
+		return
+	end
+
+	local hooked = 0
+
+	for i = 1, #EWC_FIRST_PERSON_CLASSES do
+		local class_table = classes[EWC_FIRST_PERSON_CLASSES[i]]
+
+		if type(class_table) == "table" and type(class_table.is_in_first_person_mode) == "function" then
+			local ok = pcall(function()
+				mod:hook(class_table, "is_in_first_person_mode", function(func, self)
+					if mod:get("fp_lower_body") and mod:get("fp_customization_compat") ~= false
+						and fp_is_spoofing(self.first_person_extension) then
+						return true
+					end
+
+					return func(self)
+				end)
+			end)
+
+			if ok then
+				hooked = hooked + 1
+			end
+		end
+	end
+
+	mod._fp_compat_installed = hooked > 0
+	mod._fp_compat_hooks = hooked
+end
+
+function mod.on_all_mods_loaded()
+	pcall(install_customization_compat)
+end
+
 local fp_active = false
 
 -- Pitch limits (user-tuned to their sweet spot via the telemetry): free look
@@ -1215,6 +1345,29 @@ function mod.fp_reveal_pass(ext, force)
 					end
 				end)
 			end
+
+			-- And the THIRD person side of the same stowed slots (v1.9.0).
+			-- The reveal runs the equipment system in third person, which is
+			-- what puts your holstered weapons on your body, and vanilla
+			-- parks those behind you where the camera never looks. Mods that
+			-- reposition them, Visible Equipment above all, move them onto
+			-- the hips, and then the top of a stowed hammer sits right in
+			-- the middle of the view when you look down. The camera is in
+			-- first person, so nobody is looking at your back: hide them.
+			-- Only unit visibility, the game's own channel for this, so
+			-- whatever another mod hid stays hidden and the restore is the
+			-- game's own visibility pass rather than a blind re-show.
+			local unit_3p = slot.unit_3p
+
+			if mod:get("fp_hide_holstered") ~= false and unit_3p and Unit.alive(unit_3p) then
+				Unit.set_unit_visibility(unit_3p, false, true)
+
+				for_each_attachment(slot.attachments_by_unit_3p, function(attachment_unit)
+					Unit.set_unit_visibility(attachment_unit, false, true)
+				end)
+
+				mod._fp_holstered_hidden = true
+			end
 		end
 	end
 
@@ -1284,6 +1437,130 @@ mod:hook(CLASS.PlayerUnitFxExtension, "update", function(func, self, unit, dt, t
 	return ok and result or nil
 end)
 
+-- ---------------------------------------------------------------------------
+-- Effects that are ALREADY playing when the perspective changes (v1.8.0)
+-- ---------------------------------------------------------------------------
+-- Moving an effect SOURCE only decides where the NEXT effect appears. An
+-- effect already on screen was linked to a unit and a node at the moment it
+-- was created and stays married to it, so swapping perspective mid effect
+-- leaves it hanging off the rig it was born on.
+--
+-- Looping effects (charge-ups, glows) already survive this: the engine's own
+-- spawner move stops and restarts them at the new source. What it cannot
+-- help are the one-shot bursts, because nobody keeps their id after
+-- spawning, so there is nothing left to re-aim.
+--
+-- So keep the ids ourselves. Every linked effect the local player spawns is
+-- recorded, and on a perspective change each one still playing is re-linked
+-- to the same source on the rig now being rendered, with the viewmodel field
+-- of view flag flipped to match. The list is capped and prunes itself, and
+-- the ones that matter are short lived anyway.
+local ROOT_ATTACH_NAME = ""
+local MAX_TRACKED_PARTICLES = 24
+local tracked_particles = {}
+
+local function fp_spawner_for(ext, spawner_name, attach_name)
+	local spawners = ext._vfx_spawners and ext._vfx_spawners[spawner_name]
+
+	return spawners and spawners[attach_name or ROOT_ATTACH_NAME]
+end
+
+mod:hook(CLASS.PlayerUnitFxExtension, "_spawn_unit_particles", function(func, self, particle_name, spawner_name, link, orphaned_policy, position_offset, rotation_offset, scale, create_network_index, optional_attachment_name)
+	local particle_id = func(self, particle_name, spawner_name, link, orphaned_policy, position_offset, rotation_offset, scale, create_network_index, optional_attachment_name)
+
+	if link and particle_id and mod:get("fp_fx_sources") and mod:get("fp_fx_relink") ~= false then
+		pcall(function()
+			local fp_ext = self._first_person_extension
+
+			if not fp_ext or not fp_ext._is_local_unit then
+				return
+			end
+
+			-- The offsets are engine temporaries, so they are boxed to
+			-- survive past this frame and rebuilt into a pose on re-link.
+			tracked_particles[#tracked_particles + 1] = {
+				ext = self,
+				id = particle_id,
+				spawner = spawner_name,
+				attach = optional_attachment_name,
+				orphaned = orphaned_policy,
+				pos = position_offset and Vector3Box(position_offset) or nil,
+				rot = rotation_offset and QuaternionBox(rotation_offset) or nil,
+				scale = scale and Vector3Box(scale) or nil,
+			}
+
+			if #tracked_particles > MAX_TRACKED_PARTICLES then
+				table.remove(tracked_particles, 1)
+			end
+		end)
+	end
+
+	return particle_id
+end)
+
+local function fp_relink_particles(want_1p)
+	if mod:get("fp_fx_relink") == false then
+		return
+	end
+
+	for i = #tracked_particles, 1, -1 do
+		local entry = tracked_particles[i]
+		local drop = true
+
+		pcall(function()
+			local ext = entry.ext
+			local world = ext and ext._world
+
+			if not world or not World.are_particles_playing(world, entry.id) then
+				return
+			end
+
+			local spawner = fp_spawner_for(ext, entry.spawner, entry.attach)
+
+			if not spawner then
+				return
+			end
+
+			-- Same choice of unit and node the game makes when spawning.
+			local node_unit, node
+
+			if want_1p or not spawner.node_3p then
+				node_unit, node = spawner.unit, spawner.node
+			else
+				node_unit, node = ext._unit, spawner.node_3p
+			end
+
+			if not node_unit or not Unit.alive(node_unit) then
+				return
+			end
+
+			local pose = Matrix4x4.identity()
+
+			if entry.pos then
+				Matrix4x4.set_translation(pose, entry.pos:unbox())
+			end
+
+			if entry.rot then
+				Matrix4x4.set_rotation(pose, entry.rot:unbox())
+			end
+
+			if entry.scale then
+				Matrix4x4.set_scale(pose, entry.scale:unbox())
+			end
+
+			World.link_particles(world, entry.id, node_unit, node, pose, entry.orphaned)
+			pcall(World.set_particles_use_custom_fov, world, entry.id, want_1p and true or false)
+
+			mod._fp_fx_relinks = (mod._fp_fx_relinks or 0) + 1
+			drop = false
+		end)
+
+		if drop then
+			table.remove(tracked_particles, i)
+		end
+	end
+end
+
 -- Weapon effect sources: park them on the perspective that is actually being
 -- rendered. want_1p true while the body reveal runs, false to hand them back.
 --
@@ -1346,6 +1623,9 @@ local function fp_sync_weapon_fx(ext, want_1p)
 	end
 
 	mod._fp_fx_owned = want_1p
+
+	-- Effects already in flight follow the sources.
+	pcall(fp_relink_particles, want_1p)
 end
 
 -- Hand the weapon sources back to wherever the game's own flag says they
@@ -1369,6 +1649,40 @@ local function fp_release_weapon_fx(unit)
 	pcall(fp_sync_weapon_fx, ext, game_says_1p)
 
 	mod._fp_fx_owned = false
+end
+
+-- Holstered weapons, re-asserted EVERY frame (v1.10.2). Hiding them once per
+-- pass is not enough: aiming re-runs the game's visibility work constantly,
+-- and mods that place weapons on the body re-show their own units whenever
+-- they please, so anything hidden only twice a second comes back the moment
+-- the aiming reveal flips the equipment into third person. This is a handful
+-- of unit visibility calls, the cheapest channel there is.
+local function fp_hide_holstered_units()
+	local unit = local_player_unit()
+	local ext = unit and ScriptUnit.has_extension(unit, "visual_loadout_system")
+	local equipment = ext and ext._equipment
+	local inventory = ext and ext._inventory_component
+	local wielded = inventory and inventory.wielded_slot
+
+	if not equipment then
+		return
+	end
+
+	for slot_name, slot in pairs(equipment) do
+		if slot.wieldable and slot_name ~= wielded and not string.find(slot_name, "companion") then
+			local unit_3p = slot.unit_3p
+
+			if unit_3p and Unit.alive(unit_3p) then
+				Unit.set_unit_visibility(unit_3p, false, true)
+
+				for_each_attachment(slot.attachments_by_unit_3p, function(attachment_unit)
+					Unit.set_unit_visibility(attachment_unit, false, true)
+				end)
+
+				mod._fp_holstered_hidden = true
+			end
+		end
+	end
 end
 
 local function poll_reveal(force)
@@ -1498,7 +1812,24 @@ function mod.update(dt)
 			end
 		end
 
-		if fp_active and boost ~= 0 and mod:get("fp_lower_body") then
+		-- Never while aiming (v1.10.1). Weapon customization mods set the
+		-- camera's field of view directly for a sight's own zoom, and this
+		-- multiplier writes the same value every frame, so the two fight and
+		-- the sight drifts off the crosshair. Aiming also has nothing to do
+		-- with looking at your own legs, which is what this setting is for.
+		local fov_aiming = false
+
+		if fp_active and boost ~= 0 then
+			pcall(function()
+				local unit = local_player_unit()
+				local unit_data = unit and ScriptUnit.has_extension(unit, "unit_data_system")
+				local alternate_fire = unit_data and unit_data:read_component("alternate_fire")
+
+				fov_aiming = alternate_fire ~= nil and alternate_fire.is_active == true
+			end)
+		end
+
+		if fp_active and boost ~= 0 and not fov_aiming and mod:get("fp_lower_body") then
 			local unit = local_player_unit()
 			local fp_ext = unit and ScriptUnit.has_extension(unit, "first_person_system")
 			local fp_unit = fp_ext and fp_ext._first_person_unit
@@ -1609,6 +1940,10 @@ function mod.update(dt)
 		mod._fp_sprint_is = false
 	end
 
+	if fp_active and mod:get("fp_lower_body") and mod:get("fp_hide_holstered") ~= false then
+		pcall(fp_hide_holstered_units)
+	end
+
 	mod._poll_ttl = (mod._poll_ttl or 0) - dt
 
 	if mod._poll_ttl > 0 then
@@ -1653,6 +1988,8 @@ local function write_diagnostics()
 		string.format("camera pitch: current=%.1f deg | session max down=%.1f deg (positive = down)", mod._fp_pitch_deg or 0, mod._fp_pitch_max or 0),
 		string.format("pitch clamp: on=%s sign=%s accepted=%.1f active=%s fires=%s", tostring(mod:get("fp_pitch_clamp")), tostring(mod._fp_clamp_sign or "uncalibrated"), mod._fp_pitch_prev or 0, tostring(mod._fp_clamp_active or false), tostring(mod._fp_clamp_fires or 0)),
 		string.format("fx sources: on=%s truth frames=%s weapon moves=%s owned=%s last=%s", tostring(mod:get("fp_fx_sources")), tostring(mod._fp_fx_truth_frames or 0), tostring(mod._fp_fx_moves or 0), tostring(mod._fp_fx_owned or false), tostring(mod._fp_fx_last or "none")),
+		string.format("fx relink: on=%s tracked=%s relinked=%s", tostring(mod:get("fp_fx_relink") ~= false), tostring(#tracked_particles), tostring(mod._fp_fx_relinks or 0)),
+		string.format("customization compat: on=%s hooks=%s | holstered hidden=%s", tostring(mod:get("fp_customization_compat") ~= false), tostring(mod._fp_compat_hooks or 0), tostring(mod._fp_holstered_hidden or false)) .. string.format(" | honest answers=%s", tostring(mod._fp_truth_answers or 0)),
 		string.format("sprint: option=%s detected=%s hide frames=%s | raw: %s", tostring(mod:get("fp_hide_sprint")), tostring(mod._fp_sprint_is or false), tostring(mod._fp_sprint_hides or 0), tostring(mod._fp_sprint_raw or "none")),
 		string.format("re-shower: %s", tostring(mod._fp_reshow_trace or "none caught")),
 	}

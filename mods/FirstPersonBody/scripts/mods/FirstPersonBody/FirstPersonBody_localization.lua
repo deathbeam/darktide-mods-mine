@@ -50,11 +50,29 @@ return {
 	fp_pitch_sprint_tooltip = {
 		en = "While sprinting the camera is held above this pitch angle. If you were already looking further down when the sprint starts, the camera glides up to this limit instead of snapping.",
 	},
+	fp_hide_holstered = {
+		en = "Hide holstered weapons",
+	},
+	fp_hide_holstered_tooltip = {
+		en = "Showing your body also puts your stowed weapons on it. The game normally parks those behind you where the camera never looks, but mods that reposition them, such as Visible Equipment, move them onto your hips, where the top of a stowed weapon can sit in the middle of your view when you look down. This hides them while you are in first person. They are unaffected in third person.",
+	},
+	fp_customization_compat = {
+		en = "Weapon customization compatibility",
+	},
+	fp_customization_compat_tooltip = {
+		en = "Weapon customization mods align your sights and choose which flashlight to switch on by asking the game whether you are in first person, and this mod tells the game otherwise while your body is shown. With this on, those parts of them are told the truth, which keeps sights on the crosshair and flashlights behaving. Leave it on unless you have no such mods and suspect a conflict.",
+	},
 	fp_fx_sources = {
 		en = "Keep effects on your first person hands",
 	},
 	fp_fx_sources_tooltip = {
 		en = "Visual effects attach to named points that exist on both your first person viewmodel and your third person body. While the body is shown, the game moves them to the third person copy, which sits slightly lower, so hand effects (Psyker warp effects, the Thunder Hammer charge and similar) appear below where they belong. This keeps them on the viewmodel where you see them. Leave on unless an effect misbehaves.",
+	},
+	fp_fx_relink = {
+		en = "Move effects already playing",
+	},
+	fp_fx_relink_tooltip = {
+		en = "An effect is tied to a point on your body or weapon at the moment it appears, so switching perspective while one is playing normally leaves it behind on the other rig. This carries those effects across as well. Looping effects always follow; this covers the one-shot bursts.",
 	},
 	fp_deep_weapon_wake = {
 		en = "Force every weapon part visible",
