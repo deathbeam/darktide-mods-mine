@@ -672,6 +672,13 @@ function mod.on_enabled()
 		apply_color_preset(COLOR_TARGETS[i])
 	end
 
+	-- The character rows themselves are part of the static DMF schema. Refresh
+	-- their saved operative labels and backend-ID selection bindings before the
+	-- user can open Mod Options; live discovery will refresh them again.
+	if type(CurioAcquisition.refresh_character_options) == "function" then
+		CurioAcquisition.refresh_character_options(mod)
+	end
+
 	refresh_option_dependencies()
 end
 

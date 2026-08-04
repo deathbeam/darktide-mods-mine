@@ -28,6 +28,7 @@ local CHARACTER_SELECTION_SETTING_ID = "automatic_curio_character_selection"
 local KNOWN_CHARACTERS_SETTING_ID = "_automatic_curio_known_characters"
 local CHARACTER_SLOTS_SETTING_ID = "_automatic_curio_character_slots"
 local OPERATIVE_SLOT_CAPACITY_SETTING_ID = "_automatic_curio_operative_slot_capacity"
+local CHARACTER_SLOT_SETTING_PREFIX = "automatic_curio_character_slot_"
 
 local function native_operative_slot_capacity()
 	local success, settings = pcall(require, "scripts/ui/views/main_menu_view/main_menu_view_settings")
@@ -549,6 +550,113 @@ local function prune_character_exclusion(mod, character_id)
 	state.character_selection = nil
 end
 
+local function character_slot_setting_id(index)
+	return CHARACTER_SLOT_SETTING_PREFIX .. tostring(index)
+end
+
+local function character_slot_index(setting_id)
+	if type(setting_id) ~= "string" or string.sub(setting_id, 1, #CHARACTER_SLOT_SETTING_PREFIX) ~= CHARACTER_SLOT_SETTING_PREFIX then
+		return nil
+	end
+
+	local index = tonumber(string.sub(setting_id, #CHARACTER_SLOT_SETTING_PREFIX + 1))
+
+	if not index or index < 1 or index ~= math.floor(index) then
+		return nil
+	end
+
+	return index
+end
+
+local function character_slot_bindings(mod, slots, summaries)
+	local profiles_by_id = {}
+	local duplicate_counts = {}
+	local saved_selection = mod:get(CHARACTER_SELECTION_SETTING_ID)
+	local bindings = {}
+
+	for index = 1, #summaries do
+		profiles_by_id[summaries[index].character_id] = summaries[index]
+	end
+
+	for index = 1, #slots do
+		local slot = slots[index]
+
+		if slot.character_id then
+			local label = slot.character_name and string.format("%s(%s)", slot.character_name, slot.class_name) or slot.class_name
+
+			duplicate_counts[label] = (duplicate_counts[label] or 0) + 1
+		end
+	end
+
+	for index = 1, #slots do
+		local slot = slots[index]
+		local character_id = slot.character_id
+		local available = character_id ~= nil and profiles_by_id[character_id] ~= nil
+		local display_name = mod:localize("automatic_curio_character_slot_placeholder") .. " " .. tostring(index)
+
+		if character_id then
+			display_name = slot.character_name and string.format("%s(%s)", slot.character_name, slot.class_name) or slot.class_name
+
+			if duplicate_counts[display_name] > 1 then
+				display_name = string.format("%s [%s]", display_name, string.sub(character_id, -6))
+			end
+
+			if not available then
+				display_name = display_name .. " " .. mod:localize("automatic_curio_character_slot_unavailable")
+			end
+		end
+
+		bindings[index] = {
+			available = available,
+			character_id = available and character_id or nil,
+			display_name = display_name,
+			enabled = available and not (type(saved_selection) == "table" and saved_selection[tostring(character_id)] == false) or false,
+			setting_id = character_slot_setting_id(index),
+		}
+	end
+
+	return bindings
+end
+
+local function refresh_registered_character_options(mod, slots, summaries)
+	local bindings = character_slot_bindings(mod, slots, summaries)
+	local dmf = get_mod("DMF")
+	local option_sets = dmf and dmf.options_widgets_data
+
+	-- Keep the static slot values synchronized with the backend-ID selection map.
+	-- No setting-change notification is emitted here: discovery is presentation
+	-- synchronization, not a user filter change.
+	for index = 1, #bindings do
+		mod:set(bindings[index].setting_id, bindings[index].enabled, false)
+	end
+
+	if type(option_sets) ~= "table" then
+		return bindings
+	end
+
+	for _, widgets in ipairs(option_sets) do
+		local header = type(widgets) == "table" and widgets[1]
+
+		if type(header) == "table" and header.mod_name == mod:get_name() then
+			for _, widget in ipairs(widgets) do
+				local index = type(widget) == "table" and character_slot_index(widget.setting_id) or nil
+				local binding = index and bindings[index]
+
+				if binding then
+					widget.title = binding.display_name
+					widget._better_inventory_curio_character_available = binding.available
+					widget._better_inventory_curio_character_id = binding.character_id
+					widget._better_inventory_curio_character_slot_index = index
+				end
+			end
+
+			break
+		end
+	end
+
+	return bindings
+end
+
 local function reconcile_character_slots(mod, summaries, confirm_absences)
 	local capacity = maximum_operative_slots(mod, #summaries)
 	local previous = known_character_slots(mod, capacity)
@@ -629,6 +737,8 @@ local function reconcile_character_slots(mod, summaries, confirm_absences)
 	if #summaries > capacity then
 		log_info(mod, string.format("Discovered %d operatives but only %d stable Mod Options slots are available; all operatives remain available in the inventory panel.", #summaries, capacity))
 	end
+
+	refresh_registered_character_options(mod, state.character_slots or slots, summaries)
 
 	return state.character_slots or slots, capacity
 end
@@ -1664,6 +1774,13 @@ CurioAcquisition.set_character_enabled = function(mod, character_id, enabled_val
 
 	state.character_selection = selection
 
+	for index = 1, #known_character_slots(mod) do
+		if known_character_slots(mod)[index].character_id == key then
+			mod:set(character_slot_setting_id(index), enabled_value ~= false, false)
+			break
+		end
+	end
+
 	return true
 end
 
@@ -1675,108 +1792,55 @@ CurioAcquisition.inject_character_options = function(mod, options_templates)
 	end
 
 	local category_name = mod:get_readable_name()
-	local group_title = mod:localize("automatic_curio_characters_group")
-	local placeholder_title = mod:localize("automatic_curio_character_options_placeholder")
-	local group_index
-	local removable_indices = {}
-
-	for index = 1, #settings do
-		local entry = settings[index]
-
-		if type(entry) == "table" and (entry._better_inventory_curio_character_slot_index or entry._better_inventory_curio_character_id or entry._better_inventory_curio_character_placeholder or entry.category == category_name and entry.display_name == placeholder_title) then
-			removable_indices[#removable_indices + 1] = index
-		elseif type(entry) == "table" and entry.category == category_name and entry.widget_type == "group_header" and entry.display_name == group_title then
-			group_index = index
-		end
-	end
-
-	if not group_index then
-		return false
-	end
-
 	local profiles = known_profiles(mod)
-	local slots, capacity = reconcile_character_slots(mod, profiles, false)
-	local profiles_by_id = {}
-	local duplicate_counts = {}
+	local slots = reconcile_character_slots(mod, profiles, false)
+	local bindings = refresh_registered_character_options(mod, slots, profiles)
+	local binding_by_title = {}
 
 	if #profiles == 0 then
 		CurioAcquisition.request_profile_discovery()
 	end
 
-	for index = 1, #profiles do
-		profiles_by_id[profiles[index].character_id] = profiles[index]
+	for index = 1, #bindings do
+		binding_by_title[bindings[index].display_name] = index
+		binding_by_title[mod:localize(bindings[index].setting_id)] = index
 	end
 
-	for index = 1, capacity do
-		local slot = slots[index]
+	for _, entry in ipairs(settings) do
+		local index = type(entry) == "table" and entry.category == category_name and binding_by_title[entry.display_name] or nil
+		local binding = index and bindings[index]
 
-		if slot.character_id then
-			local label = slot.character_name and string.format("%s(%s)", slot.character_name, slot.class_name) or slot.class_name
-
-			duplicate_counts[label] = (duplicate_counts[label] or 0) + 1
+		if binding then
+			entry._better_inventory_curio_character_available = binding.available
+			entry._better_inventory_curio_character_id = binding.character_id
+			entry._better_inventory_curio_character_slot_index = index
+			entry.display_name = binding.display_name
 		end
-	end
-
-	for index = #removable_indices, 1, -1 do
-		local removed_index = removable_indices[index]
-
-		table.remove(settings, removed_index)
-
-		if removed_index < group_index then
-			group_index = group_index - 1
-		end
-	end
-
-	local placeholder_label = mod:localize("automatic_curio_character_slot_placeholder")
-
-	for index = capacity, 1, -1 do
-		local slot = slots[index]
-		local character_id = slot.character_id
-		local available = character_id ~= nil and profiles_by_id[character_id] ~= nil
-		local display_name
-
-		if character_id then
-			display_name = slot.character_name and string.format("%s(%s)", slot.character_name, slot.class_name) or slot.class_name
-
-			if duplicate_counts[display_name] > 1 then
-				display_name = string.format("%s [%s]", display_name, string.sub(character_id, -6))
-			end
-
-			if not available then
-				display_name = display_name .. " " .. mod:localize("automatic_curio_character_slot_unavailable")
-			end
-		else
-			display_name = placeholder_label .. " " .. tostring(index)
-		end
-
-		table.insert(settings, group_index + 1, {
-			_better_inventory_curio_character_available = available,
-			_better_inventory_curio_character_id = available and character_id or nil,
-			_better_inventory_curio_character_slot_index = index,
-			category = category_name,
-			custom = true,
-			default_value = true,
-			disabled = not available,
-			display_name = display_name,
-			indentation_level = 3,
-			on_activated = function(new_value)
-				if available then
-					CurioAcquisition.set_character_enabled(mod, character_id, new_value)
-				end
-
-				return available
-			end,
-			get_function = function()
-				return available and character_is_enabled(mod, character_id) or false
-			end,
-			value_type = "boolean",
-		})
 	end
 
 	return #profiles > 0
 end
 
+CurioAcquisition.refresh_character_options = function(mod)
+	local profiles = known_profiles(mod)
+	local slots = reconcile_character_slots(mod, profiles, false)
+
+	refresh_registered_character_options(mod, slots, profiles)
+end
+
 CurioAcquisition.on_setting_changed = function(mod, setting_id)
+	local slot_index = character_slot_index(setting_id)
+
+	if slot_index then
+		local slot = known_character_slots(mod)[slot_index]
+
+		if slot and slot.character_id then
+			CurioAcquisition.set_character_enabled(mod, slot.character_id, mod:get(setting_id) ~= false)
+		end
+
+		return
+	end
+
 	if setting_id == CHARACTER_SELECTION_SETTING_ID then
 		state.character_selection = nil
 	end

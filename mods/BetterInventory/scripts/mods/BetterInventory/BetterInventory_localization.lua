@@ -1957,4 +1957,14 @@ for localization_id, text in pairs(zh_cn) do
 	end
 end
 
+-- Character-slot controls must exist in the static DMF schema so their
+-- cardinality is stable for Alf's DMF Extensions and across cold starts. Their
+-- initialized titles are replaced with discovered operative names at runtime.
+for index = 1, 64 do
+	localization["automatic_curio_character_slot_" .. tostring(index)] = {
+		en = "Character " .. tostring(index),
+		["zh-cn"] = "角色 " .. tostring(index),
+	}
+end
+
 return localization
