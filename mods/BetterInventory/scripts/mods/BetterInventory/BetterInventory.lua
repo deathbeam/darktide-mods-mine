@@ -1,5 +1,25 @@
 local mod = get_mod("BetterInventory")
 
+local function no_op_module(module, module_name)
+	if type(module) == "table" then
+		return module
+	end
+
+	mod:error("Failed to load %s; its features are disabled until the next successful reload.", module_name)
+
+	local no_op = function()
+		return false
+	end
+
+	return setmetatable({}, {
+		__index = function(fallback, key)
+			rawset(fallback, key, no_op)
+
+			return no_op
+		end,
+	})
+end
+
 local CraftingMechanicusModifyView = require("scripts/ui/views/crafting_mechanicus_modify_view/crafting_mechanicus_modify_view")
 local CreditsVendorView = require("scripts/ui/views/credits_vendor_view/credits_vendor_view")
 local ItemGridViewBase = require("scripts/ui/views/item_grid_view_base/item_grid_view_base")
@@ -7,7 +27,12 @@ local ItemGridViewBaseDefinitions = require("scripts/ui/views/item_grid_view_bas
 local InventoryWeaponsView = require("scripts/ui/views/inventory_weapons_view/inventory_weapons_view")
 local ViewElementGrid = require("scripts/ui/view_elements/view_element_grid/view_element_grid")
 local Layout = mod:io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_layout")
-local Features = mod:io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_features")
+local Features = no_op_module(mod:io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_features"), "BetterInventory_features.lua")
+local CurioAcquisition = no_op_module(mod:io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_curio_acquisition"), "BetterInventory_curio_acquisition.lua")
+
+if type(Features.set_curio_acquisition_provider) == "function" then
+	Features.set_curio_acquisition_provider(CurioAcquisition)
+end
 local unpack_values = table.unpack or unpack
 local active_grid_view
 local active_grid_configuration
@@ -102,6 +127,11 @@ local COLOR_PRESETS = {
 		105,
 		230,
 	},
+	pink = {
+		255,
+		94,
+		132,
+	},
 	orange = {
 		235,
 		155,
@@ -141,6 +171,10 @@ local COLOR_TARGETS = {
 	{
 		prefix = "weapon_blessing_text_color",
 		default_preset = "light_blue",
+	},
+	{
+		prefix = "weapon_modifier_lowest_color",
+		default_preset = "pink",
 	},
 	{
 		prefix = "curio_secondary_text_color",
@@ -214,8 +248,10 @@ end
 
 local function refresh_option_dependencies()
 	local grid_enabled = mod:get("enable_grid_layout") ~= false
+	local single_column_enabled = not grid_enabled
 	local automatic_height = mod:get("automatic_card_height") ~= false
 	local native_reason = mod:localize("option_requires_grid_layout")
+	local single_column_reason = mod:localize("option_requires_single_column_mode")
 
 	for _, setting_id in ipairs({
 		"columns",
@@ -252,15 +288,24 @@ local function refresh_option_dependencies()
 	local weapon_blessing_ranked_text_enabled = weapon_blessing_mode == "ranked_text"
 	local weapon_blessing_text_enabled = weapon_blessing_mode == "text" or weapon_blessing_ranked_text_enabled
 	local weapon_blessings_enabled = weapon_blessing_mode ~= "off"
+	local single_column_blessing_icons_enabled = single_column_enabled and weapon_blessing_text_enabled and mod:get("single_column_blessing_icons_on_right") ~= false
+	local blessing_icon_controls_enabled = weapon_blessing_icons_enabled or single_column_blessing_icons_enabled
+	local blessing_icon_controls_reason = single_column_enabled and weapon_blessing_text_enabled and mod:localize("option_requires_single_column_blessing_icons") or mod:localize("option_requires_weapon_blessings")
 	local weapon_rank_symbols_enabled = weapon_perk_ranks_enabled or weapon_blessing_ranked_text_enabled
 	local weapon_perk_blessing_sections_enabled = weapon_perks_enabled and weapon_blessings_enabled
 	local detailed_curio_profile = mod:get("curio_display_profile") == "detailed"
 	local quick_discard_enabled = mod:get("enable_experimental_quick_discard") == true
 	local quick_discard_reason = mod:localize("option_requires_experimental_quick_discard")
+	local automatic_curio_enabled = mod:get("enable_automatic_curio_acquisition") == true
+	local automatic_curio_reason = mod:localize("option_requires_automatic_curio_acquisition")
 	local inventory_options_panel_enabled = mod:get("enable_inventory_options_panel_prototype") == true
 	local inventory_options_panel_reason = mod:localize("option_requires_inventory_options_panel_prototype")
 	local quick_look_card_grid_enabled = grid_enabled and mod:get("enable_quick_look_card_grid_integration") ~= false
 	local quick_look_card_grid_reason = grid_enabled and mod:localize("option_requires_quick_look_card_grid_integration") or native_reason
+	local quick_look_card_single_column_enabled = single_column_enabled and mod:get("enable_quick_look_card_single_column_integration") ~= false
+	local quick_look_card_single_column_reason = single_column_enabled and mod:localize("option_requires_quick_look_card_single_column_integration") or single_column_reason
+	local weapon_modifier_lowest_color_enabled = quick_look_card_grid_enabled or quick_look_card_single_column_enabled
+	local weapon_modifier_lowest_color_reason = grid_enabled and quick_look_card_grid_reason or quick_look_card_single_column_reason
 	local quick_look_card_above_power = quick_look_card_grid_enabled and mod:get("quick_look_card_grid_stat_position") ~= "name_left" and mod:get("quick_look_card_grid_stat_position") ~= "name_right"
 	local quick_look_card_bottom_padding_reason = quick_look_card_grid_enabled and mod:localize("option_requires_quick_look_card_above_power") or quick_look_card_grid_reason
 
@@ -281,6 +326,8 @@ local function refresh_option_dependencies()
 	set_option_enabled(option_dependency_entries.weapon_perk_text_opacity, weapon_perks_enabled, mod:localize("option_requires_weapon_perks"))
 	set_option_enabled(option_dependency_entries.weapon_perk_vertical_spacing, weapon_perks_enabled, mod:localize("option_requires_weapon_perks"))
 	set_option_enabled(option_dependency_entries.blessing_text_item_level_separation, weapon_blessing_text_enabled, mod:localize("option_requires_weapon_blessing_text"))
+	set_option_enabled(option_dependency_entries.auto_fit_long_blessing_names, weapon_blessing_text_enabled, mod:localize("option_requires_weapon_blessing_text"))
+	set_option_enabled(option_dependency_entries.truncate_long_blessing_names, weapon_blessing_text_enabled, mod:localize("option_requires_weapon_blessing_text"))
 	set_option_enabled(option_dependency_entries.weapon_blessing_text_color_preset, weapon_blessing_text_enabled, mod:localize("option_requires_weapon_blessing_text"))
 	set_option_enabled(option_dependency_entries.weapon_blessing_text_color_r, weapon_blessing_text_enabled, mod:localize("option_requires_weapon_blessing_text"))
 	set_option_enabled(option_dependency_entries.weapon_blessing_text_color_g, weapon_blessing_text_enabled, mod:localize("option_requires_weapon_blessing_text"))
@@ -288,14 +335,25 @@ local function refresh_option_dependencies()
 	set_option_enabled(option_dependency_entries.weapon_blessing_text_opacity, weapon_blessing_text_enabled, mod:localize("option_requires_weapon_blessing_text"))
 	set_option_enabled(option_dependency_entries.weapon_blessing_text_vertical_spacing, weapon_blessing_text_enabled, mod:localize("option_requires_weapon_blessing_text"))
 	set_option_enabled(option_dependency_entries.weapon_blessing_text_bottom_padding, weapon_blessing_text_enabled, mod:localize("option_requires_weapon_blessing_text"))
-	set_option_enabled(option_dependency_entries.blessing_icon_size, weapon_blessing_icons_enabled, mod:localize("option_requires_weapon_blessings"))
-	set_option_enabled(option_dependency_entries.blessing_icon_spacing, weapon_blessing_icons_enabled, mod:localize("option_requires_weapon_blessings"))
+	set_option_enabled(option_dependency_entries.blessing_icon_size, blessing_icon_controls_enabled, blessing_icon_controls_reason)
+	set_option_enabled(option_dependency_entries.blessing_icon_spacing, blessing_icon_controls_enabled, blessing_icon_controls_reason)
 	set_option_enabled(option_dependency_entries.weapon_perk_blessing_spacing, weapon_perk_blessing_sections_enabled, mod:localize("option_requires_perk_and_blessing_sections"))
 	set_option_enabled(option_dependency_entries.curio_secondary_stat_font_size, detailed_curio_profile, mod:localize("option_requires_detailed_curio_profile"))
 	set_option_enabled(option_dependency_entries.curio_primary_secondary_spacing, detailed_curio_profile, mod:localize("option_requires_detailed_curio_profile"))
+	set_option_enabled(option_dependency_entries.single_column_layout_group, single_column_enabled, single_column_reason)
+	set_option_enabled(option_dependency_entries.single_column_weapon_name_font_size, single_column_enabled, single_column_reason)
+	set_option_enabled(option_dependency_entries.single_column_blessing_icons_on_right, single_column_enabled and weapon_blessing_text_enabled, not single_column_enabled and single_column_reason or mod:localize("option_requires_weapon_blessing_text"))
+	set_option_enabled(option_dependency_entries.quick_look_card_single_column_font_size, quick_look_card_single_column_enabled, quick_look_card_single_column_reason)
+	set_option_enabled(option_dependency_entries.quick_look_card_single_column_horizontal_position, quick_look_card_single_column_enabled, quick_look_card_single_column_reason)
+	set_option_enabled(option_dependency_entries.quick_look_card_single_column_vertical_position, quick_look_card_single_column_enabled, quick_look_card_single_column_reason)
 	set_option_enabled(option_dependency_entries.quick_look_card_grid_stat_position, quick_look_card_grid_enabled, quick_look_card_grid_reason)
 	set_option_enabled(option_dependency_entries.quick_look_card_grid_font_size, quick_look_card_grid_enabled, quick_look_card_grid_reason)
 	set_option_enabled(option_dependency_entries.quick_look_card_grid_bottom_padding, quick_look_card_above_power, quick_look_card_bottom_padding_reason)
+	set_option_enabled(option_dependency_entries.weapon_modifier_lowest_color_preset, weapon_modifier_lowest_color_enabled, weapon_modifier_lowest_color_reason)
+	set_option_enabled(option_dependency_entries.weapon_modifier_lowest_color_r, weapon_modifier_lowest_color_enabled, weapon_modifier_lowest_color_reason)
+	set_option_enabled(option_dependency_entries.weapon_modifier_lowest_color_g, weapon_modifier_lowest_color_enabled, weapon_modifier_lowest_color_reason)
+	set_option_enabled(option_dependency_entries.weapon_modifier_lowest_color_b, weapon_modifier_lowest_color_enabled, weapon_modifier_lowest_color_reason)
+	set_option_enabled(option_dependency_entries.weapon_modifier_lowest_color_opacity, weapon_modifier_lowest_color_enabled, weapon_modifier_lowest_color_reason)
 
 	for _, setting_id in ipairs({
 		"curio_information_width_percent",
@@ -339,6 +397,37 @@ local function refresh_option_dependencies()
 	local curio_protection_enabled = quick_discard_enabled and mod:get("quick_discard_protect_high_level_curios") ~= false
 
 	set_option_enabled(option_dependency_entries.quick_discard_curio_protection_level, curio_protection_enabled, quick_discard_enabled and mod:localize("option_requires_curio_discard_protection") or quick_discard_reason)
+
+	for _, setting_id in ipairs({
+		"automatic_curio_min_item_level",
+		"automatic_curio_min_health",
+		"automatic_curio_min_toughness",
+		"automatic_curio_diagnostic_logging",
+		"automatic_curio_target_mode",
+		"automatic_curio_buy_health",
+		"automatic_curio_buy_toughness",
+		"automatic_curio_buy_stamina",
+		"automatic_curio_buy_wounds",
+		"automatic_curio_class_veteran",
+		"automatic_curio_class_zealot",
+		"automatic_curio_class_psyker",
+		"automatic_curio_class_ogryn",
+		"automatic_curio_class_adamant",
+		"automatic_curio_class_broker",
+		"automatic_curio_class_cryptic",
+	}) do
+		set_option_enabled(option_dependency_entries[setting_id], automatic_curio_enabled, automatic_curio_reason)
+	end
+
+	for _, entry in ipairs(option_dependency_entries.automatic_curio_character_entries or {}) do
+		set_option_enabled(entry, automatic_curio_enabled, automatic_curio_reason)
+	end
+
+	local automatic_health_enabled = automatic_curio_enabled and mod:get("automatic_curio_buy_health") ~= false
+	local automatic_toughness_enabled = automatic_curio_enabled and mod:get("automatic_curio_buy_toughness") ~= false
+
+	set_option_enabled(option_dependency_entries.automatic_curio_min_health, automatic_health_enabled, automatic_curio_enabled and mod:localize("option_requires_automatic_curio_health") or automatic_curio_reason)
+	set_option_enabled(option_dependency_entries.automatic_curio_min_toughness, automatic_toughness_enabled, automatic_curio_enabled and mod:localize("option_requires_automatic_curio_toughness") or automatic_curio_reason)
 end
 
 local function bind_option_dependencies(options_templates)
@@ -350,6 +439,24 @@ local function bind_option_dependencies(options_templates)
 
 	local category_name = mod:get_readable_name()
 	local setting_by_title = {}
+	local curio_buyer_subsection_titles = {
+		[mod:localize("automatic_curio_types_group")] = true,
+		[mod:localize("automatic_curio_classes_group")] = true,
+		[mod:localize("automatic_curio_characters_group")] = true,
+	}
+	local class_setting_ids = {
+		automatic_curio_class_adamant = true,
+		automatic_curio_class_broker = true,
+		automatic_curio_class_cryptic = true,
+		automatic_curio_class_ogryn = true,
+		automatic_curio_class_psyker = true,
+		automatic_curio_class_veteran = true,
+		automatic_curio_class_zealot = true,
+	}
+	local class_group_title = mod:localize("automatic_curio_classes_group")
+	local character_group_title = mod:localize("automatic_curio_characters_group")
+	local class_group_entry
+	local character_group_entry
 
 	for _, setting_id in ipairs({
 		"columns",
@@ -376,6 +483,8 @@ local function bind_option_dependencies(options_templates)
 		"weapon_perk_text_opacity",
 		"weapon_perk_vertical_spacing",
 		"blessing_text_item_level_separation",
+		"auto_fit_long_blessing_names",
+		"truncate_long_blessing_names",
 		"weapon_blessing_text_color_preset",
 		"weapon_blessing_text_color_r",
 		"weapon_blessing_text_color_g",
@@ -388,9 +497,20 @@ local function bind_option_dependencies(options_templates)
 		"weapon_perk_blessing_spacing",
 		"curio_secondary_stat_font_size",
 		"curio_primary_secondary_spacing",
+		"single_column_layout_group",
+		"single_column_weapon_name_font_size",
+		"single_column_blessing_icons_on_right",
+		"quick_look_card_single_column_font_size",
+		"quick_look_card_single_column_horizontal_position",
+		"quick_look_card_single_column_vertical_position",
 		"quick_look_card_grid_stat_position",
 		"quick_look_card_grid_font_size",
 		"quick_look_card_grid_bottom_padding",
+		"weapon_modifier_lowest_color_preset",
+		"weapon_modifier_lowest_color_r",
+		"weapon_modifier_lowest_color_g",
+		"weapon_modifier_lowest_color_b",
+		"weapon_modifier_lowest_color_opacity",
 		"curio_information_width_percent",
 		"curio_preview_height_percent",
 		"inventory_options_panel_width",
@@ -417,18 +537,74 @@ local function bind_option_dependencies(options_templates)
 		"quick_discard_keep_stamina_curios",
 		"quick_discard_show_type_breakdown",
 		"quick_discard_show_summary_notification",
+		"automatic_curio_min_item_level",
+		"automatic_curio_min_health",
+		"automatic_curio_min_toughness",
+		"automatic_curio_diagnostic_logging",
+		"automatic_curio_target_mode",
+		"automatic_curio_buy_health",
+		"automatic_curio_buy_toughness",
+		"automatic_curio_buy_stamina",
+		"automatic_curio_buy_wounds",
+		"automatic_curio_class_veteran",
+		"automatic_curio_class_zealot",
+		"automatic_curio_class_psyker",
+		"automatic_curio_class_ogryn",
+		"automatic_curio_class_adamant",
+		"automatic_curio_class_broker",
+		"automatic_curio_class_cryptic",
 	}) do
 		setting_by_title[mod:localize(setting_id)] = setting_id
 	end
 
-	option_dependency_entries = {}
+	option_dependency_entries = {
+		automatic_curio_character_entries = {},
+	}
 
 	for i = 1, #settings do
 		local entry = settings[i]
+
+		-- DMF preserves indentation for ordinary nested controls but drops it from
+		-- nested group-header templates. Restore the two buyer subheadings to the
+		-- same depth as their schema nodes so they do not look like peer sections.
+		if type(entry) == "table" and entry.category == category_name and entry.widget_type == "group_header" and curio_buyer_subsection_titles[entry.display_name] then
+			entry.indentation_level = 2
+
+			if entry.display_name == class_group_title then
+				class_group_entry = entry
+			elseif entry.display_name == character_group_title then
+				character_group_entry = entry
+			end
+		end
+
 		local setting_id = type(entry) == "table" and entry.category == category_name and setting_by_title[entry.display_name]
 
 		if setting_id then
 			option_dependency_entries[setting_id] = entry
+		elseif type(entry) == "table" and entry._better_inventory_curio_character_id then
+			option_dependency_entries.automatic_curio_character_entries[#option_dependency_entries.automatic_curio_character_entries + 1] = entry
+		end
+	end
+
+	local function class_mode()
+		return mod:get("automatic_curio_target_mode") ~= "characters"
+	end
+
+	if class_group_entry then
+		class_group_entry.validation_function = class_mode
+	end
+
+	if character_group_entry then
+		character_group_entry.validation_function = function()
+			return not class_mode()
+		end
+	end
+
+	for setting_id in pairs(class_setting_ids) do
+		local entry = option_dependency_entries[setting_id]
+
+		if entry then
+			entry.validation_function = class_mode
 		end
 	end
 
@@ -520,6 +696,7 @@ end
 
 function mod.on_setting_changed(setting_id)
 	local color_change = color_target_by_setting_id[setting_id]
+	local automatic_curio_setting = type(setting_id) == "string" and string.sub(setting_id, 1, 16) == "automatic_curio_"
 
 	if color_change then
 		if color_change.is_preset then
@@ -529,7 +706,7 @@ function mod.on_setting_changed(setting_id)
 		end
 	end
 
-	if setting_id == "enable_grid_layout" or setting_id == "columns" or setting_id == "automatic_card_height" or setting_id == "expand_inventory_window" or setting_id == "weapon_extra_width_column_threshold" or setting_id == "expand_curio_inventory_window" or setting_id == "enable_armoury_requisition_grid" or setting_id == "expand_armoury_requisition_window" or setting_id == "weapon_blessing_display_mode" or setting_id == "show_weapon_perks" or setting_id == "show_weapon_perk_rank_symbols" or setting_id == "curio_display_profile" or setting_id == "enable_inventory_options_panel_prototype" or setting_id == "enable_experimental_quick_discard" or setting_id == "quick_discard_mode" or setting_id == "quick_discard_protect_high_level_curios" or setting_id == "enable_quick_look_card_grid_integration" or setting_id == "quick_look_card_grid_stat_position" then
+	if setting_id == "enable_grid_layout" or setting_id == "columns" or setting_id == "automatic_card_height" or setting_id == "expand_inventory_window" or setting_id == "weapon_extra_width_column_threshold" or setting_id == "expand_curio_inventory_window" or setting_id == "enable_armoury_requisition_grid" or setting_id == "expand_armoury_requisition_window" or setting_id == "weapon_blessing_display_mode" or setting_id == "show_weapon_perks" or setting_id == "show_weapon_perk_rank_symbols" or setting_id == "single_column_blessing_icons_on_right" or setting_id == "curio_display_profile" or setting_id == "enable_inventory_options_panel_prototype" or setting_id == "enable_experimental_quick_discard" or setting_id == "quick_discard_mode" or setting_id == "quick_discard_protect_high_level_curios" or setting_id == "enable_automatic_curio_acquisition" or automatic_curio_setting or setting_id == "enable_quick_look_card_single_column_integration" or setting_id == "enable_quick_look_card_grid_integration" or setting_id == "quick_look_card_grid_stat_position" then
 		refresh_option_dependencies()
 	end
 
@@ -540,6 +717,11 @@ function mod.on_setting_changed(setting_id)
 	if type(setting_id) == "string" and string.sub(setting_id, 1, 14) == "quick_discard_" then
 		Features.sync_quick_discard_settings(mod, Layout)
 	end
+
+	if setting_id == "enable_automatic_curio_acquisition" or automatic_curio_setting then
+		CurioAcquisition.on_setting_changed(mod, setting_id)
+		Features.sync_curio_acquisition_settings(mod, Layout)
+	end
 end
 
 function mod.on_game_state_changed(status, state_name)
@@ -549,17 +731,21 @@ function mod.on_game_state_changed(status, state_name)
 
 	if status == "enter" then
 		Features.begin_morningstar_auto_discard(mod)
+		CurioAcquisition.begin_morningstar_pass(mod)
 	elseif status == "exit" then
 		Features.cancel_morningstar_auto_discard()
+		CurioAcquisition.cancel()
 	end
 end
 
 function mod.update(dt)
 	Features.update_morningstar_auto_discard(mod, dt)
+	CurioAcquisition.update(mod, dt, Features.morningstar_auto_discard_is_busy(mod))
 end
 
 function mod.on_disabled()
 	Features.cancel_morningstar_auto_discard()
+	CurioAcquisition.cancel()
 	Features.disable_inventory_views()
 end
 
@@ -567,6 +753,10 @@ local dmf_mod = get_mod("DMF")
 
 if dmf_mod and type(dmf_mod.create_mod_options_settings) == "function" then
 	mod:hook_safe(dmf_mod, "create_mod_options_settings", function(_, options_templates)
+		if type(CurioAcquisition.inject_character_options) == "function" then
+			CurioAcquisition.inject_character_options(mod, options_templates)
+		end
+
 		bind_option_dependencies(options_templates)
 	end)
 end

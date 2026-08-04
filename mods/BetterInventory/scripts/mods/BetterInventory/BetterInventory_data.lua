@@ -1,4 +1,4 @@
-local MOD_VERSION = "1.1.0"
+local MOD_VERSION = "1.3.0"
 local mod = get_mod("BetterInventory")
 
 local function color_preset_options()
@@ -18,6 +18,10 @@ local function color_preset_options()
 		{
 			text = "color_preset_purple",
 			value = "purple",
+		},
+		{
+			text = "color_preset_pink",
+			value = "pink",
 		},
 		{
 			text = "color_preset_orange",
@@ -366,6 +370,154 @@ return {
 				},
 			},
 			{
+				setting_id = "automatic_curio_buyer_group",
+				type = "group",
+				sub_widgets = {
+					{
+						setting_id = "enable_automatic_curio_acquisition",
+						tooltip = "enable_automatic_curio_acquisition_tooltip",
+						type = "checkbox",
+						default_value = false,
+						sub_widgets = {
+							{
+								setting_id = "automatic_curio_min_item_level",
+								tooltip = "automatic_curio_min_item_level_tooltip",
+								type = "numeric",
+								default_value = 410,
+								range = {
+									0,
+									500,
+								},
+							},
+							{
+								setting_id = "automatic_curio_diagnostic_logging",
+								tooltip = "automatic_curio_diagnostic_logging_tooltip",
+								type = "checkbox",
+								default_value = false,
+							},
+							{
+								setting_id = "automatic_curio_target_mode",
+								tooltip = "automatic_curio_target_mode_tooltip",
+								type = "dropdown",
+								default_value = "characters",
+								options = {
+									{
+										text = "automatic_curio_target_mode_classes",
+										value = "classes",
+									},
+									{
+										text = "automatic_curio_target_mode_characters",
+										value = "characters",
+									},
+								},
+							},
+							{
+								setting_id = "automatic_curio_types_group",
+								type = "group",
+								sub_widgets = {
+									{
+										setting_id = "automatic_curio_buy_health",
+										type = "checkbox",
+										default_value = true,
+										sub_widgets = {
+											{
+												setting_id = "automatic_curio_min_health",
+												tooltip = "automatic_curio_min_health_tooltip",
+												type = "numeric",
+												default_value = 21,
+												range = {
+													0,
+													21,
+												},
+											},
+										},
+									},
+									{
+										setting_id = "automatic_curio_buy_toughness",
+										type = "checkbox",
+										default_value = true,
+										sub_widgets = {
+											{
+												setting_id = "automatic_curio_min_toughness",
+												tooltip = "automatic_curio_min_toughness_tooltip",
+												type = "numeric",
+												default_value = 17,
+												range = {
+													0,
+													17,
+												},
+											},
+										},
+									},
+									{
+										setting_id = "automatic_curio_buy_stamina",
+										type = "checkbox",
+										default_value = false,
+									},
+									{
+										setting_id = "automatic_curio_buy_wounds",
+										type = "checkbox",
+										default_value = false,
+									},
+								},
+							},
+							{
+								setting_id = "automatic_curio_classes_group",
+								type = "group",
+								sub_widgets = {
+									{
+										setting_id = "automatic_curio_class_veteran",
+										type = "checkbox",
+										default_value = true,
+									},
+									{
+										setting_id = "automatic_curio_class_zealot",
+										type = "checkbox",
+										default_value = true,
+									},
+									{
+										setting_id = "automatic_curio_class_psyker",
+										type = "checkbox",
+										default_value = true,
+									},
+									{
+										setting_id = "automatic_curio_class_ogryn",
+										type = "checkbox",
+										default_value = true,
+									},
+									{
+										setting_id = "automatic_curio_class_adamant",
+										type = "checkbox",
+										default_value = true,
+									},
+									{
+										setting_id = "automatic_curio_class_broker",
+										type = "checkbox",
+										default_value = true,
+									},
+									{
+										setting_id = "automatic_curio_class_cryptic",
+										type = "checkbox",
+										default_value = true,
+									},
+								},
+							},
+							{
+								setting_id = "automatic_curio_characters_group",
+								type = "group",
+								sub_widgets = {
+									{
+										setting_id = "automatic_curio_character_options_placeholder",
+										type = "checkbox",
+										default_value = false,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			{
 				setting_id = "additional_views_group",
 				type = "group",
 				sub_widgets = {
@@ -504,6 +656,8 @@ return {
 				},
 			},
 			{
+				-- Historical setting IDs are retained so existing Quick Look Card
+				-- integration preferences migrate into the standalone implementation.
 				setting_id = "quick_look_card_integration_group",
 				type = "group",
 				sub_widgets = {
@@ -512,6 +666,36 @@ return {
 						tooltip = "enable_quick_look_card_single_column_integration_tooltip",
 						type = "checkbox",
 						default_value = true,
+					},
+					{
+						setting_id = "quick_look_card_single_column_font_size",
+						tooltip = "quick_look_card_single_column_font_size_tooltip",
+						type = "numeric",
+						default_value = 14,
+						range = {
+							8,
+							20,
+						},
+					},
+					{
+						setting_id = "quick_look_card_single_column_horizontal_position",
+						tooltip = "quick_look_card_single_column_horizontal_position_tooltip",
+						type = "numeric",
+						default_value = 79,
+						range = {
+							0,
+							100,
+						},
+					},
+					{
+						setting_id = "quick_look_card_single_column_vertical_position",
+						tooltip = "quick_look_card_single_column_vertical_position_tooltip",
+						type = "numeric",
+						default_value = 93,
+						range = {
+							0,
+							100,
+						},
 					},
 					{
 						setting_id = "enable_quick_look_card_grid_integration",
@@ -558,6 +742,86 @@ return {
 							20,
 							60,
 						},
+					},
+					{
+						setting_id = "weapon_modifier_lowest_color_preset",
+						tooltip = "weapon_modifier_lowest_color_preset_tooltip",
+						type = "dropdown",
+						default_value = "pink",
+						options = color_preset_options(),
+					},
+					{
+						setting_id = "weapon_modifier_lowest_color_r",
+						type = "numeric",
+						default_value = 255,
+						range = {
+							0,
+							255,
+						},
+					},
+					{
+						setting_id = "weapon_modifier_lowest_color_g",
+						type = "numeric",
+						default_value = 94,
+						range = {
+							0,
+							255,
+						},
+					},
+					{
+						setting_id = "weapon_modifier_lowest_color_b",
+						type = "numeric",
+						default_value = 132,
+						range = {
+							0,
+							255,
+						},
+					},
+					{
+						setting_id = "weapon_modifier_lowest_color_opacity",
+						tooltip = "weapon_modifier_lowest_color_opacity_tooltip",
+						type = "numeric",
+						default_value = 100,
+						range = {
+							0,
+							100,
+						},
+					},
+				},
+			},
+			{
+				setting_id = "single_column_layout_group",
+				type = "group",
+				sub_widgets = {
+					{
+						setting_id = "single_column_weapon_name_font_size",
+						tooltip = "single_column_weapon_name_font_size_tooltip",
+						type = "numeric",
+						default_value = 18,
+						range = {
+							10,
+							24,
+						},
+					},
+					{
+						setting_id = "single_column_blessing_icons_on_right",
+						tooltip = "single_column_blessing_icons_on_right_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+				},
+			},
+			{
+				setting_id = "enhanced_descriptions_integration_group",
+				type = "group",
+				sub_widgets = {
+					{
+						-- Retain the established ID so existing configurations keep
+						-- their value after this option moves into its own section.
+						setting_id = "simplify_curio_primary_stat_text",
+						tooltip = "simplify_curio_primary_stat_text_tooltip",
+						type = "checkbox",
+						default_value = true,
 					},
 				},
 			},
@@ -634,6 +898,18 @@ return {
 								value = "never",
 							},
 						},
+					},
+					{
+						setting_id = "auto_fit_long_blessing_names",
+						tooltip = "auto_fit_long_blessing_names_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "truncate_long_blessing_names",
+						tooltip = "truncate_long_blessing_names_tooltip",
+						type = "checkbox",
+						default_value = false,
 					},
 					{
 						setting_id = "weapon_blessing_text_vertical_spacing",
@@ -982,12 +1258,6 @@ return {
 								value = "heavy",
 							},
 						},
-					},
-					{
-						setting_id = "simplify_curio_primary_stat_text",
-						tooltip = "simplify_curio_primary_stat_text_tooltip",
-						type = "checkbox",
-						default_value = true,
 					},
 					{
 						setting_id = "remove_curio_stat_plus_signs",
