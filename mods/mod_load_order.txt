@@ -54,6 +54,7 @@ RemoveTagSkulls
 ForTheEmperor
 pointer
 RecolorBossHealthBars
+crosshair_remap
 
 -- In Game HUD
 LetThereBeLight
