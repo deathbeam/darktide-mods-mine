@@ -6,7 +6,7 @@ SMOG
 
 -- Simple mods
 SimpleSequencer
-SimpleUse
+SimpleActivate
 SimpleMovement
 SimpleCharging
 
