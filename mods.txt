@@ -9,6 +9,7 @@ Alfs_DMF_Extensions 864 1.2.02
 AutoMark 736 2.2.8
 BetterNameplate 827 1.0.7
 BetterInventory 1144 1.5.2
+ChatBlock 68 26.08.05
 ConstantFov 91 1.9
 crosshair_remap 253 3.9.0
 DisableScreenEffects 17 26.02.08-1

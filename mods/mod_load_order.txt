@@ -55,6 +55,7 @@ ForTheEmperor
 pointer
 RecolorBossHealthBars
 crosshair_remap
+ChatBlock
 
 -- In Game HUD
 LetThereBeLight
