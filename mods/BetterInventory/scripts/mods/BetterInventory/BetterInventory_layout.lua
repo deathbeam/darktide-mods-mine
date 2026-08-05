@@ -135,7 +135,7 @@ local WEAPON_MODIFIER_VALUE_COLOR = {
 }
 local WEAPON_MODIFIER_LABELS = {
 	loc_glossary_term_melee_damage = { "weapon_modifier_melee_damage", "MELE" },
-	loc_stats_display_ammo_stat = { "weapon_modifier_ammo", "AMMO" },
+	loc_stats_display_ammo_stat = { "weapon_modifier_ammo", "AMM" },
 	loc_stats_display_ap_stat = { "weapon_modifier_penetration", "PEN" },
 	loc_stats_display_burn_stat = { "weapon_modifier_burn", "BURN" },
 	loc_stats_display_charge_speed = { "weapon_modifier_charge_rate", "CHRG" },
@@ -847,11 +847,24 @@ local function fallback_weapon_modifier_label(display_name)
 	return "STAT"
 end
 
+local function compact_weapon_modifier_label(label)
+	if type(label) ~= "string" then
+		return label
+	end
+
+	label = single_line_text(label)
+
+	-- Quick Look Card can supply its own English title instead of using our
+	-- localization path. Normalize both sources so AMMO never wraps on any
+	-- BetterInventory-managed card or view.
+	return string.upper(label) == "AMMO" and "AMM" or label
+end
+
 local function localized_weapon_modifier_label(mod, display_name)
 	local definition = WEAPON_MODIFIER_LABELS[display_name]
 
 	if not definition then
-		return fallback_weapon_modifier_label(display_name)
+		return compact_weapon_modifier_label(fallback_weapon_modifier_label(display_name))
 	end
 
 	local localization_id = definition[1]
@@ -859,10 +872,10 @@ local function localized_weapon_modifier_label(mod, display_name)
 	local localized_ok, localized = pcall(mod.localize, mod, localization_id)
 
 	if not localized_ok or type(localized) ~= "string" or localized == "" or localized == localization_id or localized == "<" .. localization_id .. ">" then
-		return fallback
+		return compact_weapon_modifier_label(fallback)
 	end
 
-	return single_line_text(localized)
+	return compact_weapon_modifier_label(localized)
 end
 
 local function unique_weapon_modifier_label(label, used_labels)
@@ -1039,7 +1052,7 @@ local function quick_look_card_lowest_stat_text(mod, content, parenthesized)
 	for index = 1, 5 do
 		local record = projected_records[index]
 		local quick_look_card_title = content["qlc_stats_title_" .. index]
-		local title = type(quick_look_card_title) == "string" and quick_look_card_title ~= "" and quick_look_card_title or record and record.title
+		local title = type(quick_look_card_title) == "string" and quick_look_card_title ~= "" and compact_weapon_modifier_label(quick_look_card_title) or record and record.title
 		local numeric_value = record and record.value
 
 		if type(title) == "string" and title ~= "" and numeric_value then
@@ -2912,7 +2925,10 @@ Layout.configure_native_item_blueprint = function(mod, item_blueprint, grid_widt
 	if managed_native_card then
 		local native_configuration = table.clone(configuration)
 		native_configuration.native_single_column = true
-		item_size[2] = math.max(item_size[2] or 110, Layout.card_height(mod, native_configuration))
+
+		if not configuration.character_overview then
+			item_size[2] = math.max(item_size[2] or 110, Layout.card_height(mod, native_configuration))
+		end
 	end
 
 	item_blueprint.size = item_size

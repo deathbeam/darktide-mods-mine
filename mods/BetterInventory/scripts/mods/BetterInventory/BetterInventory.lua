@@ -22,10 +22,14 @@ end
 
 local CraftingMechanicusModifyView = require("scripts/ui/views/crafting_mechanicus_modify_view/crafting_mechanicus_modify_view")
 local CreditsVendorView = require("scripts/ui/views/credits_vendor_view/credits_vendor_view")
+local InventoryView = require("scripts/ui/views/inventory_view/inventory_view")
+local InventoryViewContentBlueprints = require("scripts/ui/views/inventory_view/inventory_view_content_blueprints")
 local ItemGridViewBase = require("scripts/ui/views/item_grid_view_base/item_grid_view_base")
 local ItemGridViewBaseDefinitions = require("scripts/ui/views/item_grid_view_base/item_grid_view_base_definitions")
 local InventoryWeaponsView = require("scripts/ui/views/inventory_weapons_view/inventory_weapons_view")
 local ViewElementGrid = require("scripts/ui/view_elements/view_element_grid/view_element_grid")
+local ItemBlueprintGenerator = require("scripts/ui/view_content_blueprints/item_blueprints")
+local Text = require("scripts/utilities/ui/text")
 local Layout = mod:io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_layout")
 local Features = no_op_module(mod:io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_features"), "BetterInventory_features.lua")
 local CurioAcquisition = no_op_module(mod:io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_curio_acquisition"), "BetterInventory_curio_acquisition.lua")
@@ -64,6 +68,13 @@ local GLOBAL_STORE_NATIVE_CONFIGURATION = {
 	native_single_column = true,
 	store_item = true,
 }
+local CHARACTER_OVERVIEW_WEAPON_WIDGET_TYPE = "better_inventory_character_overview_weapon"
+local CHARACTER_OVERVIEW_CURIO_WIDGET_TYPE = "better_inventory_character_overview_curio"
+local CHARACTER_OVERVIEW_WEAPON_HEIGHT = 130
+local CHARACTER_OVERVIEW_BLUEPRINTS = type(ItemBlueprintGenerator) == "function" and ItemBlueprintGenerator({
+	600,
+	CHARACTER_OVERVIEW_WEAPON_HEIGHT,
+}) or nil
 
 local function pack_values(...)
 	return {
@@ -95,6 +106,463 @@ end
 
 local function is_hadron_view(view)
 	return view and view.__class_name == "CraftingMechanicusModifyView"
+end
+
+local function character_overview_weapon_kind(config)
+	local slot_name = config and config.slot and config.slot.name
+
+	if slot_name == "slot_primary" then
+		return "melee"
+	elseif slot_name == "slot_secondary" then
+		return "ranged"
+	end
+end
+
+local function character_overview_curio_slot(config)
+	local slot_name = config and config.slot and config.slot.name
+
+	return config and config.widget_type == "gadget_item_slot" and type(slot_name) == "string" and string.match(slot_name, "^slot_attachment_") ~= nil
+end
+
+local function mark_character_overview_requirement_met(widget)
+	local content = widget and widget.content
+
+	if content then
+		-- InventoryView's native item-slot blueprints do not populate the
+		-- requirement fields used by the detailed item pass. These are already
+		-- equipped overview items, so the warning/lock overlay must stay hidden.
+		content.level_requirement_met = true
+		content.required_level = nil
+	end
+end
+
+local function configure_character_overview_weapon_passes(blueprint)
+	local weapon_name_left = 0
+
+	for _, pass in ipairs(blueprint and blueprint.pass_template or {}) do
+		if pass.style_id == "display_name" and pass.style and pass.style.offset then
+			weapon_name_left = pass.style.offset[1] or 0
+
+			break
+		end
+	end
+
+	for _, pass in ipairs(blueprint and blueprint.pass_template or {}) do
+		local style_id = pass.style_id
+		local style = pass.style
+
+		if type(style_id) == "string" and style then
+			style.offset = style.offset or {
+				0,
+				0,
+				0,
+			}
+
+			local move_up = 0
+			local move_down = 0
+			local foreground = false
+
+			-- The native overview reserves a blank quality/mark row. Reuse that
+			-- row for the first perk and pull the remaining detail rows upward.
+			if string.find(style_id, "better_inventory_weapon_perk_", 1, true) == 1 or string.find(style_id, "better_inventory_blessing_", 1, true) == 1 then
+				-- Overview-only compact pass: use the reserved quality/mark row and
+				-- keep both blessing rows clear of the native frame overlay.
+				move_up = 9
+				foreground = true
+				style.offset[1] = math.max(style.offset[1] or 0, weapon_name_left)
+			elseif string.find(style_id, "better_inventory_weapon_modifier_", 1, true) == 1 or string.sub(style_id, 1, 4) == "qlc_" then
+				foreground = true
+			elseif style_id == "better_inventory_quick_look_card_dump_stat" then
+				move_down = 6
+				foreground = true
+			elseif style_id == "item_level" then
+				-- The weapon item-level pass is top-aligned (despite its
+				-- bottom-aligned text), so reducing this positive adjustment moves
+				-- it upward.
+				move_down = 4
+				foreground = true
+			end
+
+			if move_up > 0 then
+				-- Bottom-aligned passes move upward with a more positive Y offset;
+				-- top-aligned modifier passes move upward with a smaller Y offset.
+				if style.vertical_alignment == "bottom" then
+					style.offset[2] = (style.offset[2] or 0) - move_up
+				else
+					style.offset[2] = (style.offset[2] or 0) - move_up
+				end
+			end
+
+			if move_down > 0 then
+				if style.vertical_alignment == "bottom" then
+					style.offset[2] = (style.offset[2] or 0) - move_down
+				else
+					style.offset[2] = (style.offset[2] or 0) + move_down
+				end
+			end
+
+			if foreground then
+				-- The native loadout frame is drawn at a higher Z layer than the
+				-- item widget. Keep only the information passes above that frame;
+				-- the card background and weapon art remain underneath it.
+				style.offset[3] = math.max(style.offset[3] or 0, 31)
+			end
+		end
+	end
+end
+
+local function move_character_overview_weapon_icon(blueprint)
+	for _, pass in ipairs(blueprint and blueprint.pass_template or {}) do
+		if pass.style_id == "icon" and pass.style then
+			local style = pass.style
+			style.offset = style.offset or {
+				0,
+				0,
+				0,
+			}
+
+			-- Weapon icons use the card's top-aligned coordinate space. A smaller
+			-- Y offset raises them; retain the opposite adjustment for a blueprint
+			-- that supplies a bottom-aligned icon style.
+			if style.vertical_alignment == "bottom" then
+				style.offset[2] = (style.offset[2] or 0) + 6
+			else
+				style.offset[2] = (style.offset[2] or 0) - 6
+			end
+
+			return
+		end
+	end
+end
+
+local function character_overview_weapon_blueprint()
+	local native_blueprint = InventoryViewContentBlueprints.item_slot
+	local detailed_blueprint = CHARACTER_OVERVIEW_BLUEPRINTS and CHARACTER_OVERVIEW_BLUEPRINTS.item
+
+	if type(native_blueprint) ~= "table" or type(detailed_blueprint) ~= "table" or not detailed_blueprint.pass_template then
+		return
+	end
+
+	-- InventoryView's native item-slot blueprint owns the live icon lifecycle and
+	-- equipment refresh. Keep those callbacks, but give them the same pass set
+	-- and geometry as BetterInventory's detailed single-column inventory card.
+	local blueprint = table.clone(detailed_blueprint)
+	blueprint.size = table.clone(native_blueprint.size or detailed_blueprint.size)
+	blueprint.size[2] = CHARACTER_OVERVIEW_WEAPON_HEIGHT
+	blueprint.pass_template = table.clone(detailed_blueprint.pass_template)
+	blueprint.init = native_blueprint.init
+	blueprint.update = native_blueprint.update
+	blueprint.destroy = native_blueprint.destroy
+	-- configure_native_item_blueprint wraps update_data to refresh the detailed
+	-- text/stat passes after the equipped item changes. The native item-slot
+	-- blueprint has no update_data callback, so provide a harmless seam first.
+	blueprint.update_data = function()
+		return
+	end
+
+	Layout.configure_native_item_blueprint(mod, blueprint, blueprint.size[1], {
+		native_single_column = true,
+		character_overview = true,
+	})
+	configure_character_overview_weapon_passes(blueprint)
+	move_character_overview_weapon_icon(blueprint)
+
+	local configured_init = blueprint.init
+
+	blueprint.init = function(parent, widget, element, callback_name, secondary_callback_name, ui_renderer, double_click_callback, template)
+		if configured_init then
+			configured_init(parent, widget, element, callback_name, secondary_callback_name, ui_renderer, double_click_callback, template)
+		end
+
+		mark_character_overview_requirement_met(widget)
+	end
+
+	local native_update = blueprint.update
+
+	blueprint.update = function(parent, widget, input_service, dt, t, ui_renderer)
+		local content = widget and widget.content
+		local element = content and content.element
+		local previous_item = element and element.item
+
+		if native_update then
+			native_update(parent, widget, input_service, dt, t, ui_renderer)
+		end
+
+		mark_character_overview_requirement_met(widget)
+
+		local slot = element and element.slot
+		local current_item = slot and parent.equipped_item_in_slot and parent:equipped_item_in_slot(slot.name)
+
+		if element and current_item ~= previous_item then
+			element.item = current_item
+
+			if blueprint.update_data then
+				blueprint.update_data(parent, widget, element)
+			end
+		end
+	end
+
+	return blueprint
+end
+
+local function character_overview_curio_blueprint()
+	local native_blueprint = InventoryViewContentBlueprints.gadget_item_slot
+	local detailed_blueprint = CHARACTER_OVERVIEW_BLUEPRINTS and CHARACTER_OVERVIEW_BLUEPRINTS.item
+
+	if type(native_blueprint) ~= "table" or type(detailed_blueprint) ~= "table" or not detailed_blueprint.pass_template then
+		return
+	end
+
+	local blueprint = table.clone(detailed_blueprint)
+	blueprint.size = table.clone(native_blueprint.size or {
+		193,
+		250,
+	})
+	-- Keep the overview Curio compact; its native decorative frame leaves a
+	-- relatively short readable region, so avoid expanding into the lower frame.
+	blueprint.size[2] = 250
+	blueprint.pass_template = table.clone(detailed_blueprint.pass_template)
+	blueprint.init = native_blueprint.init
+	blueprint.update = native_blueprint.update
+	blueprint.destroy = native_blueprint.destroy
+	blueprint.update_data = function()
+		return
+	end
+
+	Layout.configure_native_item_blueprint(mod, blueprint, blueprint.size[1], {
+		native_single_column = true,
+		character_overview = true,
+	})
+
+	local curio_font_scale = math.max(50, math.min(150, tonumber(mod:get("character_overview_curio_font_size_percent")) or 110)) / 100
+	local curio_name_mode = mod:get("character_overview_curio_name_mode")
+
+	if curio_name_mode ~= "one_line" and curio_name_mode ~= "two_lines" then
+		curio_name_mode = mod:get("character_overview_show_curio_names") == true and "one_line" or "none"
+	end
+
+	local curio_name_line_limit = curio_name_mode == "two_lines" and 2 or curio_name_mode == "one_line" and 1 or 0
+	local show_curio_name = curio_name_line_limit > 0
+
+	for index = 1, #blueprint.pass_template do
+		local style = blueprint.pass_template[index].style
+
+		if style and type(style.font_size) == "number" then
+			style.font_size = math.max(1, math.floor(style.font_size * curio_font_scale + 0.5))
+		end
+	end
+
+	local configured_init = blueprint.init
+
+	blueprint.init = function(parent, widget, element, callback_name, secondary_callback_name, ui_renderer, double_click_callback, template)
+		if configured_init then
+			configured_init(parent, widget, element, callback_name, secondary_callback_name, ui_renderer, double_click_callback, template)
+		end
+
+		mark_character_overview_requirement_met(widget)
+	end
+
+	local card_width = blueprint.size[1]
+	local icon = nil
+	local display_name = nil
+	local sub_display_name = nil
+	local rarity_name = nil
+	local item_level = nil
+	local curio_stat_passes = {}
+
+	for index = 1, #blueprint.pass_template do
+		local pass = blueprint.pass_template[index]
+
+		if pass.style_id == "icon" then
+			icon = pass
+		elseif pass.style_id == "display_name" then
+			display_name = pass
+		elseif pass.style_id == "sub_display_name" then
+			sub_display_name = pass
+		elseif pass.style_id == "rarity_name" then
+			rarity_name = pass
+		elseif pass.style_id == "item_level" then
+			item_level = pass
+		elseif type(pass.style_id) == "string" then
+			local curio_stat_index = tonumber(string.match(pass.style_id, "^better_inventory_curio_stat_(%d+)$"))
+
+			if curio_stat_index then
+				curio_stat_passes[curio_stat_index] = pass
+			end
+		end
+	end
+
+	local primary_curio_style = curio_stat_passes[1] and curio_stat_passes[1].style
+	local curio_name_font_size = primary_curio_style and primary_curio_style.font_size or math.max(1, math.floor(16 * curio_font_scale + 0.5))
+	-- Reserve selected title lines plus a fixed gap before all four stats.
+	local curio_name_block_height = curio_name_font_size * curio_name_line_limit + 11
+
+	if show_curio_name and display_name and display_name.style then
+		display_name.visibility_function = function(content)
+			return content and type(content.display_name) == "string" and content.display_name ~= ""
+		end
+		display_name.style.horizontal_alignment = "left"
+		display_name.style.vertical_alignment = "top"
+		display_name.style.text_horizontal_alignment = "left"
+		display_name.style.text_vertical_alignment = "top"
+		display_name.style.word_wrap = false
+		display_name.style.font_size = curio_name_font_size
+		display_name.style.offset = {
+			16,
+			7,
+			12,
+		}
+		display_name.style.size = {
+			math.max(40, card_width - 56),
+			curio_name_block_height,
+		}
+
+		for index = 1, 4 do
+			local stat_style = curio_stat_passes[index] and curio_stat_passes[index].style
+
+			if stat_style and stat_style.offset then
+				stat_style.offset[2] = (stat_style.offset[2] or 0) + curio_name_block_height
+			end
+		end
+	end
+
+	-- Keep the overview's tall Curio frame, but use the same compact landscape
+	-- icon treatment and bottom-right item level as the detailed inventory card.
+	if icon and icon.style then
+		local icon_width = math.floor(math.min(card_width - 8, 188) * 1.5 + 0.5)
+
+		icon.style.horizontal_alignment = "center"
+		icon.style.vertical_alignment = "top"
+		icon.style.size = {
+			icon_width,
+			math.floor(icon_width * 0.5 + 0.5),
+		}
+		icon.style.offset = {
+			0,
+			67,
+			4,
+		}
+	end
+
+	if not show_curio_name and display_name then
+		display_name.visibility_function = function()
+			return false
+		end
+	end
+
+	for _, pass in ipairs({ sub_display_name, rarity_name }) do
+		if pass then
+			pass.visibility_function = function()
+				return false
+			end
+		end
+	end
+
+	local function fit_curio_name(widget, ui_renderer)
+		local style = show_curio_name and widget and widget.style and widget.style.display_name
+		local content = widget and widget.content
+
+		if style and content then
+			style.font_size = curio_name_font_size
+
+			local displayed_name = content.display_name
+
+			if type(displayed_name) == "string" and displayed_name ~= "" and displayed_name ~= content.better_inventory_fitted_curio_name then
+				content.better_inventory_full_display_name = string.gsub(displayed_name, "[\r\n]+", " ")
+			end
+
+			local full_name = content.better_inventory_full_display_name or displayed_name
+			local maximum_width = style.size and style.size[1]
+
+			if ui_renderer and type(full_name) == "string" and full_name ~= "" and type(maximum_width) == "number" then
+				local minimum_font_size = 8
+				local wrapped_rows
+
+				while style.font_size > minimum_font_size do
+					wrapped_rows = Text.word_wrap(ui_renderer, full_name, style, maximum_width)
+
+					if not wrapped_rows or #wrapped_rows <= curio_name_line_limit then
+						break
+					end
+
+					style.font_size = style.font_size - 1
+				end
+
+				wrapped_rows = Text.word_wrap(ui_renderer, full_name, style, maximum_width)
+
+				local fitted_name
+
+				if wrapped_rows and #wrapped_rows <= curio_name_line_limit then
+					fitted_name = table.concat(wrapped_rows, "\n")
+				elseif curio_name_line_limit == 1 then
+					fitted_name = Text.crop_text_width(ui_renderer, full_name, style, maximum_width)
+				else
+					local fitted_rows = {}
+
+					for index = 1, curio_name_line_limit do
+						fitted_rows[index] = wrapped_rows and wrapped_rows[index] or ""
+					end
+
+					fitted_rows[curio_name_line_limit] = Text.crop_text_width(ui_renderer, fitted_rows[curio_name_line_limit] .. "…", style, maximum_width)
+					fitted_name = table.concat(fitted_rows, "\n")
+				end
+
+				content.display_name = fitted_name
+				content.better_inventory_fitted_curio_name = fitted_name
+			end
+		end
+	end
+
+	local overview_init = blueprint.init
+
+	blueprint.init = function(parent, widget, element, callback_name, secondary_callback_name, ui_renderer, double_click_callback, template)
+		overview_init(parent, widget, element, callback_name, secondary_callback_name, ui_renderer, double_click_callback, template)
+		fit_curio_name(widget, ui_renderer)
+	end
+
+	if item_level and item_level.style then
+		item_level.style.horizontal_alignment = "right"
+		item_level.style.vertical_alignment = "bottom"
+		item_level.style.text_horizontal_alignment = "right"
+		item_level.style.text_vertical_alignment = "bottom"
+		item_level.style.offset = {
+			-8,
+			-8,
+			12,
+		}
+		item_level.style.size = {
+			card_width - 16,
+			30,
+		}
+	end
+
+	local native_update = blueprint.update
+
+	blueprint.update = function(parent, widget, input_service, dt, t, ui_renderer)
+		local content = widget and widget.content
+		local element = content and content.element
+		local previous_item = element and element.item
+
+		if native_update then
+			native_update(parent, widget, input_service, dt, t, ui_renderer)
+		end
+
+		mark_character_overview_requirement_met(widget)
+		fit_curio_name(widget, ui_renderer)
+
+		local slot = element and element.slot
+		local current_item = slot and parent.equipped_item_in_slot and parent:equipped_item_in_slot(slot.name)
+
+		if element and current_item ~= previous_item then
+			element.item = current_item
+
+			if blueprint.update_data then
+				blueprint.update_data(parent, widget, element)
+			end
+		end
+	end
+
+	return blueprint
 end
 
 local function is_armoury_sort_view(view)
@@ -378,6 +846,9 @@ local function refresh_option_dependencies()
 	set_option_enabled(option_dependency_entries.global_store_compact_character_names, global_store_layout_enabled, global_store_reason)
 	set_option_enabled(option_dependency_entries.global_store_single_column_modifier_horizontal_position, global_store_native_enabled, global_store_integration_reason)
 	set_option_enabled(option_dependency_entries.global_store_single_column_modifier_vertical_position, global_store_native_enabled, global_store_integration_reason)
+	local character_overview_curio_enabled = mod:get("enable_character_overview_curio_details") ~= false
+	set_option_enabled(option_dependency_entries.character_overview_curio_name_mode, character_overview_curio_enabled, mod:localize("option_requires_character_overview_curio_details"))
+	set_option_enabled(option_dependency_entries.character_overview_curio_font_size_percent, character_overview_curio_enabled, mod:localize("option_requires_character_overview_curio_details"))
 	set_option_enabled(option_dependency_entries.weapon_perk_compression, weapon_perks_enabled, mod:localize("option_requires_weapon_perks"))
 	set_option_enabled(option_dependency_entries.show_weapon_perk_rank_symbols, weapon_perks_enabled, mod:localize("option_requires_weapon_perks"))
 	set_option_enabled(option_dependency_entries.weapon_perk_rank_icon_size, weapon_rank_symbols_enabled, mod:localize("option_requires_rank_symbols"))
@@ -556,6 +1027,8 @@ local function bind_option_dependencies(options_templates)
 		"global_store_compact_character_names",
 		"global_store_single_column_modifier_horizontal_position",
 		"global_store_single_column_modifier_vertical_position",
+		"character_overview_curio_name_mode",
+		"character_overview_curio_font_size_percent",
 		"weapon_perk_compression",
 		"show_weapon_perk_rank_symbols",
 		"weapon_perk_rank_icon_size",
@@ -754,6 +1227,16 @@ function mod.on_enabled()
 
 	migrate_grid_column_settings()
 
+	-- Replace the unreleased Curio-name checkboxes with one mode selector while
+	-- preserving the currently enabled one-line presentation for test profiles.
+	if not mod:get("_character_overview_curio_name_mode_v1_migrated") then
+		if mod:get("character_overview_show_curio_names") == true then
+			mod:set("character_overview_curio_name_mode", "one_line")
+		end
+
+		mod:set("_character_overview_curio_name_mode_v1_migrated", true)
+	end
+
 	if not mod:get("_curio_compression_mode_v1_migrated") then
 		local previous_compact_setting = mod:get("compact_curio_stat_text")
 
@@ -841,7 +1324,7 @@ function mod.on_setting_changed(setting_id)
 		end
 	end
 
-	if setting_id == "enable_grid_layout" or setting_id == "melee_columns" or setting_id == "ranged_columns" or setting_id == "curio_columns" or setting_id == "automatic_card_height" or setting_id == "expand_inventory_window" or setting_id == "weapon_extra_width_column_threshold" or setting_id == "expand_curio_inventory_window" or setting_id == "enable_hadron_single_column_mirror" or setting_id == "enable_armoury_requisition_grid" or setting_id == "enable_armoury_single_column_mirror" or setting_id == "enable_armoury_requisition_sorting_panel" or setting_id == "brighten_armoury_item_levels" or setting_id == "three_column_weapon_name_font_size" or setting_id == "expand_armoury_requisition_window" or setting_id == "enable_global_store_integration" or setting_id == "enable_global_store_grid" or setting_id == "enable_global_store_sorting_panel" or setting_id == "global_store_character_photo_size_percent" or setting_id == "global_store_price_row_padding" or setting_id == "global_store_character_info_gap" or setting_id == "global_store_character_class_icon_size" or setting_id == "global_store_character_name_font_size" or setting_id == "global_store_compact_character_names" or setting_id == "global_store_single_column_modifier_horizontal_position" or setting_id == "global_store_single_column_modifier_vertical_position" or setting_id == "weapon_blessing_display_mode" or setting_id == "show_weapon_perks" or setting_id == "show_weapon_perk_rank_symbols" or setting_id == "single_column_blessing_icons_on_right" or setting_id == "curio_display_profile" or setting_id == "enable_inventory_options_panel_prototype" or setting_id == "enable_experimental_quick_discard" or setting_id == "quick_discard_mode" or setting_id == "quick_discard_protect_high_level_curios" or setting_id == "enable_automatic_curio_acquisition" or automatic_curio_setting or setting_id == "enable_quick_look_card_single_column_integration" or setting_id == "enable_quick_look_card_grid_integration" or setting_id == "quick_look_card_grid_stat_position" then
+	if setting_id == "enable_grid_layout" or setting_id == "melee_columns" or setting_id == "ranged_columns" or setting_id == "curio_columns" or setting_id == "automatic_card_height" or setting_id == "expand_inventory_window" or setting_id == "weapon_extra_width_column_threshold" or setting_id == "expand_curio_inventory_window" or setting_id == "enable_hadron_single_column_mirror" or setting_id == "enable_armoury_requisition_grid" or setting_id == "enable_armoury_single_column_mirror" or setting_id == "enable_armoury_requisition_sorting_panel" or setting_id == "brighten_armoury_item_levels" or setting_id == "three_column_weapon_name_font_size" or setting_id == "expand_armoury_requisition_window" or setting_id == "enable_global_store_integration" or setting_id == "enable_global_store_grid" or setting_id == "enable_global_store_sorting_panel" or setting_id == "global_store_character_photo_size_percent" or setting_id == "global_store_price_row_padding" or setting_id == "global_store_character_info_gap" or setting_id == "global_store_character_class_icon_size" or setting_id == "global_store_character_name_font_size" or setting_id == "global_store_compact_character_names" or setting_id == "global_store_single_column_modifier_horizontal_position" or setting_id == "global_store_single_column_modifier_vertical_position" or setting_id == "enable_character_overview_melee_mirror" or setting_id == "enable_character_overview_ranged_mirror" or setting_id == "enable_character_overview_curio_details" or setting_id == "character_overview_curio_name_mode" or setting_id == "weapon_blessing_display_mode" or setting_id == "show_weapon_perks" or setting_id == "show_weapon_perk_rank_symbols" or setting_id == "single_column_blessing_icons_on_right" or setting_id == "curio_display_profile" or setting_id == "enable_inventory_options_panel_prototype" or setting_id == "enable_experimental_quick_discard" or setting_id == "quick_discard_mode" or setting_id == "quick_discard_protect_high_level_curios" or setting_id == "enable_automatic_curio_acquisition" or automatic_curio_setting or setting_id == "enable_quick_look_card_single_column_integration" or setting_id == "enable_quick_look_card_grid_integration" or setting_id == "quick_look_card_grid_stat_position" then
 		refresh_option_dependencies()
 	end
 
@@ -1062,6 +1545,36 @@ if ensure_class_method(InventoryWeaponsView, "present_grid_layout") then
 		configuration.slot_kind = Layout.slot_kind(view)
 
 		return present_grid_with_configuration(func, view, layout, on_present_callback, configuration)
+	end)
+end
+
+-- The character overview uses InventoryView's individual item-slot widgets
+-- instead of ViewElementGrid. Swap only its primary/secondary weapon slots to
+-- the detailed inventory card while retaining Darktide's native icon loading,
+-- equipment refresh and click callbacks. The optional scenegraph ID is present
+-- only for individual-layout widgets, so inventory grid tabs remain untouched.
+if ensure_class_method(InventoryView, "_create_entry_widget_from_config") then
+	mod:hook(InventoryView, "_create_entry_widget_from_config", function(func, view, config, suffix, callback_name, secondary_callback_name, optional_scenegraph_id)
+		local weapon_kind = optional_scenegraph_id and character_overview_weapon_kind(config)
+		local curio_slot = optional_scenegraph_id and character_overview_curio_slot(config)
+		local setting_id = weapon_kind == "melee" and "enable_character_overview_melee_mirror" or weapon_kind == "ranged" and "enable_character_overview_ranged_mirror" or curio_slot and "enable_character_overview_curio_details"
+
+		if view and view.__class_name == "InventoryView" and setting_id and mod:get(setting_id) ~= false then
+			local blueprint = curio_slot and character_overview_curio_blueprint() or character_overview_weapon_blueprint()
+			local widget_type = curio_slot and CHARACTER_OVERVIEW_CURIO_WIDGET_TYPE or CHARACTER_OVERVIEW_WEAPON_WIDGET_TYPE
+
+			if blueprint then
+				InventoryViewContentBlueprints[widget_type] = blueprint
+
+				local adapted_config = table.clone(config)
+				adapted_config.widget_type = widget_type
+				adapted_config.item = view.equipped_item_in_slot and view:equipped_item_in_slot(config.slot.name)
+
+				return func(view, adapted_config, suffix, callback_name, secondary_callback_name, optional_scenegraph_id)
+			end
+		end
+
+		return func(view, config, suffix, callback_name, secondary_callback_name, optional_scenegraph_id)
 	end)
 end
 

@@ -50,6 +50,12 @@ return {
 	fp_pitch_sprint_tooltip = {
 		en = "While sprinting the camera is held above this pitch angle. If you were already looking further down when the sprint starts, the camera glides up to this limit instead of snapping.",
 	},
+	fp_device_truth = {
+		en = "Hide body while holding a scanner",
+	},
+	fp_device_truth_tooltip = {
+		en = "The auspex puzzle is drawn on the scanner's own first person screen, which is not the screen being rendered while your body is shown, so the puzzle goes missing and the objective cannot be finished. This steps the mod aside for as long as a scanner is in your hands, covering every scanner in the game. Your body returns the moment you put it away.",
+	},
 	fp_hide_holstered = {
 		en = "Hide holstered weapons",
 	},

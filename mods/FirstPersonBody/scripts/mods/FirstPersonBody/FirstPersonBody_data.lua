@@ -73,6 +73,12 @@ return {
 				},
 			},
 			{
+				setting_id = "fp_device_truth",
+				type = "checkbox",
+				default_value = true,
+				tooltip = "fp_device_truth_tooltip",
+			},
+			{
 				setting_id = "fp_hide_holstered",
 				type = "checkbox",
 				default_value = true,

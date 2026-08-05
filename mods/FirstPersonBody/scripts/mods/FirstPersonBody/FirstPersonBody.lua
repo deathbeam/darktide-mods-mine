@@ -33,7 +33,7 @@ local mod = get_mod("FirstPersonBody")
 -- Compatible with Perspectives: its third person mode sets the game's own
 -- _force_third_person_mode flag, which this mod treats as "hands off".
 
-mod.version = "1.10.4"
+mod.version = "1.11.0"
 
 mod._poll_ttl = 0
 mod._diag_delay = 5
@@ -175,6 +175,15 @@ local function wake_unit_render(unit, deep)
 		return
 	end
 
+	-- REVERTED in v1.10.6, and the reason is worth keeping. v1.10.5 dropped
+	-- the second flag here to stop this call reaching down the first person
+	-- rig and switching a weapon's flashlight lamp on. It did stop that, and
+	-- it also stopped the weapon rendering at all: what looked like an
+	-- over-broad "and everything below" is in fact the flag that makes this
+	-- call reach the objects the viewmodel is actually built from. Held
+	-- weapons vanished from the player's hands. The flashlight is a real
+	-- bug, but it is the smaller one, and it needs a fix that names the
+	-- lamp rather than one that turns the wake down.
 	pcall(Unit.set_unit_objects_visibility, unit, true, true)
 
 	local ok, num_meshes = pcall(Unit.num_meshes, unit)
@@ -597,7 +606,31 @@ end
 mod:hook(CLASS.PlayerUnitFirstPersonExtension, "_update_first_person_mode", function(func, self, t)
 	local show_1p_equipment, wants_1p_camera = func(self, t)
 
-	if show_1p_equipment and wants_1p_camera and not self._force_third_person_mode and self._is_local_unit and mod:get("fp_lower_body") then
+	-- Scanners get the plain truth (v1.11.0). The auspex minigame is drawn
+	-- onto the device's own first person screen, and while the equipment
+	-- system is running in third person that screen is not the one being
+	-- rendered, so the puzzle is simply absent and the objective cannot be
+	-- completed. No amount of waking fixes it, because the missing thing is
+	-- the interface, not a mesh. Gating on the WIELDED SLOT rather than on a
+	-- particular item covers every scanner the game has, the ones scattered
+	-- around missions and the Expedition one alike, since they are all
+	-- wielded in the device slot.
+	local device_wielded = false
+
+	if mod:get("fp_device_truth") ~= false then
+		local d_ok, wielded_slot = pcall(function()
+			local unit_data = ScriptUnit.has_extension(self._unit, "unit_data_system")
+			local inventory = unit_data and unit_data:read_component("inventory")
+
+			return inventory and inventory.wielded_slot
+		end)
+
+		if d_ok and type(wielded_slot) == "string" and string.find(wielded_slot, "device", 1, true) then
+			device_wielded = true
+		end
+	end
+
+	if show_1p_equipment and wants_1p_camera and not self._force_third_person_mode and self._is_local_unit and mod:get("fp_lower_body") and not device_wielded then
 		-- ADS exception (field-confirmed by control test): sight alignment
 		-- consults the first person mode we spoof, and told "third person"
 		-- it floats scopes above the crosshair. So during alternate fire the
