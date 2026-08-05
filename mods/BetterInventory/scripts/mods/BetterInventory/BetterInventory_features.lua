@@ -61,6 +61,7 @@ local ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT = 32
 local ARMOURY_NATIVE_SORT_PANEL_ROW_SPACING = 4
 local ARMOURY_NATIVE_SORT_PANEL_PADDING = 10
 local ARMOURY_NATIVE_SORT_CHECKBOX_LEFT_PADDING = 8
+local GLOBAL_STORE_SERVICE = "get_all_characters_store_custom"
 local INVENTORY_CURIO_NATIVE_WIDTH = 530
 local INVENTORY_CURIO_NATIVE_GRID_WIDTH = 518
 local INVENTORY_CURIO_NATIVE_HEADER_HEIGHT = 250
@@ -168,8 +169,16 @@ local function is_armoury_requisition_view(view)
 	return view and view.__class_name == "CreditsVendorView" and view._optional_store_service == nil
 end
 
+local function is_global_store_view(view)
+	return view and view.__class_name == "CreditsVendorView" and view._optional_store_service == GLOBAL_STORE_SERVICE
+end
+
+local function is_armoury_sort_view(view)
+	return is_armoury_requisition_view(view) or is_global_store_view(view)
+end
+
 local function is_sortable_view(layout, view)
-	return is_inventory_view(layout, view) or is_armoury_requisition_view(view)
+	return is_inventory_view(layout, view) or is_armoury_sort_view(view)
 end
 
 local function inventory_sort_toggle_passes()
@@ -2422,14 +2431,18 @@ local function armoury_native_sort_entries(mod, layout, view)
 	if not collapsed.sorting then
 		entries[#entries + 1] = armoury_native_sort_priority_entry(mod, layout, view, "prioritize_equipped_favorites", mod:localize("prioritize_equipped_favorites_inventory_label"))
 		entries[#entries + 1] = armoury_native_sort_priority_entry(mod, layout, view, "prioritize_perfect_roll_weapons", mod:localize("prioritize_perfect_roll_weapons_inventory_label"))
-		entries[#entries + 1] = armoury_native_sort_header_entry(mod, layout, view, "native_sorting", mod:localize("armoury_native_sorting_header"))
+	end
 
-		if not collapsed.native_sorting then
-			local sort_options = view._sort_options or {}
+	-- Native sorting is a sibling section, not part of the custom-priority
+	-- section. Keep its header (and its own collapsed state) visible when the
+	-- Sorting section is collapsed.
+	entries[#entries + 1] = armoury_native_sort_header_entry(mod, layout, view, "native_sorting", mod:localize("armoury_native_sorting_header"))
 
-			for option_index = 1, #sort_options do
-				entries[#entries + 1] = armoury_native_sort_entry(view, sort_options[option_index], option_index)
-			end
+	if not collapsed.native_sorting then
+		local sort_options = view._sort_options or {}
+
+		for option_index = 1, #sort_options do
+			entries[#entries + 1] = armoury_native_sort_entry(view, sort_options[option_index], option_index)
 		end
 	end
 
@@ -2486,7 +2499,7 @@ Features.update_armoury_native_sort_panel = function(view)
 end
 
 Features.setup_armoury_native_sort_panel = function(mod, layout, view, ViewElementGrid)
-	if not is_armoury_requisition_view(view) or view._better_inventory_armoury_native_sort_panel then
+	if not is_armoury_sort_view(view) or view._better_inventory_armoury_native_sort_panel then
 		return false
 	end
 
@@ -2643,6 +2656,14 @@ end
 
 Features.configure_armoury_sort_options = function(mod, view)
 	if not is_armoury_requisition_view(view) then
+		return
+	end
+
+	configure_sort_options(mod, view)
+end
+
+Features.configure_global_store_sort_options = function(mod, view)
+	if not is_global_store_view(view) then
 		return
 	end
 

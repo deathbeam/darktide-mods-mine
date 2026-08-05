@@ -503,17 +503,116 @@ local localization = {
 	additional_views_group = {
 		en = "Additional inventory views",
 	},
+	hadron_additional_views_group = {
+		en = "Hadron",
+	},
+	armoury_exchange_views_group = {
+		en = "Armoury Exchange",
+	},
+	global_store_integration_group = {
+		en = "Mod Integration: GlobalStore",
+	},
+	enable_global_store_integration = {
+		en = "Enable GlobalStore integration",
+	},
+	enable_global_store_integration_tooltip = {
+		en = "Enables BetterInventory's GlobalStore integration for Multi-Operative Supply. Disable this to leave GlobalStore's native cards and sorting untouched.",
+	},
+	enable_global_store_grid = {
+		en = "Use BetterInventory grid cards",
+	},
+	enable_global_store_grid_tooltip = {
+		en = "Uses BetterInventory's responsive grid cards in GlobalStore's Multi-Operative Supply. The view is capped at three columns; the Melee, Ranged and Curios column settings only apply to inventory tabs. Three columns reserve an extra character-information row without stretching weapon art.",
+	},
+	enable_global_store_sorting_panel = {
+		en = "Show GlobalStore sorting widget",
+	},
+	enable_global_store_sorting_panel_tooltip = {
+		en = "Adds collapsible BetterInventory Sorting and Darktide Native Sorting sections to GlobalStore's Multi-Operative Supply. Requires the GlobalStore grid option and is enabled by default.",
+	},
+	global_store_character_photo_size_percent = {
+		en = "GlobalStore character photo size (%%)",
+	},
+	global_store_character_photo_size_percent_tooltip = {
+		en = "Controls the GlobalStore character photo size in two- and three-column cards (50-125%%, with 110%% as the default). The character row remains below the price and item-level row while its reserved height stays fixed, so changing this value does not change card dimensions or move the price.",
+	},
+	global_store_price_row_padding = {
+		en = "GlobalStore price/item-level row padding",
+	},
+	global_store_price_row_padding_tooltip = {
+		en = "Controls the vertical padding above the GlobalStore character row. Increasing it moves the Ordo Dockets and item-level row farther from the character photo without changing the photo size.",
+	},
+	global_store_character_info_gap = {
+		en = "GlobalStore character info horizontal gap",
+	},
+	global_store_character_info_gap_tooltip = {
+		en = "Controls the horizontal space between the GlobalStore character photo and the class icon/name. The value is in pixels and applies to two- and three-column cards.",
+	},
+	global_store_character_class_icon_size = {
+		en = "GlobalStore class icon size",
+	},
+	global_store_character_class_icon_size_tooltip = {
+		en = "Controls the GlobalStore class icon font size in two- and three-column cards (8-24 px, default 16). The character row and card dimensions stay fixed.",
+	},
+	global_store_character_name_font_size = {
+		en = "GlobalStore character name font size",
+	},
+	global_store_character_name_font_size_tooltip = {
+		en = "Controls the GlobalStore character name font size in two- and three-column cards (8-20 px, default 16). The character row and card dimensions stay fixed.",
+	},
+	global_store_compact_character_names = {
+		en = "Compact GlobalStore character names in 4-5 columns",
+	},
+	global_store_compact_character_names_tooltip = {
+		en = "Retained for compatibility with older profiles. GlobalStore is capped at three columns, so this narrow-card four- and five-column behavior is not used. Enabled by default.",
+	},
+	global_store_single_column_modifier_horizontal_position = {
+		en = "GlobalStore single-column weapon modifier horizontal position (%%)",
+	},
+	global_store_single_column_modifier_horizontal_position_tooltip = {
+		en = "Moves the DMG, CLVD, DEF and other weapon modifier values horizontally on native single-column GlobalStore cards. Zero is the left edge and 100 is the right edge. Reopen GlobalStore after changing this value.",
+	},
+	global_store_single_column_modifier_vertical_position = {
+		en = "GlobalStore single-column weapon modifier vertical position (%%)",
+	},
+	global_store_single_column_modifier_vertical_position_tooltip = {
+		en = "Moves the native single-column GlobalStore weapon modifier block vertically. Zero is the top edge and 100 is the bottom edge. Reopen GlobalStore after changing this value.",
+	},
 	enable_hadron_entreat_grid = {
 		en = "Hadron: Entreat Hadron",
 	},
 	enable_hadron_entreat_grid_tooltip = {
 		en = "Uses Better Inventory cards when selecting an item through Entreat Hadron. The effective layout is capped at three columns; Hadron's separate Sacrifice Weapons flow is not changed.",
 	},
+	enable_hadron_single_column_mirror = {
+		en = "Mirror single-column format from inventory",
+	},
+	enable_hadron_single_column_mirror_tooltip = {
+		en = "Uses the detailed BetterInventory single-column card format for Entreat Hadron when grid layout is disabled. This adds the same perk, blessing and weapon-stat rows used by the inventory. Enabled by default.",
+	},
 	enable_armoury_requisition_grid = {
 		en = "Armoury: Requisition Weapons & Curios",
 	},
 	enable_armoury_requisition_grid_tooltip = {
 		en = "Uses Better Inventory cards in Requisition Weapons & Curios. The effective layout is capped at three columns; Brunt's Armoury and Multi-Operative Supply are not changed.",
+	},
+	enable_armoury_single_column_mirror = {
+		en = "Enable custom detailed card for single column",
+	},
+	enable_armoury_single_column_mirror_tooltip = {
+		en = "Uses BetterInventory's custom detailed card for Requisition Weapons & Curios when grid layout is disabled. Enabled by default.",
+	},
+	enable_armoury_requisition_sorting_panel = {
+		en = "Show Armoury sorting widget",
+	},
+	enable_armoury_requisition_sorting_panel_tooltip = {
+		en = "Adds BetterInventory's collapsible Sorting and Darktide Native Sorting widget to Requisition Weapons & Curios. Requires the Armoury grid option and is enabled by default.",
+	},
+	brighten_armoury_item_levels = {
+		en = "Brighten Armoury item levels",
+	},
+	brighten_armoury_item_levels_tooltip = {
+		en = "Uses brighter text for item levels on Armoury Exchange cards so the value remains readable above the price footer. Enabled by default.",
 	},
 	expand_armoury_requisition_window = {
 		en = "Expand Armoury Requisition window",
@@ -555,13 +654,13 @@ local localization = {
 		en = "Single-column modifier horizontal position (%%)",
 	},
 	quick_look_card_single_column_horizontal_position_tooltip = {
-		en = "Moves the five-modifier block horizontally across the available card width. Zero is the left edge and 100 is the right edge. Reopen the inventory after changing this value.",
+		en = "Moves the five-modifier block horizontally across the available card width, including native single-column GlobalStore cards. Zero is the left edge and 100 is the right edge. Reopen the inventory after changing this value.",
 	},
 	quick_look_card_single_column_vertical_position = {
 		en = "Single-column modifier vertical position (%%)",
 	},
 	quick_look_card_single_column_vertical_position_tooltip = {
-		en = "Moves the five-modifier block vertically across the available card height. Zero is the top edge and 100 is the bottom edge. Reopen the inventory after changing this value.",
+		en = "Moves the five-modifier block vertically across the available card height, including native single-column GlobalStore cards. Zero is the top edge and 100 is the bottom edge. Reopen the inventory after changing this value.",
 	},
 	enable_quick_look_card_grid_integration = {
 		en = "Show lowest weapon modifier in grid mode",
@@ -672,11 +771,29 @@ local localization = {
 	enable_grid_layout_tooltip = {
 		en = "Uses Better Inventory's multi-column cards. Disable this to retain Darktide's native single-column geometry while keeping enabled card-content enhancements.",
 	},
-	columns = {
-		en = "Columns",
+	melee_columns = {
+		en = "Melee Weapons Columns",
 	},
-	columns_tooltip = {
-		en = "Number of item cards per inventory row. Three is the recommended starting point.",
+	melee_columns_tooltip = {
+		en = "Number of melee-weapon cards per inventory row. Defaults to three. This setting affects melee weapons only.",
+	},
+	ranged_columns = {
+		en = "Ranged Weapons Columns",
+	},
+	ranged_columns_tooltip = {
+		en = "Number of ranged-weapon cards per inventory row. Defaults to three. This setting affects ranged weapons only.",
+	},
+	curio_columns = {
+		en = "Curios Columns",
+	},
+	curio_columns_tooltip = {
+		en = "Number of Curio cards per inventory row. Defaults to three. This setting affects Curios only.",
+	},
+	three_column_weapon_name_font_size = {
+		en = "Armoury weapon name font size",
+	},
+	three_column_weapon_name_font_size_tooltip = {
+		en = "Controls weapon-name size in Armoury Exchange cards. Lower values help long names stay on one line without changing inventory cards. Reopen the Armoury view after changing this value.",
 	},
 	expand_inventory_window = {
 		en = "Expand inventory window when needed",
@@ -764,6 +881,12 @@ local localization = {
 	},
 	option_requires_armoury_expansion = {
 		en = "Enable Armoury Requisition window expansion to set a target card width.",
+	},
+	option_requires_global_store_grid = {
+		en = "Enable the GlobalStore grid to use this option.",
+	},
+	option_requires_global_store_integration = {
+		en = "Enable GlobalStore integration to use this option.",
 	},
 	option_requires_weapon_perks = {
 		en = "Enable weapon perk text to use this option.",
@@ -1960,6 +2083,52 @@ zh_cn.automatic_curio_character_slot_unavailable = "（当前未找到）"
 zh_cn.automatic_curio_character_slot_empty_reason = "当前没有角色分配到此栏位。BetterInventory 会在进入晨星号后刷新角色列表，并在枢纽中定期刷新。"
 zh_cn.enable_automatic_curio_acquisition_tooltip = "每次进入晨星号后，对所有角色的军械库交易所执行一次扫描，并自动购买符合物品等级、主要属性数值、类型和目标筛选条件的所有珍品。目标可按职业或单个角色选择。此功能会在没有确认提示的情况下花费审判庭双子币。自动丢弃会先完成，且符合获取规则的珍品会在以后的自动丢弃流程中保持受保护状态。"
 zh_cn.automatic_curio_min_item_level_tooltip = "只有显示物品等级达到或超过此值的军械库珍品才符合条件。生命和韧性珍品还必须达到对应的最低主要属性数值。货币充足时，会购买每个已启用目标的所有匹配商品。默认值为 410。"
+
+zh_cn.enable_armoury_requisition_sorting_panel = "显示军械库排序组件"
+zh_cn.enable_armoury_requisition_sorting_panel_tooltip = "在申领武器与珍品中添加可折叠的 BetterInventory 排序组件。需要开启军械库网格，默认开启。"
+zh_cn.brighten_armoury_item_levels = "提亮军械库物品等级"
+zh_cn.brighten_armoury_item_levels_tooltip = "使用更明亮的文字显示军械库交易所卡片中的物品等级，避免被底部价格区域遮暗。默认开启。"
+zh_cn.three_column_weapon_name_font_size = "军械库武器名称字号"
+zh_cn.three_column_weapon_name_font_size_tooltip = "控制军械库卡片中的武器名称字号。调低数值可帮助较长名称保持在一行，同时不影响库存卡片。"
+zh_cn.hadron_additional_views_group = "哈德隆"
+zh_cn.armoury_exchange_views_group = "军械库交易所"
+zh_cn.global_store_integration_group = "Mod 集成：GlobalStore"
+zh_cn.enable_global_store_integration = "启用 GlobalStore 集成"
+zh_cn.enable_global_store_integration_tooltip = "为多干员补给启用 BetterInventory 的 GlobalStore 集成。关闭后将保持 GlobalStore 的原生卡片和排序。"
+zh_cn.enable_global_store_grid = "使用 BetterInventory 网格卡片"
+zh_cn.enable_global_store_grid_tooltip = "在 GlobalStore 的多干员补给中使用 BetterInventory 响应式网格卡片。该视图最多三列；近战、远程和珍品列数设置仅适用于库存标签页。三列会增加角色信息行，但不会拉伸武器图像。"
+zh_cn.enable_global_store_sorting_panel = "显示 GlobalStore 排序组件"
+zh_cn.enable_global_store_sorting_panel_tooltip = "在 GlobalStore 的多干员补给中添加可折叠的 BetterInventory 排序和暗潮原生排序组件。需要开启 GlobalStore 网格，默认开启。"
+zh_cn.global_store_character_photo_size_percent = "GlobalStore 角色头像大小（%%）"
+zh_cn.global_store_character_photo_size_percent_tooltip = "控制二至三列卡片中的 GlobalStore 角色头像大小（50-125%%，默认110%%）。角色信息行位于价格和物品等级行下方，预留高度保持不变，因此调整此值不会改变卡片尺寸或使价格移动。"
+zh_cn.global_store_price_row_padding = "GlobalStore 价格/物品等级行内边距"
+zh_cn.global_store_price_row_padding_tooltip = "控制 GlobalStore 角色信息行上方的垂直内边距。增加此值会让奥多点券和物品等级行远离角色头像，而不会改变头像大小。"
+zh_cn.global_store_character_info_gap = "GlobalStore 角色信息水平间距"
+zh_cn.global_store_character_info_gap_tooltip = "控制 GlobalStore 角色头像与职业图标/名称之间的水平间距。单位为像素，适用于二至三列卡片。"
+zh_cn.global_store_character_class_icon_size = "GlobalStore 职业图标大小"
+zh_cn.global_store_character_class_icon_size_tooltip = "控制二至三列卡片中的 GlobalStore 职业图标字号（8-24像素，默认16）。角色信息行和卡片尺寸保持不变。"
+zh_cn.global_store_character_name_font_size = "GlobalStore 角色名称字号"
+zh_cn.global_store_character_name_font_size_tooltip = "控制二至三列卡片中的 GlobalStore 角色名称字号（8-20像素，默认16）。角色信息行和卡片尺寸保持不变。"
+zh_cn.global_store_compact_character_names = "在4-5列中压缩 GlobalStore 角色名称"
+zh_cn.global_store_compact_character_names_tooltip = "为兼容旧配置而保留。GlobalStore 最多三列，因此不会使用四列和五列窄卡片行为。默认开启。"
+zh_cn.option_requires_global_store_grid = "启用 GlobalStore 网格后才能使用此选项。"
+zh_cn.option_requires_global_store_integration = "启用 GlobalStore 集成后才能使用此选项。"
+
+zh_cn.global_store_single_column_modifier_horizontal_position = "GlobalStore single-column modifier horizontal position (%%)"
+zh_cn.global_store_single_column_modifier_horizontal_position_tooltip = "Move native single-column GlobalStore weapon modifiers horizontally. 0 is left and 100 is right. Reopen GlobalStore after changing."
+zh_cn.global_store_single_column_modifier_vertical_position = "GlobalStore single-column modifier vertical position (%%)"
+zh_cn.global_store_single_column_modifier_vertical_position_tooltip = "Move native single-column GlobalStore weapon modifiers vertically. 0 is top and 100 is bottom. Reopen GlobalStore after changing."
+zh_cn.melee_columns = "Melee Weapons Columns"
+zh_cn.melee_columns_tooltip = "Number of melee-weapon cards per inventory row. Defaults to three."
+zh_cn.ranged_columns = "Ranged Weapons Columns"
+zh_cn.ranged_columns_tooltip = "Number of ranged-weapon cards per inventory row. Defaults to three."
+zh_cn.curio_columns = "Curios Columns"
+zh_cn.curio_columns_tooltip = "Number of Curio cards per inventory row. Defaults to three."
+
+zh_cn.enable_hadron_single_column_mirror = "Mirror single-column format from inventory"
+zh_cn.enable_hadron_single_column_mirror_tooltip = "Uses the detailed BetterInventory single-column card format for Entreat Hadron when grid layout is disabled. Enabled by default."
+zh_cn.enable_armoury_single_column_mirror = "Enable custom detailed card for single column"
+zh_cn.enable_armoury_single_column_mirror_tooltip = "Uses BetterInventory's custom detailed card for Requisition Weapons & Curios when grid layout is disabled. Enabled by default."
 
 for localization_id, text in pairs(zh_cn) do
 	local entry = localization[localization_id]

@@ -1,4 +1,4 @@
-local MOD_VERSION = "1.4.0"
+local MOD_VERSION = "1.5.2"
 local mod = get_mod("BetterInventory")
 local DEFAULT_OPERATIVE_SLOT_CAPACITY = 10
 local MAX_REASONABLE_OPERATIVE_SLOT_CAPACITY = 64
@@ -547,31 +547,177 @@ return {
 				type = "group",
 				sub_widgets = {
 					{
-						setting_id = "enable_hadron_entreat_grid",
-						tooltip = "enable_hadron_entreat_grid_tooltip",
-						type = "checkbox",
-						default_value = true,
+						setting_id = "hadron_additional_views_group",
+						type = "group",
+						sub_widgets = {
+							{
+								setting_id = "enable_hadron_entreat_grid",
+								tooltip = "enable_hadron_entreat_grid_tooltip",
+								type = "checkbox",
+								default_value = true,
+							},
+							{
+								setting_id = "enable_hadron_single_column_mirror",
+								tooltip = "enable_hadron_single_column_mirror_tooltip",
+								type = "checkbox",
+								default_value = true,
+							},
+						},
 					},
 					{
-						setting_id = "enable_armoury_requisition_grid",
-						tooltip = "enable_armoury_requisition_grid_tooltip",
-						type = "checkbox",
-						default_value = true,
+						setting_id = "armoury_exchange_views_group",
+						type = "group",
+						sub_widgets = {
+							{
+								setting_id = "enable_armoury_requisition_grid",
+								tooltip = "enable_armoury_requisition_grid_tooltip",
+								type = "checkbox",
+								default_value = true,
+							},
+							{
+								setting_id = "enable_armoury_single_column_mirror",
+								tooltip = "enable_armoury_single_column_mirror_tooltip",
+								type = "checkbox",
+								default_value = true,
+							},
+							{
+								setting_id = "enable_armoury_requisition_sorting_panel",
+								tooltip = "enable_armoury_requisition_sorting_panel_tooltip",
+								type = "checkbox",
+								default_value = true,
+							},
+							{
+								setting_id = "brighten_armoury_item_levels",
+								tooltip = "brighten_armoury_item_levels_tooltip",
+								type = "checkbox",
+								default_value = true,
+							},
+							{
+								setting_id = "three_column_weapon_name_font_size",
+								tooltip = "three_column_weapon_name_font_size_tooltip",
+								type = "numeric",
+								default_value = 14,
+								range = {
+									10,
+									20,
+								},
+							},
+							{
+								setting_id = "expand_armoury_requisition_window",
+								tooltip = "expand_armoury_requisition_window_tooltip",
+								type = "checkbox",
+								default_value = true,
+							},
+							{
+								setting_id = "armoury_requisition_target_card_width",
+								tooltip = "armoury_requisition_target_card_width_tooltip",
+								type = "numeric",
+								default_value = 230,
+								range = {
+									190,
+									230,
+								},
+							},
+						},
 					},
 					{
-						setting_id = "expand_armoury_requisition_window",
-						tooltip = "expand_armoury_requisition_window_tooltip",
-						type = "checkbox",
-						default_value = true,
-					},
-					{
-						setting_id = "armoury_requisition_target_card_width",
-						tooltip = "armoury_requisition_target_card_width_tooltip",
-						type = "numeric",
-						default_value = 230,
-						range = {
-							190,
-							230,
+						setting_id = "global_store_integration_group",
+						type = "group",
+						sub_widgets = {
+							{
+								setting_id = "enable_global_store_integration",
+								tooltip = "enable_global_store_integration_tooltip",
+								type = "checkbox",
+								default_value = true,
+							},
+							{
+								setting_id = "enable_global_store_grid",
+								tooltip = "enable_global_store_grid_tooltip",
+								type = "checkbox",
+								default_value = true,
+							},
+							{
+								setting_id = "enable_global_store_sorting_panel",
+								tooltip = "enable_global_store_sorting_panel_tooltip",
+								type = "checkbox",
+								default_value = true,
+							},
+							{
+								setting_id = "global_store_character_photo_size_percent",
+								tooltip = "global_store_character_photo_size_percent_tooltip",
+								type = "numeric",
+								default_value = 110,
+								range = {
+									50,
+									125,
+								},
+							},
+							{
+								setting_id = "global_store_price_row_padding",
+								tooltip = "global_store_price_row_padding_tooltip",
+								type = "numeric",
+								default_value = 10,
+								range = {
+									5,
+									20,
+								},
+							},
+													{
+														setting_id = "global_store_character_info_gap",
+														tooltip = "global_store_character_info_gap_tooltip",
+														type = "numeric",
+								default_value = 5,
+														range = {
+															0,
+															40,
+														},
+													},
+													{
+														setting_id = "global_store_character_class_icon_size",
+														tooltip = "global_store_character_class_icon_size_tooltip",
+														type = "numeric",
+														default_value = 16,
+														range = {
+															8,
+															24,
+														},
+													},
+													{
+														setting_id = "global_store_character_name_font_size",
+														tooltip = "global_store_character_name_font_size_tooltip",
+														type = "numeric",
+														default_value = 16,
+														range = {
+															8,
+															20,
+														},
+													},
+							{
+									setting_id = "global_store_compact_character_names",
+									tooltip = "global_store_compact_character_names_tooltip",
+									type = "checkbox",
+									default_value = true,
+								},
+								{
+									setting_id = "global_store_single_column_modifier_horizontal_position",
+									tooltip = "global_store_single_column_modifier_horizontal_position_tooltip",
+									type = "numeric",
+									default_value = 55,
+									range = {
+										0,
+										100,
+									},
+								},
+								{
+									setting_id = "global_store_single_column_modifier_vertical_position",
+									tooltip = "global_store_single_column_modifier_vertical_position_tooltip",
+									type = "numeric",
+									default_value = 100,
+									range = {
+										0,
+										100,
+									},
+								},
 						},
 					},
 				},
@@ -587,13 +733,33 @@ return {
 						default_value = true,
 					},
 					{
-						setting_id = "columns",
-						tooltip = "columns_tooltip",
+						setting_id = "melee_columns",
+						tooltip = "melee_columns_tooltip",
 						type = "numeric",
 						default_value = 3,
 						range = {
 							2,
 							5,
+						},
+					},
+					{
+						setting_id = "ranged_columns",
+						tooltip = "ranged_columns_tooltip",
+						type = "numeric",
+						default_value = 3,
+						range = {
+							2,
+							5,
+						},
+					},
+					{
+						setting_id = "curio_columns",
+						tooltip = "curio_columns_tooltip",
+						type = "numeric",
+						default_value = 3,
+						range = {
+							2,
+						5,
 						},
 					},
 					{

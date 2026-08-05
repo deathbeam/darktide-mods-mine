@@ -19,7 +19,44 @@ local DEFAULT_PERK_RANK_SIZE = 17
 local DEFAULT_BLESSING_ICON_SIZE = 36
 local PERK_RANK_GAP = 3
 local STORE_FOOTER_HEIGHT = 34
+-- Armoury's native store cards use a fixed translucent price footer. Give the
+-- detailed single-column variant a little extra vertical room and keep its
+-- modifier rows clear of that footer. This is deliberately Armoury-only;
+-- inventory, Hadron and GlobalStore retain their established heights.
+local ARMOURY_NATIVE_CARD_HEIGHT_EXTRA = 16
+local ARMOURY_NATIVE_FOOTER_GAP = 8
+local ARMOURY_NATIVE_MODIFIER_HORIZONTAL_PERCENT = 62
+local GLOBAL_STORE_CHARACTER_PHOTO_BASE_SIZE = 30
+local GLOBAL_STORE_CHARACTER_PHOTO_MIN_PERCENT = 50
+local GLOBAL_STORE_CHARACTER_PHOTO_DEFAULT_PERCENT = 110
+-- Keep the established layout available while allowing a small amount of
+-- additional growth. At 125%, the original 100% size sits at 80% of the slider.
+local GLOBAL_STORE_CHARACTER_PHOTO_MAX_PERCENT = 125
+local GLOBAL_STORE_CHARACTER_ROW_HEIGHT = 30
+local GLOBAL_STORE_CHARACTER_INFO_GAP_DEFAULT = 5
+local GLOBAL_STORE_CHARACTER_INFO_GAP_MIN = 0
+local GLOBAL_STORE_CHARACTER_INFO_GAP_MAX = 40
+local GLOBAL_STORE_CHARACTER_CLASS_ICON_SIZE_DEFAULT = 16
+local GLOBAL_STORE_CHARACTER_CLASS_ICON_SIZE_MIN = 8
+local GLOBAL_STORE_CHARACTER_CLASS_ICON_SIZE_MAX = 24
+local GLOBAL_STORE_CHARACTER_NAME_FONT_SIZE_DEFAULT = 16
+local GLOBAL_STORE_CHARACTER_NAME_FONT_SIZE_MIN = 8
+local GLOBAL_STORE_CHARACTER_NAME_FONT_SIZE_MAX = 20
+local GLOBAL_STORE_CHARACTER_NAME_FIT_SAFETY_MARGIN = 6
+local GLOBAL_STORE_PRICE_ROW_PADDING_DEFAULT = 10
+local GLOBAL_STORE_PRICE_ROW_PADDING_MIN = 5
+local GLOBAL_STORE_PRICE_ROW_PADDING_MAX = 20
 local NATIVE_SINGLE_COLUMN_CONTENT_GAP = 12
+local COLUMN_SETTING_BY_SLOT = {
+	melee = "melee_columns",
+	ranged = "ranged_columns",
+	curio = "curio_columns",
+	-- Inventory and vendor views expose the native slot names. Keep these
+	-- aliases alongside the semantic names used by the settings UI so both
+	-- paths resolve the same per-category column value.
+	slot_primary = "melee_columns",
+	slot_secondary = "ranged_columns",
+}
 local WEAPON_PERK_COUNT = 2
 local WEAPON_BLESSING_COUNT = 2
 local BLESSING_TEXT_WIDTH_SAFETY_MARGIN = 4
@@ -27,6 +64,50 @@ local MINIMUM_AUTO_FIT_BLESSING_FONT_SIZE = 8
 local QUICK_LOOK_CARD_DUMP_STAT_ID = "better_inventory_quick_look_card_dump_stat"
 local WEAPON_MODIFIER_TITLE_PREFIX = "better_inventory_weapon_modifier_title_"
 local WEAPON_MODIFIER_VALUE_PREFIX = "better_inventory_weapon_modifier_value_"
+
+local function global_store_character_photo_percent(mod)
+	local value = tonumber(mod:get("global_store_character_photo_size_percent")) or GLOBAL_STORE_CHARACTER_PHOTO_DEFAULT_PERCENT
+
+	return math.max(GLOBAL_STORE_CHARACTER_PHOTO_MIN_PERCENT, math.min(GLOBAL_STORE_CHARACTER_PHOTO_MAX_PERCENT, value))
+end
+
+local function global_store_character_photo_size(mod)
+	return math.max(12, math.floor(GLOBAL_STORE_CHARACTER_PHOTO_BASE_SIZE * global_store_character_photo_percent(mod) / 100 + 0.5))
+end
+
+local function global_store_price_row_padding(mod)
+	local value = tonumber(mod:get("global_store_price_row_padding")) or GLOBAL_STORE_PRICE_ROW_PADDING_DEFAULT
+
+	return math.max(GLOBAL_STORE_PRICE_ROW_PADDING_MIN, math.min(GLOBAL_STORE_PRICE_ROW_PADDING_MAX, value))
+end
+
+local function global_store_character_info_gap(mod)
+	local value = tonumber(mod:get("global_store_character_info_gap")) or GLOBAL_STORE_CHARACTER_INFO_GAP_DEFAULT
+
+	return math.max(GLOBAL_STORE_CHARACTER_INFO_GAP_MIN, math.min(GLOBAL_STORE_CHARACTER_INFO_GAP_MAX, value))
+end
+
+local function global_store_character_class_icon_size(mod)
+	local value = tonumber(mod:get("global_store_character_class_icon_size")) or GLOBAL_STORE_CHARACTER_CLASS_ICON_SIZE_DEFAULT
+
+	return math.max(GLOBAL_STORE_CHARACTER_CLASS_ICON_SIZE_MIN, math.min(GLOBAL_STORE_CHARACTER_CLASS_ICON_SIZE_MAX, value))
+end
+
+local function global_store_character_name_font_size(mod)
+	local value = tonumber(mod:get("global_store_character_name_font_size")) or GLOBAL_STORE_CHARACTER_NAME_FONT_SIZE_DEFAULT
+
+	return math.max(GLOBAL_STORE_CHARACTER_NAME_FONT_SIZE_MIN, math.min(GLOBAL_STORE_CHARACTER_NAME_FONT_SIZE_MAX, value))
+end
+
+local function global_store_extra_height(mod, configuration)
+	if not configuration or configuration.global_store ~= true or type(Layout.columns) ~= "function" then
+		return 0
+	end
+
+	return GLOBAL_STORE_CHARACTER_ROW_HEIGHT + math.max(0, global_store_price_row_padding(mod) - GLOBAL_STORE_PRICE_ROW_PADDING_DEFAULT)
+end
+
+Layout.global_store_character_photo_size = global_store_character_photo_size
 local QUICK_LOOK_CARD_HIGHLIGHT_COLOR = {
 	255,
 	255,
@@ -410,6 +491,12 @@ local DEFAULT_WEAPON_BLESSING_TEXT_COLOR = {
 	200,
 	235,
 }
+local DEFAULT_ARMOURY_ITEM_LEVEL_COLOR = {
+	255,
+	220,
+	230,
+	210,
+}
 
 local SLOT_SETTING_BY_NAME = {
 	slot_primary = "enable_melee_inventory",
@@ -490,7 +577,7 @@ local function separate_blessing_text_and_item_level(mod, configuration)
 
 	configuration = configuration or {}
 
-	local columns = Layout.columns(mod, configuration.maximum_columns)
+	local columns = Layout.columns(mod, configuration.maximum_columns, configuration.slot_kind)
 
 	if mode == "five_only" then
 		return columns >= 5
@@ -1003,7 +1090,7 @@ local function quick_look_card_grid_position(mod)
 	return "above_power"
 end
 
-local function add_quick_look_card_grid_pass(mod, pass_template, card_width, text_left, position)
+local function add_quick_look_card_grid_pass(mod, pass_template, card_width, text_left, position, bottom_offset)
 	local font_size = numeric_setting(mod, "quick_look_card_grid_font_size", 13, 8, 20)
 	local bottom_padding = numeric_setting(mod, "quick_look_card_grid_bottom_padding", 26, 20, 60)
 	local lowest_modifier_color = configured_text_color(mod, "weapon_modifier_lowest_color", QUICK_LOOK_CARD_HIGHLIGHT_COLOR, "weapon_modifier_lowest_color_opacity", 80)
@@ -1054,7 +1141,7 @@ local function add_quick_look_card_grid_pass(mod, pass_template, card_width, tex
 		style.text_vertical_alignment = "bottom"
 		style.offset = {
 			-8,
-			-bottom_padding,
+			-(bottom_padding + (bottom_offset or 0)),
 			12,
 		}
 		style.size = {
@@ -1083,11 +1170,17 @@ local function add_quick_look_card_grid_pass(mod, pass_template, card_width, tex
 	return label_width
 end
 
-local function configure_native_quick_look_card_passes(mod, pass_template, card_width, card_height)
+local function configure_native_quick_look_card_passes(mod, pass_template, card_width, card_height, configuration)
+	local armoury_native = configuration and configuration.store_item == true and configuration.global_store ~= true
 	local font_size = numeric_setting(mod, "quick_look_card_single_column_font_size", 14, 8, 20)
 	local lowest_modifier_color = configured_text_color(mod, "weapon_modifier_lowest_color", QUICK_LOOK_CARD_HIGHLIGHT_COLOR, "weapon_modifier_lowest_color_opacity", 80)
-	local horizontal_percent = numeric_setting(mod, "quick_look_card_single_column_horizontal_position", 79, 0, 100)
-	local vertical_percent = numeric_setting(mod, "quick_look_card_single_column_vertical_position", 93, 0, 100)
+	local horizontal_setting = configuration and configuration.global_store and "global_store_single_column_modifier_horizontal_position" or "quick_look_card_single_column_horizontal_position"
+	local vertical_setting = configuration and configuration.global_store and "global_store_single_column_modifier_vertical_position" or "quick_look_card_single_column_vertical_position"
+	local horizontal_default = configuration and configuration.global_store and 55 or 79
+	local vertical_default = configuration and configuration.global_store and 100 or 93
+	local horizontal_percent = numeric_setting(mod, horizontal_setting, horizontal_default, 0, 100)
+	local vertical_percent = numeric_setting(mod, vertical_setting, vertical_default, 0, 100)
+	local text_z = configuration and (configuration.global_store or armoury_native) and 12 or 5
 	local line_height = font_size + 3
 	local row_step = line_height + 2
 	local column_step = math.max(80, math.floor(font_size * 5.72 + 0.5))
@@ -1103,6 +1196,16 @@ local function configure_native_quick_look_card_passes(mod, pass_template, card_
 	local block_height = row_step + line_height
 	local block_left = math.floor(math.max(0, card_width - block_width) * horizontal_percent * 0.01 + 0.5)
 	local block_top = math.floor(math.max(0, card_height - block_height) * vertical_percent * 0.01 + 0.5)
+
+	if armoury_native then
+		-- Armoury's native store blueprint draws a translucent footer over the
+		-- bottom 34 logical pixels. Keep the detailed stat block above that
+		-- footer with a small visual gap and shift it right so it sits naturally
+		-- beside the blessing area without colliding with item level or price.
+		-- GlobalStore keeps its existing configurable path.
+		block_left = math.floor(math.max(0, card_width - block_width) * ARMOURY_NATIVE_MODIFIER_HORIZONTAL_PERCENT * 0.01 + 0.5)
+		block_top = math.max(0, card_height - STORE_FOOTER_HEIGHT - ARMOURY_NATIVE_FOOTER_GAP - block_height)
+	end
 	local positions = {
 		{ block_left, block_top },
 		{ block_left + column_step, block_top },
@@ -1174,7 +1277,7 @@ local function configure_native_quick_look_card_passes(mod, pass_template, card_
 			style.offset = {
 				position[1] + (kind == "value" and value_offset or 0),
 				position[2],
-				5,
+				text_z,
 			}
 			style.size = {
 				kind == "value" and value_width or title_width,
@@ -1660,6 +1763,29 @@ local function configure_favorite_marker(mod, pass_template, text_left)
 
 	local favorite_style = favorite_icon.style
 	local favorite_marker_position = setting(mod, "favorite_marker_position", "above_rating")
+	local equipped_icon = pass_by_style_id(pass_template, "equipped_icon")
+
+	-- Equipped Icon+ extends Darktide's equipped-icon visibility function to
+	-- include items equipped in inactive loadouts and changes the icon colour.
+	-- Keep the favorite marker below that icon whenever the extension reports
+	-- it as visible. Calling the pass function (rather than checking only
+	-- content.equipped) keeps this compatible with the mod's configurable
+	-- active/inactive colours and avoids a hard dependency on its internals.
+	local function equipped_icon_is_visible(content)
+		if content and content.equipped then
+			return true
+		end
+
+		local visibility_function = equipped_icon and equipped_icon.visibility_function
+
+		if not content or type(visibility_function) ~= "function" then
+			return false
+		end
+
+		local ok, visible = pcall(visibility_function, content, equipped_icon.style)
+
+		return ok and visible == true
+	end
 
 	if setting(mod, "compact_favorite_marker", true) then
 		favorite_icon.value = ""
@@ -1688,7 +1814,7 @@ local function configure_favorite_marker(mod, pass_template, text_left)
 				original_change_function(content, style, animations, dt)
 			end
 
-			style.offset[2] = content and content.equipped and 33 or 7
+			style.offset[2] = equipped_icon_is_visible(content) and 33 or 7
 		end
 	else
 		favorite_style.horizontal_alignment = "left"
@@ -1755,7 +1881,7 @@ local function add_custom_content_passes(mod, pass_template, card_width, text_le
 	local show_weapon_perk_ranks = show_weapon_perks and setting(mod, "show_weapon_perk_rank_symbols", true)
 	local detailed_curio_profile = setting(mod, "curio_display_profile", "detailed") == "detailed"
 	local favorite_marker_position = setting(mod, "favorite_marker_position", "above_rating")
-	local store_footer_height = configuration.store_item and STORE_FOOTER_HEIGHT or 0
+	local store_footer_height = configuration.store_item and STORE_FOOTER_HEIGHT + global_store_extra_height(mod, configuration) or 0
 	local expertise_font_size = numeric_setting(mod, "expertise_font_size", 20, 10, 28)
 	local item_level_row_height = math.max(30, expertise_font_size + 10)
 	local bottom_content_height = item_level_row_height
@@ -1859,6 +1985,13 @@ local function add_custom_content_passes(mod, pass_template, card_width, text_le
 		else
 			bottom_content_height = math.max(bottom_content_height, blessing_text_height + blessing_bottom_padding + 3)
 		end
+	end
+
+	-- GlobalStore's native card reserves a character row below the price row.
+	-- Lift the perk block slightly into the icon area so the weapon name and
+	-- first perk retain the tighter spacing used by the two-column cards.
+	if configuration.native_single_column and configuration.global_store then
+		bottom_content_height = bottom_content_height + 8
 	end
 
 	if show_weapon_perks then
@@ -2244,11 +2377,24 @@ local function fit_weapon_perks(parent, widget, ui_renderer)
 	end
 end
 
+local function grid_weapon_name_font_size(mod, configuration)
+	local default_font_size = numeric_setting(mod, "item_name_font_size", 16, 10, 24)
+	local maximum_columns = configuration and configuration.maximum_columns
+
+	-- The temporary compact-name override is intentionally scoped to Armoury
+	-- store cards. Inventory and Hadron cards retain the general grid setting.
+	if configuration and configuration.store_item == true and Layout.columns(mod, maximum_columns) == 3 then
+		return numeric_setting(mod, "three_column_weapon_name_font_size", 14, 10, 20)
+	end
+
+	return default_font_size
+end
+
 local function configure_card_content(mod, item_blueprint, configuration)
 	configuration = configuration or {}
 	local original_init = item_blueprint.init
 	local original_update_data = item_blueprint.update_data
-	local preferred_font_size = configuration.native_single_column and numeric_setting(mod, "single_column_weapon_name_font_size", 20, 10, 24) or numeric_setting(mod, "item_name_font_size", 16, 10, 24)
+	local preferred_font_size = configuration.native_single_column and numeric_setting(mod, "single_column_weapon_name_font_size", 20, 10, 24) or grid_weapon_name_font_size(mod, configuration)
 	local minimum_font_size = numeric_setting(mod, "minimum_item_name_font_size", 12, 8, 20)
 	local append_mark_to_name = setting(mod, "append_mark_to_name", true)
 	local blessing_display_mode = weapon_blessing_display_mode(mod)
@@ -2297,6 +2443,39 @@ local function configure_card_content(mod, item_blueprint, configuration)
 	end
 end
 
+local function slot_kind_from_slot_types(slot_types)
+	if type(slot_types) ~= "table" then
+		return
+	end
+
+	for _, slot_name in ipairs(slot_types) do
+		if SLOT_SETTING_BY_NAME[slot_name] then
+			return slot_name
+		end
+
+		if type(slot_name) == "string" and string.match(slot_name, "^slot_attachment_") then
+			return "curio"
+		end
+	end
+end
+
+local function slot_kind_from_layout(layout)
+	if type(layout) ~= "table" then
+		return
+	end
+
+	for _, entry in ipairs(layout) do
+		if type(entry) == "table" and not entry.is_external then
+			local slots = entry.filter_slots or entry.item and entry.item.slots
+			local slot_kind = slot_kind_from_slot_types(slots)
+
+			if slot_kind then
+				return slot_kind
+			end
+		end
+	end
+end
+
 Layout.slot_kind = function(view)
 	local selected_slot = view and view._selected_slot
 	local slot_name = selected_slot and selected_slot.name
@@ -2308,6 +2487,33 @@ Layout.slot_kind = function(view)
 	if type(slot_name) == "string" and string.match(slot_name, "^slot_attachment_") then
 		return "curio"
 	end
+end
+
+-- Tabbed item views may not expose `_selected_slot`; their category tabs carry
+-- the native slot filter instead. Prefer the filtered layout (which is
+-- available during both initial presentation and tab switches), then fall
+-- back to the selected tab for empty categories.
+Layout.store_slot_kind = function(view, layout)
+	local slot_kind = slot_kind_from_layout(layout)
+
+	if slot_kind then
+		return slot_kind
+	end
+
+	local tab_menu = view and view._tab_menu_element
+	local definitions = view and view._definitions
+	local tabs_content = view and view._tabs_content or definitions and definitions.item_category_tabs_content
+	local selected_index = view and view._next_tab_index
+
+	if not selected_index and tab_menu and type(tab_menu.selected_index) == "function" then
+		selected_index = tab_menu:selected_index()
+	end
+
+	selected_index = selected_index or 1
+
+	local tab_content = selected_index and tabs_content and tabs_content[selected_index]
+
+	return slot_kind_from_slot_types(tab_content and tab_content.slot_types) or Layout.slot_kind(view)
 end
 
 Layout.is_enabled_for_view = function(mod, view)
@@ -2322,9 +2528,17 @@ Layout.is_enabled_for_view = function(mod, view)
 	return setting_id and setting(mod, setting_id, true) or false
 end
 
-Layout.columns = function(mod, maximum_columns)
+Layout.columns = function(mod, maximum_columns, slot_kind)
 	local column_limit = math.floor(math.max(2, math.min(5, tonumber(maximum_columns) or 5)))
-	local requested_columns = math.floor(numeric_setting(mod, "columns", 3, 2, 5))
+	local setting_id = COLUMN_SETTING_BY_SLOT[slot_kind]
+
+	local configured_columns = setting_id and tonumber(mod:get(setting_id))
+
+	if not setting_id or configured_columns == nil then
+		setting_id = "columns"
+	end
+
+	local requested_columns = math.floor(numeric_setting(mod, setting_id, 3, 2, 5))
 
 	return math.max(2, math.min(column_limit, requested_columns))
 end
@@ -2346,7 +2560,7 @@ Layout.grid_expansion = function(mod, current_grid_width, slot_kind)
 		return 0
 	end
 
-	local columns = Layout.columns(mod)
+	local columns = Layout.columns(mod, nil, slot_kind)
 	local spacing = numeric_setting(mod, "grid_spacing", 10, 0, 40)
 	local target_card_width = MINIMUM_CARD_WIDTH
 
@@ -2366,18 +2580,19 @@ Layout.grid_expansion = function(mod, current_grid_width, slot_kind)
 	return required_expansion
 end
 
-Layout.armoury_grid_expansion = function(mod, current_grid_width)
+Layout.armoury_grid_expansion = function(mod, current_grid_width, grid_setting_id, slot_kind)
 	current_grid_width = tonumber(current_grid_width)
+	grid_setting_id = grid_setting_id or "enable_armoury_requisition_grid"
 
 	if not current_grid_width or current_grid_width <= 0 then
 		return 0
 	end
 
-	if not setting(mod, "enable_grid_layout", true) or not setting(mod, "enable_armoury_requisition_grid", true) or not setting(mod, "expand_armoury_requisition_window", true) then
+	if not setting(mod, "enable_grid_layout", true) or not setting(mod, grid_setting_id, true) or not setting(mod, "expand_armoury_requisition_window", true) then
 		return 0
 	end
 
-	local columns = Layout.columns(mod, 3)
+	local columns = Layout.columns(mod, 3, slot_kind)
 	local spacing = numeric_setting(mod, "grid_spacing", 10, 0, 40)
 	local target_card_width = numeric_setting(mod, "armoury_requisition_target_card_width", 230, ARMOURY_MINIMUM_CARD_WIDTH, ARMOURY_MAXIMUM_CARD_WIDTH)
 	local required_grid_width = target_card_width * columns + spacing * (columns - 1)
@@ -2415,7 +2630,7 @@ local function maximum_safe_inventory_expansion(definitions, slot_kind)
 	return math.max(0, available_expansion)
 end
 
-Layout.expanded_armoury_view_definitions = function(mod, definitions, base_definitions)
+Layout.expanded_armoury_view_definitions = function(mod, definitions, base_definitions, grid_setting_id, slot_kind)
 	local grid_settings = definitions and definitions.grid_settings
 	local grid_size = grid_settings and grid_settings.grid_size
 	local current_grid_width = grid_size and grid_size[1]
@@ -2424,7 +2639,7 @@ Layout.expanded_armoury_view_definitions = function(mod, definitions, base_defin
 		return definitions, 0
 	end
 
-	local expansion = Layout.armoury_grid_expansion(mod, current_grid_width)
+	local expansion = Layout.armoury_grid_expansion(mod, current_grid_width, grid_setting_id, slot_kind)
 
 	if expansion <= 0 then
 		return definitions, 0
@@ -2471,6 +2686,10 @@ Layout.expanded_armoury_view_definitions = function(mod, definitions, base_defin
 	end
 
 	return adjusted_definitions, expansion
+end
+
+Layout.expanded_global_store_view_definitions = function(mod, definitions, base_definitions, slot_kind)
+	return Layout.expanded_armoury_view_definitions(mod, definitions, base_definitions, "enable_global_store_grid", slot_kind)
 end
 
 Layout.expanded_view_definitions = function(mod, definitions, view)
@@ -2526,19 +2745,20 @@ Layout.card_height = function(mod, configuration)
 	configuration = configuration or {}
 
 	local manual_height = numeric_setting(mod, "card_height", 110, 110, 240)
+	local global_store_extra = global_store_extra_height(mod, configuration)
 
-	if not setting(mod, "automatic_card_height", true) and not configuration.native_single_column then
+	if not setting(mod, "automatic_card_height", true) and not configuration.native_single_column and global_store_extra <= 0 then
 		return manual_height
 	end
 
-	local item_name_font_size = configuration.native_single_column and numeric_setting(mod, "single_column_weapon_name_font_size", 20, 10, 24) or numeric_setting(mod, "item_name_font_size", 16, 10, 24)
+	local item_name_font_size = configuration.native_single_column and numeric_setting(mod, "single_column_weapon_name_font_size", 20, 10, 24) or grid_weapon_name_font_size(mod, configuration)
 	local secondary_font_size = numeric_setting(mod, "secondary_text_font_size", 13, 8, 20)
 	local expertise_font_size = numeric_setting(mod, "expertise_font_size", 20, 10, 28)
 	local name_row_height = configuration.native_single_column and 25 + math.max(0, item_name_font_size - 16) or math.max(25, item_name_font_size + 5)
 	local secondary_row_height = math.max(22, secondary_font_size + 5)
 	local bottom_region_height = math.max(expertise_font_size + 10, secondary_font_size + 15)
-	local required_height = 110
-	local store_footer_height = configuration.store_item and STORE_FOOTER_HEIGHT or 0
+	local required_height = global_store_extra > 0 and manual_height or 110
+	local store_footer_height = configuration.store_item and STORE_FOOTER_HEIGHT + global_store_extra_height(mod, configuration) or 0
 
 	local blessing_display_mode = weapon_blessing_display_mode(mod)
 	local blessing_text_mode = blessing_display_mode == "text" or blessing_display_mode == "ranked_text"
@@ -2596,6 +2816,10 @@ Layout.card_height = function(mod, configuration)
 
 	required_height = math.max(required_height, 7 + name_row_height + optional_rows * secondary_row_height + bottom_region_height + 8 + native_content_gap)
 
+	if configuration.native_single_column and configuration.store_item and not configuration.global_store then
+		required_height = required_height + ARMOURY_NATIVE_CARD_HEIGHT_EXTRA
+	end
+
 	if setting(mod, "curio_display_profile", "detailed") == "detailed" then
 		local primary_line_height = curio_primary_font_size(mod) + 5
 		local secondary_line_height = curio_secondary_font_size(mod) + 5
@@ -2614,12 +2838,13 @@ end
 
 Layout.item_size = function(mod, grid_width, maximum_columns, configuration)
 	grid_width = tonumber(grid_width)
+	local slot_kind = configuration and configuration.slot_kind
 
 	if not grid_width or grid_width <= 0 then
-		grid_width = MINIMUM_CARD_WIDTH * Layout.columns(mod, maximum_columns)
+		grid_width = MINIMUM_CARD_WIDTH * Layout.columns(mod, maximum_columns, slot_kind)
 	end
 
-	local columns = Layout.columns(mod, maximum_columns)
+	local columns = Layout.columns(mod, maximum_columns, slot_kind)
 	local spacing = numeric_setting(mod, "grid_spacing", 10, 0, 40)
 	local height = Layout.card_height(mod, configuration)
 	local width = math.floor((grid_width - spacing * (columns - 1)) / columns)
@@ -2646,7 +2871,19 @@ Layout.configure_grid = function(mod, item_grid)
 	end
 end
 
-Layout.configure_native_item_blueprint = function(mod, item_blueprint, grid_width)
+Layout.configure_native_item_blueprint = function(mod, item_blueprint, grid_width, configuration)
+	configuration = configuration or {}
+	local global_store = configuration.global_store == true
+	local store_item = configuration.store_item == true or global_store
+	local armoury_native = store_item and not global_store
+	local global_store_extra = global_store_extra_height(mod, configuration)
+	local global_store_multicolumn = global_store and global_store_extra > 0
+	local global_store_photo_size = global_store_multicolumn and global_store_character_photo_size(mod) or 34
+	local global_store_info_gap = global_store_multicolumn and global_store_character_info_gap(mod) or 0
+	local global_store_class_icon_size = global_store_multicolumn and global_store_character_class_icon_size(mod) or GLOBAL_STORE_CHARACTER_CLASS_ICON_SIZE_DEFAULT
+	local global_store_name_font_size = global_store_multicolumn and global_store_character_name_font_size(mod) or GLOBAL_STORE_CHARACTER_NAME_FONT_SIZE_DEFAULT
+	local global_store_price_padding = global_store_multicolumn and global_store_price_row_padding(mod) or 0
+	local global_store_price_row_offset = global_store_multicolumn and GLOBAL_STORE_CHARACTER_ROW_HEIGHT + global_store_price_padding or 0
 	local item_size = table.clone(item_blueprint.size or {
 		grid_width,
 		110,
@@ -2661,10 +2898,21 @@ Layout.configure_native_item_blueprint = function(mod, item_blueprint, grid_widt
 	local weapon_modifier_stats_enabled = setting(mod, "enable_quick_look_card_single_column_integration", true)
 	local managed_native_card = not quick_look_card_present or weapon_modifier_stats_enabled
 
+	if global_store and pass_by_style_id(pass_template, "character_info_text") and not pass_by_style_id(pass_template, "character_class_icon_text") then
+		local character_info_pass = pass_by_style_id(pass_template, "character_info_text")
+		local class_icon_pass = table.clone(character_info_pass)
+
+		class_icon_pass.style_id = "character_class_icon_text"
+		class_icon_pass.value_id = "character_class_icon_text"
+		class_icon_pass.value = ""
+		class_icon_pass.style = table.clone(character_info_pass.style)
+		pass_template[#pass_template + 1] = class_icon_pass
+	end
+
 	if managed_native_card then
-		item_size[2] = math.max(item_size[2] or 110, Layout.card_height(mod, {
-			native_single_column = true,
-		}))
+		local native_configuration = table.clone(configuration)
+		native_configuration.native_single_column = true
+		item_size[2] = math.max(item_size[2] or 110, Layout.card_height(mod, native_configuration))
 	end
 
 	item_blueprint.size = item_size
@@ -2675,7 +2923,7 @@ Layout.configure_native_item_blueprint = function(mod, item_blueprint, grid_widt
 	end
 
 	if weapon_modifier_stats_enabled then
-		configure_native_quick_look_card_passes(mod, pass_template, card_width, item_size[2] or 110)
+		configure_native_quick_look_card_passes(mod, pass_template, card_width, item_size[2] or 110, configuration)
 	end
 
 	local display_name = pass_by_style_id(pass_template, "display_name")
@@ -2689,6 +2937,18 @@ Layout.configure_native_item_blueprint = function(mod, item_blueprint, grid_widt
 		display_name.style.word_wrap = false
 		display_name.style.size = display_name.style.size or {}
 		display_name.style.size[2] = math.max(display_name.style.size[2] or 0, native_name_font_size + 6)
+		if global_store then
+			display_name.style.horizontal_alignment = "left"
+			display_name.style.vertical_alignment = "top"
+			display_name.style.text_horizontal_alignment = "left"
+			display_name.style.text_vertical_alignment = "top"
+			display_name.style.offset = {
+				12,
+				7,
+				11,
+			}
+			display_name.style.size[1] = math.max(80, card_width - 120)
+		end
 	end
 
 	preserve_visibility(display_name, function(content)
@@ -2715,9 +2975,163 @@ Layout.configure_native_item_blueprint = function(mod, item_blueprint, grid_widt
 		end
 	end
 
+	if global_store then
+		local icon = pass_by_style_id(pass_template, "icon")
+
+		if icon and icon.style then
+			local native_icon_size = icon.style.size or {}
+			local native_icon_width = tonumber(native_icon_size[1]) or math.min(card_width, math.floor(card_width * 0.55))
+
+			-- Keep Darktide's native landscape icon width/aspect instead of scaling
+			-- the weapon texture across the entire GlobalStore card.
+			icon.style.horizontal_alignment = "right"
+			icon.style.vertical_alignment = "top"
+			icon.style.size = {
+				math.min(card_width, native_icon_width),
+				math.max(1, (item_size[2] or 110) - global_store_extra),
+			}
+			icon.style.offset = {
+				0,
+				0,
+				4,
+			}
+		end
+	end
+
 	preserve_visibility(item_level, function(content)
 		return not is_curio(item_from_content(content)) or show_curio_item_level
 	end)
+
+	if global_store_multicolumn and item_level and item_level.style then
+		item_level.style.text_color = table.clone(DEFAULT_ARMOURY_ITEM_LEVEL_COLOR)
+		item_level.style.default_color = table.clone(DEFAULT_ARMOURY_ITEM_LEVEL_COLOR)
+		item_level.style.hover_color = table.clone(DEFAULT_ARMOURY_ITEM_LEVEL_COLOR)
+		item_level.style.horizontal_alignment = "right"
+		item_level.style.vertical_alignment = "bottom"
+		item_level.style.text_horizontal_alignment = "right"
+		item_level.style.text_vertical_alignment = "bottom"
+		item_level.style.offset = {
+			-8,
+			-global_store_price_row_offset,
+			12,
+		}
+		item_level.style.size = {
+			card_width - 16,
+			28,
+		}
+	end
+
+	if global_store_multicolumn then
+		local wallet_icon = pass_by_style_id(pass_template, "wallet_icon")
+
+		if wallet_icon and wallet_icon.style then
+			wallet_icon.style.horizontal_alignment = "left"
+			wallet_icon.style.vertical_alignment = "bottom"
+			wallet_icon.style.size = {
+				22,
+				18,
+			}
+			wallet_icon.style.offset = {
+				12,
+				-(global_store_price_row_offset + 2),
+				12,
+			}
+		end
+
+		configure_text_pass(pass_by_style_id(pass_template, "price_text"), {
+			font_size = 16,
+			horizontal_alignment = "left",
+			vertical_alignment = "bottom",
+			text_horizontal_alignment = "left",
+			text_vertical_alignment = "bottom",
+			offset = {
+				39,
+				-global_store_price_row_offset,
+				12,
+			},
+			size = {
+				math.max(45, card_width - 120),
+				24,
+			},
+		})
+
+		configure_text_pass(pass_by_style_id(pass_template, "owned_text"), {
+			font_size = 14,
+			horizontal_alignment = "left",
+			vertical_alignment = "bottom",
+			text_horizontal_alignment = "left",
+			text_vertical_alignment = "bottom",
+			offset = {
+				12,
+				-global_store_price_row_offset,
+				12,
+			},
+			size = {
+				math.max(55, card_width - 80),
+				24,
+			},
+		})
+	end
+
+	if global_store then
+		local portrait = pass_by_style_id(pass_template, "portrait")
+
+		if portrait and portrait.style then
+			portrait.style.horizontal_alignment = "left"
+			portrait.style.vertical_alignment = "bottom"
+			portrait.style.size = {
+				global_store_photo_size,
+				global_store_photo_size,
+			}
+			-- This branch is native single-column GlobalStore only. With bottom
+			-- alignment, a smaller Y offset moves the portrait upward; keep these
+			-- logical UI-canvas coordinates resolution-independent.
+			portrait.style.offset = {
+				15,
+				-1,
+				14,
+			}
+		end
+
+		local character_info = pass_by_style_id(pass_template, "character_info_text")
+		if character_info and character_info.style then
+			character_info.style.horizontal_alignment = "left"
+			character_info.style.vertical_alignment = "bottom"
+			character_info.style.text_horizontal_alignment = "left"
+			character_info.style.text_vertical_alignment = "bottom"
+			character_info.style.font_size = global_store_name_font_size
+			character_info.style.word_wrap = false
+			character_info.style.text_fit_with = false
+			character_info.style.offset = {
+				18 + global_store_photo_size + global_store_info_gap + global_store_class_icon_size + 4,
+				-7,
+				14,
+			}
+			character_info.style.size = {
+				math.max(40, card_width - 18 - global_store_photo_size - global_store_info_gap - global_store_class_icon_size - 14),
+				24,
+			}
+		end
+
+		local class_icon = pass_by_style_id(pass_template, "character_class_icon_text")
+		if class_icon and class_icon.style then
+			class_icon.style.horizontal_alignment = "left"
+			class_icon.style.vertical_alignment = "bottom"
+			class_icon.style.text_horizontal_alignment = "left"
+			class_icon.style.text_vertical_alignment = "bottom"
+			class_icon.style.font_size = global_store_class_icon_size
+			class_icon.style.word_wrap = false
+			class_icon.style.offset = {
+				18 + global_store_photo_size + global_store_info_gap,
+				-7,
+				14,
+			}
+			class_icon.style.size = {
+				math.max(12, global_store_class_icon_size + 4),
+				24,
+			}
+		end
+	end
 
 	set_visibility(pass_by_style_id(pass_template, "rarity_tag"), setting(mod, "show_rarity_tag", true))
 	configure_equipped_highlight(mod, pass_template, card_width, item_size[2] or 110)
@@ -2727,10 +3141,35 @@ Layout.configure_native_item_blueprint = function(mod, item_blueprint, grid_widt
 		add_custom_content_passes(mod, pass_template, card_width, 15, sub_display_name and sub_display_name.style, {
 			content_right = weapon_modifier_stats_enabled and 260 or nil,
 			native_single_column = true,
+			global_store = global_store,
+			store_item = store_item,
 		})
+	end
+
+	if armoury_native and item_level and item_level.style then
+		-- Keep Armoury's item level above its dark price footer, matching the
+		-- readable inventory treatment without touching GlobalStore geometry.
+		item_level.style.text_color = table.clone(DEFAULT_ARMOURY_ITEM_LEVEL_COLOR)
+		item_level.style.default_color = table.clone(DEFAULT_ARMOURY_ITEM_LEVEL_COLOR)
+		item_level.style.hover_color = table.clone(DEFAULT_ARMOURY_ITEM_LEVEL_COLOR)
+		item_level.style.horizontal_alignment = "right"
+		item_level.style.vertical_alignment = "bottom"
+		item_level.style.text_horizontal_alignment = "right"
+		item_level.style.text_vertical_alignment = "bottom"
+		item_level.style.offset = {
+			-8,
+			-(STORE_FOOTER_HEIGHT + 2),
+			12,
+		}
+		item_level.style.size = {
+			card_width - 16,
+			28,
+		}
 	end
 	configure_card_content(mod, item_blueprint, {
 		native_single_column = true,
+		global_store = global_store,
+		store_item = store_item,
 		weapon_modifier_stats_enabled = weapon_modifier_stats_enabled,
 	})
 
@@ -2740,15 +3179,38 @@ end
 
 Layout.configure_item_blueprint = function(mod, item_blueprint, grid_width, configuration)
 	if not setting(mod, "enable_grid_layout", true) then
-		return Layout.configure_native_item_blueprint(mod, item_blueprint, grid_width)
+		configuration = configuration or {}
+		return Layout.configure_native_item_blueprint(mod, item_blueprint, grid_width, configuration)
 	end
 
 	configuration = configuration or {}
+	local global_store = configuration.global_store == true
+	local global_store_extra = global_store_extra_height(mod, configuration)
+	local global_store_multicolumn = global_store_extra > 0
+	local global_store_photo_size = global_store_multicolumn and global_store_character_photo_size(mod) or 34
+	local global_store_info_gap = global_store_multicolumn and global_store_character_info_gap(mod) or 0
+	local global_store_class_icon_size = global_store_multicolumn and global_store_character_class_icon_size(mod) or GLOBAL_STORE_CHARACTER_CLASS_ICON_SIZE_DEFAULT
+	local global_store_name_font_size = global_store_multicolumn and global_store_character_name_font_size(mod) or GLOBAL_STORE_CHARACTER_NAME_FONT_SIZE_DEFAULT
+	local global_store_compact_character_names = global_store_multicolumn and setting(mod, "global_store_compact_character_names", true) and Layout.columns(mod, configuration.maximum_columns, configuration.slot_kind) >= 4 or false
+	local global_store_price_padding = global_store_multicolumn and global_store_price_row_padding(mod) or 0
+	local global_store_price_row_offset = global_store_multicolumn and GLOBAL_STORE_CHARACTER_ROW_HEIGHT + global_store_price_padding or 0
 
 	local item_size = Layout.item_size(mod, grid_width, configuration.maximum_columns, configuration)
 	local card_width = item_size[1]
 	local card_height = item_size[2]
 	local pass_template = table.clone(item_blueprint.pass_template)
+
+	if global_store_multicolumn and pass_by_style_id(pass_template, "character_info_text") and not pass_by_style_id(pass_template, "character_class_icon_text") then
+		local character_info_pass = pass_by_style_id(pass_template, "character_info_text")
+		local class_icon_pass = table.clone(character_info_pass)
+
+		class_icon_pass.style_id = "character_class_icon_text"
+		class_icon_pass.value_id = "character_class_icon_text"
+		class_icon_pass.value = ""
+		class_icon_pass.style = table.clone(character_info_pass.style)
+		pass_template[#pass_template + 1] = class_icon_pass
+	end
+
 	local show_rarity_tag = setting(mod, "show_rarity_tag", true)
 	local text_left = show_rarity_tag and 12 or 8
 	local quick_look_card_present = has_quick_look_card_passes(pass_template)
@@ -2775,7 +3237,7 @@ Layout.configure_item_blueprint = function(mod, item_blueprint, grid_width, conf
 	disable_quick_look_card_passes(pass_template)
 
 	if quick_look_card_integration then
-		add_quick_look_card_grid_pass(mod, pass_template, card_width, text_left, quick_look_card_position)
+		add_quick_look_card_grid_pass(mod, pass_template, card_width, text_left, quick_look_card_position, global_store_price_row_offset)
 	end
 
 	local icon = pass_by_style_id(pass_template, "icon")
@@ -2785,7 +3247,7 @@ Layout.configure_item_blueprint = function(mod, item_blueprint, grid_width, conf
 		icon.style.vertical_alignment = "top"
 		icon.style.size = {
 			card_width,
-			card_height,
+			card_height - global_store_extra,
 		}
 		icon.style.offset = {
 			0,
@@ -2829,7 +3291,7 @@ Layout.configure_item_blueprint = function(mod, item_blueprint, grid_width, conf
 	local display_name = pass_by_style_id(pass_template, "display_name")
 
 	configure_text_pass(display_name, {
-		font_size = numeric_setting(mod, "item_name_font_size", 16, 10, 24),
+		font_size = grid_weapon_name_font_size(mod, configuration),
 		offset = {
 			display_name_left,
 			7,
@@ -2916,6 +3378,19 @@ Layout.configure_item_blueprint = function(mod, item_blueprint, grid_width, conf
 			28,
 		},
 	})
+	if configuration.store_item and setting(mod, "brighten_armoury_item_levels", true) and item_level and item_level.style then
+		item_level.style.text_color = table.clone(DEFAULT_ARMOURY_ITEM_LEVEL_COLOR)
+		item_level.style.default_color = table.clone(DEFAULT_ARMOURY_ITEM_LEVEL_COLOR)
+		item_level.style.hover_color = table.clone(DEFAULT_ARMOURY_ITEM_LEVEL_COLOR)
+		-- Darktide's store blueprint draws a translucent price footer at z=10.
+		-- Raise the rating above that footer when the readability option is on.
+		item_level.style.offset[3] = 11
+	end
+	if global_store_multicolumn and item_level and item_level.style then
+		-- Keep the rating in the price row; the character row occupies the new
+		-- space below it.
+		item_level.style.offset[2] = -global_store_price_row_offset
+	end
 	preserve_visibility(item_level, function(content)
 		return not is_curio(item_from_content(content)) or show_curio_item_level
 	end)
@@ -2924,51 +3399,162 @@ Layout.configure_item_blueprint = function(mod, item_blueprint, grid_width, conf
 		local wallet_icon = pass_by_style_id(pass_template, "wallet_icon")
 
 		if wallet_icon and wallet_icon.style then
-			wallet_icon.style.horizontal_alignment = "left"
+			wallet_icon.style.horizontal_alignment = global_store_multicolumn and "left" or (global_store and "right" or "left")
 			wallet_icon.style.vertical_alignment = "bottom"
 			wallet_icon.style.size = {
 				22,
 				18,
 			}
-			wallet_icon.style.offset = {
+			wallet_icon.style.offset = global_store_multicolumn and {
+				text_left,
+				-(global_store_price_row_offset + 2),
+				12,
+			} or global_store and {
+				-8,
+				-7,
+				12,
+			} or {
 				text_left,
 				-7,
 				12,
 			}
 		end
 
-		configure_text_pass(pass_by_style_id(pass_template, "price_text"), {
+		local price_text = pass_by_style_id(pass_template, "price_text")
+
+		configure_text_pass(price_text, {
 			font_size = 16,
-			horizontal_alignment = "left",
+			horizontal_alignment = global_store_multicolumn and "left" or (global_store and "right" or "left"),
 			vertical_alignment = "bottom",
-			text_horizontal_alignment = "left",
+			text_horizontal_alignment = global_store_multicolumn and "left" or (global_store and "right" or "left"),
 			text_vertical_alignment = "bottom",
-			offset = {
+			offset = global_store_multicolumn and {
+				text_left + 27,
+				-global_store_price_row_offset,
+				12,
+			} or global_store and {
+				-30,
+				-5,
+				12,
+			} or {
 				text_left + 27,
 				-5,
 				12,
 			},
-			size = {
+			size = global_store_multicolumn and {
+				math.max(45, card_width - text_left - 105),
+				24,
+			} or global_store and {
+				math.max(45, card_width - text_left - 30),
+				24,
+			} or {
 				math.max(45, card_width - text_left - 105),
 				24,
 			},
 		})
 		configure_text_pass(pass_by_style_id(pass_template, "owned_text"), {
 			font_size = 14,
-			horizontal_alignment = "left",
+			horizontal_alignment = global_store_multicolumn and "left" or (global_store and "right" or "left"),
 			vertical_alignment = "bottom",
-			text_horizontal_alignment = "left",
+			text_horizontal_alignment = global_store_multicolumn and "left" or (global_store and "right" or "left"),
 			text_vertical_alignment = "bottom",
-			offset = {
+			offset = global_store_multicolumn and {
+				text_left,
+				-global_store_price_row_offset,
+				12,
+			} or global_store and {
+				-30,
+				-5,
+				12,
+			} or {
 				text_left,
 				-5,
 				12,
 			},
-			size = {
+			size = global_store_multicolumn and {
+				math.max(55, card_width - text_left - 80),
+				24,
+			} or global_store and {
+				math.max(55, card_width - text_left - 30),
+				24,
+			} or {
 				math.max(55, card_width - text_left - 80),
 				24,
 			},
 		})
+	end
+
+	if global_store then
+		local portrait = pass_by_style_id(pass_template, "portrait")
+
+		if portrait and portrait.style then
+			portrait.style.horizontal_alignment = "left"
+			portrait.style.vertical_alignment = "bottom"
+			portrait.style.size = {
+				global_store_photo_size,
+				global_store_photo_size,
+			}
+			portrait.style.offset = {
+				text_left,
+				-2,
+				14,
+			}
+		end
+
+		local character_info = pass_by_style_id(pass_template, "character_info_text")
+
+		if character_info and character_info.style then
+			local character_name_width
+
+			if global_store_multicolumn then
+				local compact_name_margin = global_store_compact_character_names and GLOBAL_STORE_CHARACTER_NAME_FIT_SAFETY_MARGIN or 0
+				local reserved_name_width = text_left + global_store_photo_size + global_store_info_gap + global_store_class_icon_size + 10 + compact_name_margin
+
+				character_name_width = math.max(global_store_compact_character_names and 20 or 40, card_width - reserved_name_width)
+			else
+				character_name_width = math.max(40, card_width - text_left - 108)
+			end
+
+			character_info.style.horizontal_alignment = "left"
+			character_info.style.vertical_alignment = "bottom"
+			character_info.style.text_horizontal_alignment = "left"
+			character_info.style.text_vertical_alignment = "bottom"
+			character_info.style.font_size = global_store_name_font_size
+			character_info.style.word_wrap = false
+			-- The native text pass scales the name down to the available width.
+			-- Limit this behavior to narrow four/five-column cards so two/three
+			-- column layouts retain their configured typography.
+			character_info.style.text_fit_with = global_store_compact_character_names
+			character_info.style.offset = {
+				text_left + (global_store_multicolumn and global_store_photo_size + global_store_info_gap + global_store_class_icon_size + 4 or 38),
+				-7,
+				14,
+			}
+			character_info.style.size = {
+				character_name_width,
+				24,
+			}
+		end
+
+		local class_icon = pass_by_style_id(pass_template, "character_class_icon_text")
+
+		if class_icon and class_icon.style then
+			class_icon.style.horizontal_alignment = "left"
+			class_icon.style.vertical_alignment = "bottom"
+			class_icon.style.text_horizontal_alignment = "left"
+			class_icon.style.text_vertical_alignment = "bottom"
+			class_icon.style.font_size = global_store_class_icon_size
+			class_icon.style.word_wrap = false
+			class_icon.style.offset = {
+				text_left + (global_store_multicolumn and global_store_photo_size + global_store_info_gap or 38),
+				-7,
+				14,
+			}
+			class_icon.style.size = {
+				math.max(12, global_store_class_icon_size + 4),
+				24,
+			}
+		end
 	end
 
 	local rarity_tag = pass_by_style_id(pass_template, "rarity_tag")
@@ -3056,7 +3642,7 @@ Layout.configure_item_blueprint = function(mod, item_blueprint, grid_width, conf
 	set_height(pass_by_style_id(pass_template, "inner_shadow"), card_height)
 	set_height(pass_by_style_id(pass_template, "inner_highlight"), card_height)
 
-	configure_card_content(mod, item_blueprint)
+	configure_card_content(mod, item_blueprint, configuration)
 
 	return item_size
 end
