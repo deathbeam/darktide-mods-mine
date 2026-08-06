@@ -18,6 +18,7 @@ DynamicCrosshair 110 1.7
 Enhanced_descriptions 210 6.0.0b
 ForTheEmperor 135 1.6.3
 FXLimiter 424 2.2
+GetOutOfTheWay 967 1.7
 stamina_dodge_bars 915 1.3
 controlled_chaos 953 1.2
 # crosshair_hud 9 2.0.5b

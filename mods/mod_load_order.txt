@@ -49,15 +49,16 @@ markers_aio
 DynamicCrosshair
 stamina_dodge_bars
 BetterNameplate
-FirstPersonBody
 RemoveTagSkulls
+FirstPersonBody
 ForTheEmperor
+GetOutOfTheWay
 pointer
 RecolorBossHealthBars
 crosshair_remap
 ChatBlock
 
--- In Game HUD
+-- In Game overlays and stuff
 LetThereBeLight
 crosshair_hud
 PlayerOutlines
