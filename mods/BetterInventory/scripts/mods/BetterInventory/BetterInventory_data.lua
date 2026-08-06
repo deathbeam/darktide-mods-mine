@@ -1,4 +1,4 @@
-local MOD_VERSION = "1.6.2"
+local MOD_VERSION = "1.7.0"
 local mod = get_mod("BetterInventory")
 local DEFAULT_OPERATIVE_SLOT_CAPACITY = 10
 local MAX_REASONABLE_OPERATIVE_SLOT_CAPACITY = 64
@@ -398,6 +398,12 @@ return {
 						type = "checkbox",
 						default_value = true,
 					},
+					{
+						setting_id = "quick_discard_disable_no_eligible_notification",
+						tooltip = "quick_discard_disable_no_eligible_notification_tooltip",
+						type = "checkbox",
+						default_value = false,
+					},
 				},
 			},
 			{
@@ -423,6 +429,12 @@ return {
 							{
 								setting_id = "automatic_curio_diagnostic_logging",
 								tooltip = "automatic_curio_diagnostic_logging_tooltip",
+								type = "checkbox",
+								default_value = false,
+							},
+							{
+								setting_id = "automatic_curio_disable_no_eligible_notification",
+								tooltip = "automatic_curio_disable_no_eligible_notification_tooltip",
 								type = "checkbox",
 								default_value = false,
 							},
@@ -777,18 +789,6 @@ return {
 				},
 			},
 			{
-				setting_id = "visible_equipment_integration_group",
-				type = "group",
-				sub_widgets = {
-					{
-						setting_id = "enable_visible_equipment_character_overview_override",
-						tooltip = "enable_visible_equipment_character_overview_override_tooltip",
-						type = "checkbox",
-						default_value = true,
-					},
-				},
-			},
-			{
 				setting_id = "layout_group",
 				type = "group",
 				sub_widgets = {
@@ -929,6 +929,93 @@ return {
 					{
 						setting_id = "single_column_blessing_icons_on_right",
 						tooltip = "single_column_blessing_icons_on_right_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+				},
+			},
+			{
+				setting_id = "custom_item_name_and_colors_group",
+				type = "group",
+				sub_widgets = {
+					{
+						setting_id = "enable_custom_item_name_and_colors",
+						tooltip = "enable_custom_item_name_and_colors_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "custom_item_name_keybind",
+						tooltip = "custom_item_name_keybind_tooltip",
+						type = "dropdown",
+						default_value = "hotkey_menu_special_2",
+						options = {
+							{ text = "custom_item_editor_keybind_e", value = "hotkey_menu_special_1" },
+							{ text = "custom_item_editor_keybind_q", value = "hotkey_menu_special_2" },
+							{ text = "custom_item_editor_keybind_v", value = "hotkey_item_inspect" },
+							{ text = "custom_item_editor_keybind_r", value = "group_finder_refresh_groups" },
+							{ text = "custom_item_editor_keybind_off", value = "off" },
+						},
+					},
+					{
+						setting_id = "custom_item_name_color_keybind",
+						tooltip = "custom_item_name_color_keybind_tooltip",
+						type = "dropdown",
+						default_value = "hotkey_menu_special_1",
+						options = {
+							{ text = "custom_item_editor_keybind_e", value = "hotkey_menu_special_1" },
+							{ text = "custom_item_editor_keybind_q", value = "hotkey_menu_special_2" },
+							{ text = "custom_item_editor_keybind_v", value = "hotkey_item_inspect" },
+							{ text = "custom_item_editor_keybind_r", value = "group_finder_refresh_groups" },
+							{ text = "custom_item_editor_keybind_off", value = "off" },
+						},
+					},
+					{
+						setting_id = "custom_item_background_color_keybind",
+						tooltip = "custom_item_background_color_keybind_tooltip",
+						type = "dropdown",
+						default_value = "group_finder_refresh_groups",
+						options = {
+							{ text = "custom_item_editor_keybind_e", value = "hotkey_menu_special_1" },
+							{ text = "custom_item_editor_keybind_q", value = "hotkey_menu_special_2" },
+							{ text = "custom_item_editor_keybind_v", value = "hotkey_item_inspect" },
+							{ text = "custom_item_editor_keybind_r", value = "group_finder_refresh_groups" },
+							{ text = "custom_item_editor_keybind_off", value = "off" },
+						},
+					},
+					{
+						setting_id = "custom_item_skip_confirmation_prompts",
+						tooltip = "custom_item_skip_confirmation_prompts_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "custom_item_preserve_card_shading",
+						tooltip = "custom_item_preserve_card_shading_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "custom_item_override_weapon_information_color",
+						tooltip = "custom_item_override_weapon_information_color_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "custom_item_override_weapon_rarity_keyword_color",
+						tooltip = "custom_item_override_weapon_rarity_keyword_color_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "custom_item_override_weapon_information_name_color",
+						tooltip = "custom_item_override_weapon_information_name_color_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "name_it_force_curio_name_in_detailed_mode",
+						tooltip = "name_it_force_curio_name_in_detailed_mode_tooltip",
 						type = "checkbox",
 						default_value = true,
 					},
@@ -1089,6 +1176,18 @@ return {
 						tooltip = "simplify_curio_primary_stat_text_tooltip",
 						type = "checkbox",
 						default_value = true,
+					},
+				},
+			},
+			{
+				setting_id = "myfavorites_integration_group",
+				type = "group",
+				sub_widgets = {
+					{
+						setting_id = "myfavorites_show_favorite_letter",
+						tooltip = "myfavorites_show_favorite_letter_tooltip",
+						type = "checkbox",
+						default_value = false,
 					},
 				},
 			},
@@ -1463,6 +1562,12 @@ return {
 								value = "detailed",
 							},
 						},
+					},
+					{
+						setting_id = "curio_content_name_it_curio_name",
+						tooltip = "curio_content_name_it_curio_name_tooltip",
+						type = "checkbox",
+						default_value = true,
 					},
 					{
 						setting_id = "show_curio_item_level",

@@ -5,6 +5,7 @@ local RankSettings = require("scripts/settings/item/rank_settings")
 local WeaponStats = require("scripts/utilities/weapon_stats")
 
 local Layout = {}
+local item_customization_provider
 local INVENTORY_CANVAS_WIDTH = 1920
 local INVENTORY_EDGE_MARGIN = 16
 local WEAPON_ACTIONS_PANEL_WIDTH = 420
@@ -47,6 +48,7 @@ local GLOBAL_STORE_PRICE_ROW_PADDING_DEFAULT = 10
 local GLOBAL_STORE_PRICE_ROW_PADDING_MIN = 5
 local GLOBAL_STORE_PRICE_ROW_PADDING_MAX = 20
 local NATIVE_SINGLE_COLUMN_CONTENT_GAP = 12
+local CURIO_NAME_LINE_GAP = 3
 local COLUMN_SETTING_BY_SLOT = {
 	melee = "melee_columns",
 	ranged = "ranged_columns",
@@ -511,6 +513,76 @@ local function setting(mod, setting_id, fallback)
 	end
 
 	return value
+end
+
+local function enabled_name_it_mod()
+	local resolver = rawget(_G, "get_mod")
+
+	if type(resolver) ~= "function" then
+		return
+	end
+
+	local ok, name_it = pcall(resolver, "name_it")
+
+	if not ok or type(name_it) ~= "table" then
+		return
+	end
+
+	if type(name_it.is_enabled) == "function" then
+		local enabled_ok, enabled = pcall(name_it.is_enabled, name_it)
+
+		if enabled_ok and enabled == false then
+			return
+		end
+	end
+
+	return name_it
+end
+
+local function fallback_name_it_name(mod, item, is_sub)
+	if setting(mod, "enable_custom_item_name_and_colors", true) ~= false then
+		return
+	end
+
+	local name_it = enabled_name_it_mod()
+
+	if not name_it or type(name_it.get_custom_name) ~= "function" then
+		return
+	end
+
+	local ok, custom_name = pcall(name_it.get_custom_name, item, is_sub)
+
+	return ok and type(custom_name) == "string" and custom_name ~= "" and custom_name or nil
+end
+
+local function name_it_curio_title_enabled(mod, configuration)
+	return not (configuration and configuration.character_overview) and setting(mod, "name_it_force_curio_name_in_detailed_mode", true)
+end
+
+local function curio_name_font_size(mod, configuration)
+	local fallback = configuration and configuration.native_single_column and 20 or 16
+	local setting_id = configuration and configuration.native_single_column and "single_column_weapon_name_font_size" or "item_name_font_size"
+	local value = tonumber(setting(mod, setting_id, fallback)) or fallback
+
+	return math.max(10, math.min(24, value))
+end
+
+local function curio_name_title_height(mod, configuration)
+	return math.max(40, 2 * (curio_name_font_size(mod, configuration) + CURIO_NAME_LINE_GAP))
+end
+
+Layout.set_item_customization_provider = function(provider)
+	item_customization_provider = provider
+end
+
+local function item_customization(mod, item)
+	if setting(mod, "enable_custom_item_name_and_colors", true) == false or type(item_customization_provider) ~= "table" or type(item_customization_provider.get) ~= "function" then
+		return
+	end
+
+	local gear_id = item and item.gear_id
+
+	return gear_id and item_customization_provider.get(mod, gear_id) or nil
 end
 
 local function numeric_setting(mod, setting_id, fallback, minimum, maximum)
@@ -1767,6 +1839,35 @@ local function add_curio_stat_pass(pass_template, index, options)
 	}
 end
 
+local function add_name_it_curio_title_pass(pass_template, options)
+	local style = table.clone(options.base_style or {})
+
+	style.font_size = options.font_size
+	style.horizontal_alignment = "left"
+	style.vertical_alignment = "top"
+	style.text_horizontal_alignment = "left"
+	style.text_vertical_alignment = "top"
+	style.word_wrap = true
+	style.text_fit_with = false
+	style.offset = options.offset
+	style.size = options.size
+	style.drop_shadow = true
+	style.text_color = table.clone(DEFAULT_CURIO_SECONDARY_COLOR)
+	style.default_color = table.clone(DEFAULT_CURIO_SECONDARY_COLOR)
+	style.hover_color = table.clone(DEFAULT_CURIO_SECONDARY_COLOR)
+
+	pass_template[#pass_template + 1] = {
+		pass_type = "text",
+		style_id = "better_inventory_name_it_curio_name",
+		value = "",
+		value_id = "better_inventory_name_it_curio_name_text",
+		style = style,
+		visibility_function = function(content)
+			return content and content.better_inventory_name_it_curio_title == true
+		end,
+	}
+end
+
 local function configure_favorite_marker(mod, pass_template, text_left)
 	local favorite_icon = pass_by_style_id(pass_template, "favorite_icon")
 
@@ -1777,6 +1878,33 @@ local function configure_favorite_marker(mod, pass_template, text_left)
 	local favorite_style = favorite_icon.style
 	local favorite_marker_position = setting(mod, "favorite_marker_position", "above_rating")
 	local equipped_icon = pass_by_style_id(pass_template, "equipped_icon")
+	local myfavorites_hotspot = pass_by_style_id(pass_template, "myfav_hotspot")
+	local myfavorites_compatibility = myfavorites_hotspot and myfavorites_hotspot.style
+	local myfavorites_show_favorite_letter = myfavorites_compatibility and setting(mod, "myfavorites_show_favorite_letter", false)
+
+	local function align_myfavorites_hotspot(horizontal_alignment, vertical_alignment, offset, size)
+		if not myfavorites_compatibility then
+			return
+		end
+
+		local hotspot_style = myfavorites_hotspot.style
+		local resolved_size = size or hotspot_style.size or {
+			30,
+			28,
+		}
+
+		hotspot_style.horizontal_alignment = horizontal_alignment
+		hotspot_style.vertical_alignment = vertical_alignment
+		hotspot_style.offset = {
+			offset[1],
+			offset[2],
+			math.max(offset[3] or 0, 17),
+		}
+		hotspot_style.size = {
+			resolved_size[1] or 30,
+			resolved_size[2] or 28,
+		}
+	end
 
 	-- Equipped Icon+ extends Darktide's equipped-icon visibility function to
 	-- include items equipped in inactive loadouts and changes the icon colour.
@@ -1802,11 +1930,37 @@ local function configure_favorite_marker(mod, pass_template, text_left)
 
 	if setting(mod, "compact_favorite_marker", true) then
 		favorite_icon.value = ""
+
+		if myfavorites_show_favorite_letter then
+			favorite_icon.value = favorite_icon.value .. "\nF"
+		end
+
 		favorite_style.font_size = 20
+		favorite_style.word_wrap = false
 		favorite_style.size = {
 			30,
-			28,
+			myfavorites_show_favorite_letter and 48 or 28,
 		}
+
+		-- MyFavorites replaces the native favorite value every frame with an
+		-- icon plus the localized "Favorite" label (or its hovered colour name).
+		-- Narrow BetterInventory cards wrap that label into a vertical column.
+		-- Run its original visibility callback first so colour-group state and
+		-- hover behavior remain intact, then restore the compact glyph only.
+		if myfavorites_compatibility then
+			local original_visibility_function = favorite_icon.visibility_function
+			local compact_favorite_value = favorite_icon.value
+
+			favorite_icon.visibility_function = function(content, style)
+				local visible = type(original_visibility_function) ~= "function" or original_visibility_function(content, style)
+
+				if visible and content then
+					content.favorite_icon = compact_favorite_value
+				end
+
+				return visible
+			end
+		end
 	end
 
 	if favorite_marker_position == "above_rating" then
@@ -1819,6 +1973,7 @@ local function configure_favorite_marker(mod, pass_template, text_left)
 			7,
 			16,
 		}
+		align_myfavorites_hotspot("right", "top", favorite_style.offset, favorite_style.size)
 
 		local original_change_function = favorite_icon.change_function
 
@@ -1827,7 +1982,19 @@ local function configure_favorite_marker(mod, pass_template, text_left)
 				original_change_function(content, style, animations, dt)
 			end
 
-			style.offset[2] = equipped_icon_is_visible(content) and 33 or 7
+			local offset_y = equipped_icon_is_visible(content) and 33 or 7
+
+			style.offset[2] = offset_y
+
+			-- ViewElementGrid clones pass styles when it creates a widget. The
+			-- creation hook in BetterInventory.lua stores that real runtime hotspot
+			-- style on shared widget content, allowing this callback (which Darktide
+			-- reliably executes) to keep the click target on the visible marker.
+			local runtime_hotspot_style = content and content.better_inventory_myfavorites_hotspot_style
+
+			if runtime_hotspot_style and runtime_hotspot_style.offset then
+				runtime_hotspot_style.offset[2] = offset_y
+			end
 		end
 	else
 		favorite_style.horizontal_alignment = "left"
@@ -1839,6 +2006,7 @@ local function configure_favorite_marker(mod, pass_template, text_left)
 			-5,
 			16,
 		}
+		align_myfavorites_hotspot("left", "bottom", favorite_style.offset, favorite_style.size)
 	end
 end
 
@@ -2054,7 +2222,25 @@ local function add_custom_content_passes(mod, pass_template, card_width, text_le
 		local secondary_font_size = curio_secondary_font_size(mod)
 		local primary_secondary_spacing = curio_primary_secondary_spacing(mod)
 		local secondary_text_color = configured_text_color(mod, "curio_secondary_text_color", DEFAULT_CURIO_SECONDARY_COLOR)
-		local y_offset = 7
+		local show_name_it_curio_title = name_it_curio_title_enabled(mod, configuration)
+		local title_height = show_name_it_curio_title and curio_name_title_height(mod, configuration) or 0
+		local y_offset = 7 + title_height
+
+		if show_name_it_curio_title then
+			add_name_it_curio_title_pass(pass_template, {
+				base_style = base_text_style,
+				font_size = curio_name_font_size(mod, configuration),
+				offset = {
+					text_left,
+					7,
+					11,
+				},
+				size = {
+					math.max(40, card_width - text_left - 40),
+					title_height,
+				},
+			})
+		end
 
 		for i = 1, 4 do
 			if i == 2 then
@@ -2129,7 +2315,22 @@ local function valid_weapon_name_part(value)
 	return type(value) == "string" and value ~= "" and value ~= "n/a"
 end
 
-local function format_weapon_name(widget, element, append_mark_to_name)
+local function localized_item_name(item, fallback)
+	local localization_id = item and item.display_name
+	local localize = rawget(_G, "Localize")
+
+	if type(localization_id) == "string" and type(localize) == "function" then
+		local ok, value = pcall(localize, localization_id)
+
+		if ok and type(value) == "string" and value ~= "" then
+			return value
+		end
+	end
+
+	return fallback
+end
+
+local function format_item_name(mod, widget, element, append_mark_to_name)
 	local content = widget and widget.content
 
 	if not content then
@@ -2138,14 +2339,80 @@ local function format_weapon_name(widget, element, append_mark_to_name)
 
 	content.better_inventory_display_name_base = nil
 	content.better_inventory_display_name_suffix = nil
+	content.better_inventory_name_it_curio_title = nil
+	content.better_inventory_name_it_curio_name_text = nil
+	content.better_inventory_name_it_curio_full_name = nil
+	content.better_inventory_fitted_name_it_curio_name = nil
+	content.better_inventory_name_it_curio_source_name = nil
+
+	element = element or content.element
+
+	local item = element and (element.real_item or element.item)
+	local customization = item_customization(mod, item)
+	local internal_name = customization and customization.name
+	local internal_name_target = customization and customization.name_target
+	local external_name = fallback_name_it_name(mod, item, false)
+	local external_sub_name = fallback_name_it_name(mod, item, true)
+
+	if is_curio(item) then
+		content.display_name = external_name or internal_name or localized_item_name(item, content.display_name)
+		content.better_inventory_name_it_curio_title = setting(mod, "curio_display_profile", "detailed") == "detailed" and setting(mod, "name_it_force_curio_name_in_detailed_mode", true)
+		content.better_inventory_name_it_curio_name_text = content.display_name
+		content.better_inventory_name_it_curio_source_name = content.display_name
+
+		return
+	end
+
+	if not is_weapon(item) then
+		return
+	end
+
+	if type(internal_name) == "string" and internal_name ~= "" then
+		if internal_name_target == "sub" then
+			local family_ok, family_name = pcall(Items.weapon_lore_family_name, item)
+
+			if family_ok and valid_weapon_name_part(family_name) then
+				content.display_name = family_name
+			end
+
+			content.sub_display_name = internal_name
+
+			return
+		end
+
+		content.display_name = internal_name
+		content.sub_display_name = ""
+
+		return
+	end
+
+	if external_name then
+		content.display_name = external_name
+		content.sub_display_name = ""
+
+		return
+	elseif external_sub_name then
+		local family_ok, family_name = pcall(Items.weapon_lore_family_name, item)
+
+		if family_ok and valid_weapon_name_part(family_name) then
+			content.display_name = family_name
+		end
+
+		content.sub_display_name = external_sub_name
+
+		return
+	end
+
+	local family_ok, family_name = pcall(Items.weapon_lore_family_name, item)
+
+	if family_ok and valid_weapon_name_part(family_name) then
+		content.display_name = family_name
+	end
 
 	if not append_mark_to_name then
 		return
 	end
 
-	element = element or content.element
-
-	local item = element and (element.real_item or element.item)
 	local display_name = content.display_name
 	local mark_ok, mark_name = pcall(Items.weapon_lore_mark_name, item)
 
@@ -2166,6 +2433,118 @@ local function format_weapon_name(widget, element, append_mark_to_name)
 	pattern_name = pattern_ok and pattern_name or nil
 
 	content.sub_display_name = valid_weapon_name_part(pattern_name) and pattern_name or ""
+end
+
+local function apply_custom_color(style, color, field_name)
+	if type(style) ~= "table" or type(style[field_name]) ~= "table" then
+		return
+	end
+
+	local backup_id = "better_inventory_original_" .. field_name
+
+	style[backup_id] = style[backup_id] or table.clone(style[field_name])
+	style[field_name] = table.clone(type(color) == "table" and color or style[backup_id])
+end
+
+local function apply_item_customization_style(mod, widget, element)
+	local content = widget and widget.content
+	local style = widget and widget.style
+	local item = item_from_element(element or content and content.element)
+	local customization = item_customization(mod, item)
+	local name_color = customization and customization.name_color
+	local background_color = customization and customization.background_color
+	local preserve_shading = customization and customization.background_preserve_shading
+
+	if not style then
+		return
+	end
+
+	for _, style_id in ipairs({ "display_name", "better_inventory_name_it_curio_name" }) do
+		local text_style = style[style_id]
+
+		apply_custom_color(text_style, name_color, "text_color")
+		apply_custom_color(text_style, name_color, "default_color")
+		apply_custom_color(text_style, name_color, "hover_color")
+	end
+
+	if preserve_shading == nil then
+		preserve_shading = setting(mod, "custom_item_preserve_card_shading", true)
+	end
+
+	-- Darktide composes equipment cards from a fixed dark base plus a colored
+	-- gradient. Preserve that base by default; the per-item flag can opt back
+	-- into the former full-card paint behavior.
+	apply_custom_color(style.background, background_color and not preserve_shading and background_color or nil, "color")
+	apply_custom_color(style.background_gradient, background_color, "color")
+	apply_custom_color(style.rarity_tag, background_color, "color")
+end
+
+Layout.apply_item_customization_style = apply_item_customization_style
+
+-- The weapon-information panel already composites its rarity tint through a
+-- vertical gradient over Darktide's dark terminal background. Only replace
+-- that tint (and, independently, the rarity keyword) so the native shading is
+-- retained regardless of the card's per-item flat/shaded preference.
+Layout.apply_weapon_information_customization = function(mod, weapon_stats, item)
+	local customization = item_customization(mod, item)
+	local name_color = customization and customization.name_color
+	local background_color = customization and customization.background_color
+	local information_color = setting(mod, "custom_item_override_weapon_information_color", true) and background_color or nil
+	local rarity_keyword_color = setting(mod, "custom_item_override_weapon_rarity_keyword_color", true) and background_color or nil
+	local information_name_color = setting(mod, "custom_item_override_weapon_information_name_color", true) and name_color or nil
+	local widgets = weapon_stats and weapon_stats._grid_widgets
+	local widgets_by_name = weapon_stats and weapon_stats._widgets_by_name
+	local title_widget = widgets_by_name and widgets_by_name.grid_divider_top_weapon
+	local title_style = title_widget and title_widget.style and title_widget.style.weapon_display_name
+	local applied = false
+
+	if title_style then
+		apply_custom_color(title_style, information_name_color, "text_color")
+
+		if customization and type(customization.name) == "string" and customization.name ~= "" and customization.name_target ~= "sub" and title_widget.content then
+			title_widget.content.weapon_display_name = customization.name
+		end
+
+		applied = true
+	end
+
+	if type(widgets) ~= "table" then
+		return applied
+	end
+
+	for index = 1, #widgets do
+		local widget = widgets[index]
+		local style = widget and widget.style
+
+		if style and (style.gradient_background or style.rarity_name) then
+			apply_custom_color(style.gradient_background, information_color, "color")
+			apply_custom_color(style.rarity_name, rarity_keyword_color, "text_color")
+
+			if customization and customization.name_target == "sub" and type(customization.name) == "string" and customization.name ~= "" and widget.content and style.sub_display_name then
+				widget.content.sub_display_name = customization.name
+			end
+
+			applied = true
+		end
+	end
+
+	return applied
+end
+
+-- Re-run the same formatting path used when a card is initialized. This is
+-- also used by the customization editor to update already-created loadout
+-- widgets (notably the character overview hidden beneath InventoryWeaponsView)
+-- without forcing the player to close and reopen the view.
+Layout.refresh_item_customization = function(mod, widget, element)
+	if not widget then
+		return false
+	end
+
+	element = element or widget.content and widget.content.element
+	format_item_name(mod, widget, element, setting(mod, "append_mark_to_name", true))
+	apply_item_customization_style(mod, widget, element)
+
+	return true
 end
 
 local function format_item_level(widget, element, show_item_level_icon)
@@ -2193,6 +2572,59 @@ local function fit_display_name(parent, widget, ui_renderer, preferred_font_size
 	local display_name = content and content.display_name
 
 	if not style or type(display_name) ~= "string" or display_name == "" then
+		return
+	end
+
+	if content.better_inventory_name_it_curio_title then
+		local title_style = widget.style and widget.style.better_inventory_name_it_curio_name
+
+		if not title_style then
+			return
+		end
+
+		ui_renderer = ui_renderer or grid_ui_renderer(parent)
+
+		if not ui_renderer then
+			return
+		end
+
+		local title_text = content.better_inventory_name_it_curio_name_text or display_name
+
+		if title_text ~= content.better_inventory_fitted_name_it_curio_name then
+			content.better_inventory_name_it_curio_full_name = string.gsub(title_text, "[\r\n]+", " ")
+		end
+
+		local full_name = content.better_inventory_name_it_curio_full_name or title_text
+		local maximum_width = title_style.size and title_style.size[1]
+		local maximum_lines = 2
+		local minimum_title_font_size = math.min(title_style.font_size or 16, 12)
+
+		if type(maximum_width) ~= "number" then
+			return
+		end
+
+		local wrapped_rows = Text.word_wrap(ui_renderer, full_name, title_style, maximum_width)
+
+		while wrapped_rows and #wrapped_rows > maximum_lines and title_style.font_size > minimum_title_font_size do
+			title_style.font_size = title_style.font_size - 1
+			wrapped_rows = Text.word_wrap(ui_renderer, full_name, title_style, maximum_width)
+		end
+
+		if wrapped_rows and #wrapped_rows > 0 then
+			local fitted_rows = {}
+
+			for index = 1, math.min(maximum_lines, #wrapped_rows) do
+				fitted_rows[index] = wrapped_rows[index]
+			end
+
+			if #wrapped_rows > maximum_lines then
+				fitted_rows[maximum_lines] = Text.crop_text_width(ui_renderer, fitted_rows[maximum_lines] .. "...", title_style, maximum_width)
+			end
+
+			content.better_inventory_name_it_curio_name_text = table.concat(fitted_rows, "\n")
+			content.better_inventory_fitted_name_it_curio_name = content.better_inventory_name_it_curio_name_text
+		end
+
 		return
 	end
 
@@ -2406,6 +2838,7 @@ end
 local function configure_card_content(mod, item_blueprint, configuration)
 	configuration = configuration or {}
 	local original_init = item_blueprint.init
+	local original_update = item_blueprint.update
 	local original_update_data = item_blueprint.update_data
 	local preferred_font_size = configuration.native_single_column and numeric_setting(mod, "single_column_weapon_name_font_size", 20, 10, 24) or grid_weapon_name_font_size(mod, configuration)
 	local minimum_font_size = numeric_setting(mod, "minimum_item_name_font_size", 12, 8, 20)
@@ -2432,7 +2865,8 @@ local function configure_card_content(mod, item_blueprint, configuration)
 	if original_init then
 		item_blueprint.init = function(parent, widget, element, callback_name, secondary_callback_name, ui_renderer, double_click_callback, template)
 			original_init(parent, widget, element, callback_name, secondary_callback_name, ui_renderer, double_click_callback, template)
-			format_weapon_name(widget, element, append_mark_to_name)
+			format_item_name(mod, widget, element, append_mark_to_name)
+			apply_item_customization_style(mod, widget, element)
 			format_item_level(widget, element, show_item_level_icon)
 			populate_card_content(mod, widget, element, blessing_display_mode, show_weapon_perks, weapon_perk_compression, compression_mode, simplify_curio_stats, show_weapon_modifiers, show_blessing_text_icons)
 			fit_display_name(parent, widget, ui_renderer, preferred_font_size, math.min(preferred_font_size, minimum_font_size))
@@ -2445,7 +2879,8 @@ local function configure_card_content(mod, item_blueprint, configuration)
 	if original_update_data then
 		item_blueprint.update_data = function(parent, widget, element)
 			original_update_data(parent, widget, element)
-			format_weapon_name(widget, element, append_mark_to_name)
+			format_item_name(mod, widget, element, append_mark_to_name)
+			apply_item_customization_style(mod, widget, element)
 			format_item_level(widget, element, show_item_level_icon)
 			populate_card_content(mod, widget, element, blessing_display_mode, show_weapon_perks, weapon_perk_compression, compression_mode, simplify_curio_stats, show_weapon_modifiers, show_blessing_text_icons)
 			fit_display_name(parent, widget, nil, preferred_font_size, math.min(preferred_font_size, minimum_font_size))
@@ -2454,6 +2889,7 @@ local function configure_card_content(mod, item_blueprint, configuration)
 			fit_curio_stats(parent, widget, nil)
 		end
 	end
+
 end
 
 local function slot_kind_from_slot_types(slot_types)
@@ -2759,8 +3195,9 @@ Layout.card_height = function(mod, configuration)
 
 	local manual_height = numeric_setting(mod, "card_height", 110, 110, 240)
 	local global_store_extra = global_store_extra_height(mod, configuration)
+	local force_name_it_curio_title = setting(mod, "curio_display_profile", "detailed") == "detailed" and name_it_curio_title_enabled(mod, configuration)
 
-	if not setting(mod, "automatic_card_height", true) and not configuration.native_single_column and global_store_extra <= 0 then
+	if not setting(mod, "automatic_card_height", true) and not configuration.native_single_column and global_store_extra <= 0 and not force_name_it_curio_title then
 		return manual_height
 	end
 
@@ -2837,8 +3274,9 @@ Layout.card_height = function(mod, configuration)
 		local primary_line_height = curio_primary_font_size(mod) + 5
 		local secondary_line_height = curio_secondary_font_size(mod) + 5
 		local primary_secondary_spacing = curio_primary_secondary_spacing(mod)
+		local curio_title_height = force_name_it_curio_title and curio_name_title_height(mod, configuration) or 0
 
-		required_height = math.max(required_height, 7 + primary_line_height + primary_secondary_spacing + 3 * secondary_line_height + 12 + store_footer_height)
+		required_height = math.max(required_height, 7 + curio_title_height + primary_line_height + primary_secondary_spacing + 3 * secondary_line_height + 12 + store_footer_height)
 	else
 		local primary_line_height = math.max(20, curio_primary_font_size(mod) + 5)
 		local quality_row_height = setting(mod, "show_curio_quality", false) and secondary_row_height or 0
@@ -3159,6 +3597,7 @@ Layout.configure_native_item_blueprint = function(mod, item_blueprint, grid_widt
 			native_single_column = true,
 			global_store = global_store,
 			store_item = store_item,
+			character_overview = configuration.character_overview,
 		})
 	end
 

@@ -203,6 +203,12 @@ local localization = {
 	quick_discard_show_summary_notification_tooltip = {
 		en = "Shows a native notification after the backend confirms an automated discard, with discarded item counts colored by rarity. Manual discard completion remains owned by Darktide's native inventory flow.",
 	},
+	quick_discard_disable_no_eligible_notification = {
+		en = "Disable notification when no eligible discard items are found",
+	},
+	quick_discard_disable_no_eligible_notification_tooltip = {
+		en = "Suppresses the Morningstar automatic-discard notification when no items match the current filters. Successful discard notifications are unaffected.",
+	},
 	automatic_curio_buyer_group = {
 		en = "Automatic Curio Buyer",
 	},
@@ -223,6 +229,12 @@ local localization = {
 	},
 	automatic_curio_diagnostic_logging_tooltip = {
 		en = "Writes per-character, per-Curio and revalidation details to Darktide's shared session log during the single Morningstar scan. Disabled by default to minimize disk-log growth; failures are still logged.",
+	},
+	automatic_curio_disable_no_eligible_notification = {
+		en = "Disable notification when no eligible Curios are found",
+	},
+	automatic_curio_disable_no_eligible_notification_tooltip = {
+		en = "Suppresses the Automatic Curio Buyer notification when no Curios match the current filters. Purchase, insufficient-funds and failure notifications are unaffected.",
 	},
 	automatic_curio_target_mode = {
 		en = "Curio acquisition targets",
@@ -554,14 +566,14 @@ local localization = {
 	option_requires_character_overview_curio_details = {
 		en = "Requires detailed Curio cards on the character overview.",
 	},
-	visible_equipment_integration_group = {
-		en = "Mod Integration: Visible Equipment",
+	myfavorites_integration_group = {
+		en = "Mod Integration: MyFavorites",
 	},
-	enable_visible_equipment_character_overview_override = {
-		en = "Enable Visible Equipment compatibility",
+	myfavorites_show_favorite_letter = {
+		en = "Show F below favorite icon",
 	},
-	enable_visible_equipment_character_overview_override_tooltip = {
-		en = "Preserves Visible Equipment's Primary and Secondary Placement widgets in the Cosmetics tab while BetterInventory keeps its configured detailed cards in the Loadout tab. Enabled by default.",
+	myfavorites_show_favorite_letter_tooltip = {
+		en = "Adds a compact F beneath the coloured MyFavorites icon. Disabled by default.",
 	},
 	global_store_integration_group = {
 		en = "Mod Integration: GlobalStore",
@@ -685,6 +697,93 @@ local localization = {
 	},
 	quick_look_card_integration_group = {
 		en = "Mod Integration: Quick Look Card",
+	},
+	custom_item_name_and_colors_group = {
+		en = "Custom Item Names and Colors",
+	},
+	enable_custom_item_name_and_colors = {
+		en = "Enable custom item names and colors",
+	},
+	enable_custom_item_name_and_colors_tooltip = {
+		en = "Enables BetterInventory's standalone per-item name, name-color and background-color editor. Does not require Name It.",
+	},
+	custom_item_name_keybind = {
+		en = "Change Name keybind",
+	},
+	custom_item_name_keybind_tooltip = {
+		en = "Opens the name editor directly. When Name It is installed, BetterInventory uses its configured Change Name key and replaces its duplicate inventory action.",
+	},
+	custom_item_name_color_keybind = {
+		en = "Name Color keybind",
+	},
+	custom_item_name_color_keybind_tooltip = {
+		en = "Opens the item-name RGB selector directly.",
+	},
+	custom_item_background_color_keybind = {
+		en = "Background Color keybind",
+	},
+	custom_item_background_color_keybind_tooltip = {
+		en = "Opens the item-background RGB selector directly.",
+	},
+	custom_item_editor_keybind_e = {
+		en = "[E]",
+	},
+	custom_item_editor_keybind_q = {
+		en = "[Q]",
+	},
+	custom_item_editor_keybind_v = {
+		en = "[V]",
+	},
+	custom_item_editor_keybind_r = {
+		en = "[R]",
+	},
+	custom_item_editor_keybind_off = {
+		en = "Off",
+	},
+	custom_item_skip_confirmation_prompts = {
+		en = "Skip confirmation prompts",
+	},
+	custom_item_skip_confirmation_prompts_tooltip = {
+		en = "Immediately applies reset actions instead of asking for confirmation. Enabled by default.",
+	},
+	custom_item_preserve_card_shading = {
+		en = "Preserve Darktide Equipment Card Shading",
+	},
+	custom_item_preserve_card_shading_tooltip = {
+		en = "Uses Darktide's dark base layer beneath custom background colors. Disable this to paint the entire card with the selected color. This is the default for newly painted backgrounds; each item retains the choice confirmed in its Background Color prompt.",
+	},
+	custom_item_override_weapon_information_color = {
+		en = "Apply custom color to weapon information",
+	},
+	custom_item_override_weapon_information_color_tooltip = {
+		en = "Uses an item's custom background color for the weapon-information header. Darktide's native dark base and gradient shading are always preserved in this panel.",
+	},
+	custom_item_override_weapon_rarity_keyword_color = {
+		en = "Apply custom color to rarity keyword",
+	},
+	custom_item_override_weapon_rarity_keyword_color_tooltip = {
+		en = "Uses an item's custom background color for its rarity keyword in the weapon-information panel.",
+	},
+	custom_item_override_weapon_information_name_color = {
+		en = "Apply custom name color to weapon information",
+	},
+	custom_item_override_weapon_information_name_color_tooltip = {
+		en = "Uses an item's custom name color for its name in the weapon-information panel.",
+	},
+	option_requires_custom_item_name_and_colors = {
+		en = "Enable custom item names and colors to use this option.",
+	},
+	name_it_force_curio_name_in_detailed_mode = {
+		en = "Show Curio name with all four attributes",
+	},
+	name_it_force_curio_name_in_detailed_mode_tooltip = {
+		en = "Shows every Curio name in a reserved two-line title area above the primary attribute and three secondary attributes. Works with or without Name It. Reopen the current view after changing this option.",
+	},
+	curio_content_name_it_curio_name = {
+		en = "Show Curio name with all four attributes",
+	},
+	curio_content_name_it_curio_name_tooltip = {
+		en = "Shows every Curio name in a reserved two-line title area above the primary attribute and three secondary attributes. Works with or without Name It. Reopen the current view after changing this option.",
 	},
 	enable_quick_look_card_single_column_integration = {
 		en = "Show weapon modifiers in single-column mode",
@@ -1638,6 +1737,8 @@ local zh_cn = {
 	automatic_curio_min_item_level_tooltip = "只有显示物品等级达到或超过此值的军械库珍品才符合条件。生命和韧性珍品还必须达到对应的最低主要属性数值。货币充足时，会购买所有已启用职业的每个匹配商品。默认值为 410。",
 	automatic_curio_diagnostic_logging = "启用详细诊断日志",
 	automatic_curio_diagnostic_logging_tooltip = "在每次晨星号单次扫描期间，将每个角色、每件珍品和重新验证的详细信息写入《暗潮》的共享会话日志。默认关闭以尽量减少磁盘日志增长；错误仍会记录。",
+	automatic_curio_disable_no_eligible_notification = "未找到符合条件的珍品时禁用通知",
+	automatic_curio_disable_no_eligible_notification_tooltip = "当没有珍品符合当前筛选条件时，隐藏自动珍品购买器通知。购买、资金不足和失败通知不受影响。",
 	automatic_curio_types_group = "我们正在寻找的珍品类型：",
 	automatic_curio_buy_health = "生命",
 	automatic_curio_min_health = "最低生命值 (%%)",
@@ -1741,6 +1842,8 @@ local zh_cn = {
 	quick_discard_show_type_breakdown_tooltip = "在快速丢弃确认窗口的每个稀有度行中显示近战武器、远程武器和珍品数量。此显示选项仅在模组选项中提供，默认启用。",
 	quick_discard_show_summary_notification = "显示自动丢弃通知",
 	quick_discard_show_summary_notification_tooltip = "在后端确认自动丢弃后显示原生通知，丢弃的物品数量按稀有度着色。手动丢弃完成仍然属于《暗潮》的原生库存流程。",
+	quick_discard_disable_no_eligible_notification = "未找到符合条件的丢弃物品时禁用通知",
+	quick_discard_disable_no_eligible_notification_tooltip = "当没有物品符合当前筛选条件时，隐藏晨星号自动丢弃通知。成功丢弃通知不受影响。",
 	quick_discard_inventory_prefix = "全部丢弃",
 	quick_discard_inventory_mode = "模式",
 	quick_discard_inventory_suffix = "及以下",
@@ -2183,6 +2286,35 @@ zh_cn.enable_hadron_single_column_mirror = "Mirror single-column format from inv
 zh_cn.enable_hadron_single_column_mirror_tooltip = "Uses the detailed BetterInventory single-column card format for Entreat Hadron when grid layout is disabled. Enabled by default."
 zh_cn.enable_armoury_single_column_mirror = "Enable custom detailed card for single column"
 zh_cn.enable_armoury_single_column_mirror_tooltip = "Uses BetterInventory's custom detailed card for Requisition Weapons & Curios when grid layout is disabled. Enabled by default."
+zh_cn.custom_item_name_and_colors_group = "Custom Item Names and Colors"
+zh_cn.enable_custom_item_name_and_colors = "Enable custom item names and colors"
+zh_cn.enable_custom_item_name_and_colors_tooltip = "Enables BetterInventory's standalone per-item name, name-color and background-color editor. Does not require Name It."
+zh_cn.custom_item_name_keybind = "Change Name keybind"
+zh_cn.custom_item_name_keybind_tooltip = "Opens the name editor directly. When Name It is installed, BetterInventory uses its configured Change Name key and replaces its duplicate inventory action."
+zh_cn.custom_item_name_color_keybind = "Name Color keybind"
+zh_cn.custom_item_name_color_keybind_tooltip = "Opens the item-name RGB selector directly."
+zh_cn.custom_item_background_color_keybind = "Background Color keybind"
+zh_cn.custom_item_background_color_keybind_tooltip = "Opens the item-background RGB selector directly."
+zh_cn.custom_item_editor_keybind_e = "[E]"
+zh_cn.custom_item_editor_keybind_q = "[Q]"
+zh_cn.custom_item_editor_keybind_v = "[V]"
+zh_cn.custom_item_editor_keybind_r = "[R]"
+zh_cn.custom_item_editor_keybind_off = "Off"
+zh_cn.custom_item_skip_confirmation_prompts = "Skip confirmation prompts"
+zh_cn.custom_item_skip_confirmation_prompts_tooltip = "Immediately applies reset actions instead of asking for confirmation. Enabled by default."
+zh_cn.custom_item_preserve_card_shading = "Preserve Darktide Equipment Card Shading"
+zh_cn.custom_item_preserve_card_shading_tooltip = "Uses Darktide's dark base layer beneath custom background colors. Disable this to paint the entire card with the selected color. Each painted item retains its confirmed choice."
+zh_cn.custom_item_override_weapon_information_color = "Apply custom color to weapon information"
+zh_cn.custom_item_override_weapon_information_color_tooltip = "Uses an item's custom background color for the weapon-information header. Darktide's native dark base and gradient shading are always preserved in this panel."
+zh_cn.custom_item_override_weapon_rarity_keyword_color = "Apply custom color to rarity keyword"
+zh_cn.custom_item_override_weapon_rarity_keyword_color_tooltip = "Uses an item's custom background color for its rarity keyword in the weapon-information panel."
+zh_cn.custom_item_override_weapon_information_name_color = "Apply custom name color to weapon information"
+zh_cn.custom_item_override_weapon_information_name_color_tooltip = "Uses an item's custom name color for its name in the weapon-information panel."
+zh_cn.option_requires_custom_item_name_and_colors = "Enable custom item names and colors to use this option."
+zh_cn.name_it_force_curio_name_in_detailed_mode = "Show Curio name with all four attributes"
+zh_cn.name_it_force_curio_name_in_detailed_mode_tooltip = "Shows a two-line Curio name above all four attribute lines in Character Overview and supported item views. Works with or without Name It."
+zh_cn.curio_content_name_it_curio_name = "Show Curio name with all four attributes"
+zh_cn.curio_content_name_it_curio_name_tooltip = "Shows a two-line Curio name above all four attribute lines in Character Overview and supported item views. Works with or without Name It."
 zh_cn.character_overview_group = "Character overview"
 zh_cn.enable_character_overview_melee_mirror = "Mirror melee weapon single-column format from inventory"
 zh_cn.enable_character_overview_melee_mirror_tooltip = "Uses the detailed BetterInventory single-column card for the equipped melee weapon on the character overview screen. Enabled by default."
@@ -2198,9 +2330,9 @@ zh_cn.character_overview_curio_name_mode_two_lines = "Two-line title"
 zh_cn.character_overview_curio_font_size_percent = "Character overview Curio font size (%%)"
 zh_cn.character_overview_curio_font_size_percent_tooltip = "Scales all text on detailed Curio cards in the character overview (50-150%%, default 110%%). Does not affect Curio cards in inventory or stores."
 zh_cn.option_requires_character_overview_curio_details = "Requires detailed Curio cards on the character overview."
-zh_cn.visible_equipment_integration_group = "Mod Integration: Visible Equipment"
-zh_cn.enable_visible_equipment_character_overview_override = "Enable Visible Equipment compatibility"
-zh_cn.enable_visible_equipment_character_overview_override_tooltip = "Preserves Visible Equipment's Primary and Secondary Placement widgets in the Cosmetics tab while BetterInventory keeps its configured detailed cards in the Loadout tab. Enabled by default."
+zh_cn.myfavorites_integration_group = "Mod Integration: MyFavorites"
+zh_cn.myfavorites_show_favorite_letter = "Show F below favorite icon"
+zh_cn.myfavorites_show_favorite_letter_tooltip = "Adds a compact F beneath the coloured MyFavorites icon. Disabled by default."
 
 for localization_id, text in pairs(zh_cn) do
 	local entry = localization[localization_id]

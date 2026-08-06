@@ -33,9 +33,18 @@ local Text = require("scripts/utilities/ui/text")
 local Layout = mod:io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_layout")
 local Features = no_op_module(mod:io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_features"), "BetterInventory_features.lua")
 local CurioAcquisition = no_op_module(mod:io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_curio_acquisition"), "BetterInventory_curio_acquisition.lua")
+local ItemCustomization = no_op_module(mod:io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_item_customization"), "BetterInventory_item_customization.lua")
 
 if type(Features.set_curio_acquisition_provider) == "function" then
 	Features.set_curio_acquisition_provider(CurioAcquisition)
+end
+
+if type(Layout.set_item_customization_provider) == "function" then
+	Layout.set_item_customization_provider(ItemCustomization)
+end
+
+if type(ItemCustomization.install) == "function" then
+	ItemCustomization.install(mod, InventoryWeaponsView, Layout)
 end
 local unpack_values = table.unpack or unpack
 local active_grid_view
@@ -338,6 +347,10 @@ local function character_overview_curio_blueprint()
 	local curio_font_scale = math.max(50, math.min(150, tonumber(mod:get("character_overview_curio_font_size_percent")) or 110)) / 100
 	local curio_name_mode = mod:get("character_overview_curio_name_mode")
 
+	if mod:get("name_it_force_curio_name_in_detailed_mode") ~= false then
+		curio_name_mode = "two_lines"
+	end
+
 	if curio_name_mode ~= "one_line" and curio_name_mode ~= "two_lines" then
 		curio_name_mode = mod:get("character_overview_show_curio_names") == true and "one_line" or "none"
 	end
@@ -410,6 +423,14 @@ local function character_overview_curio_blueprint()
 		display_name.style.text_vertical_alignment = "top"
 		display_name.style.word_wrap = false
 		display_name.style.font_size = curio_name_font_size
+		display_name.style.text_color = {
+			255,
+			220,
+			230,
+			210,
+		}
+		display_name.style.default_color = table.clone(display_name.style.text_color)
+		display_name.style.hover_color = table.clone(display_name.style.text_color)
 		display_name.style.offset = {
 			16,
 			7,
@@ -971,6 +992,20 @@ local function refresh_option_dependencies()
 	set_option_enabled(option_dependency_entries.weapon_modifier_lowest_color_g, weapon_modifier_lowest_color_enabled, weapon_modifier_lowest_color_reason)
 	set_option_enabled(option_dependency_entries.weapon_modifier_lowest_color_b, weapon_modifier_lowest_color_enabled, weapon_modifier_lowest_color_reason)
 	set_option_enabled(option_dependency_entries.weapon_modifier_lowest_color_opacity, weapon_modifier_lowest_color_enabled, weapon_modifier_lowest_color_reason)
+	set_option_enabled(option_dependency_entries.name_it_force_curio_name_in_detailed_mode, detailed_curio_profile, mod:localize("option_requires_detailed_curio_profile"))
+	set_option_enabled(option_dependency_entries.curio_content_name_it_curio_name, detailed_curio_profile, mod:localize("option_requires_detailed_curio_profile"))
+	local custom_item_colors_enabled = mod:get("enable_custom_item_name_and_colors") ~= false
+	local custom_item_colors_reason = mod:localize("option_requires_custom_item_name_and_colors")
+
+	set_option_enabled(option_dependency_entries.enable_custom_item_name_and_colors, true)
+	set_option_enabled(option_dependency_entries.custom_item_name_keybind, custom_item_colors_enabled, custom_item_colors_reason)
+	set_option_enabled(option_dependency_entries.custom_item_name_color_keybind, custom_item_colors_enabled, custom_item_colors_reason)
+	set_option_enabled(option_dependency_entries.custom_item_background_color_keybind, custom_item_colors_enabled, custom_item_colors_reason)
+	set_option_enabled(option_dependency_entries.custom_item_skip_confirmation_prompts, custom_item_colors_enabled, custom_item_colors_reason)
+	set_option_enabled(option_dependency_entries.custom_item_preserve_card_shading, custom_item_colors_enabled, custom_item_colors_reason)
+	set_option_enabled(option_dependency_entries.custom_item_override_weapon_information_color, custom_item_colors_enabled, custom_item_colors_reason)
+	set_option_enabled(option_dependency_entries.custom_item_override_weapon_rarity_keyword_color, custom_item_colors_enabled, custom_item_colors_reason)
+	set_option_enabled(option_dependency_entries.custom_item_override_weapon_information_name_color, custom_item_colors_enabled, custom_item_colors_reason)
 
 	for _, setting_id in ipairs({
 		"curio_information_width_percent",
@@ -1010,6 +1045,7 @@ local function refresh_option_dependencies()
 	local automatic_discard_reason = quick_discard_enabled and mod:localize("option_requires_automatic_discard_mode") or quick_discard_reason
 
 	set_option_enabled(option_dependency_entries.quick_discard_skip_automatic_confirmation, automatic_discard_enabled, automatic_discard_reason)
+	set_option_enabled(option_dependency_entries.quick_discard_disable_no_eligible_notification, automatic_discard_enabled, automatic_discard_reason)
 
 	local curio_protection_enabled = quick_discard_enabled and mod:get("quick_discard_protect_high_level_curios") ~= false
 
@@ -1020,6 +1056,7 @@ local function refresh_option_dependencies()
 		"automatic_curio_min_health",
 		"automatic_curio_min_toughness",
 		"automatic_curio_diagnostic_logging",
+		"automatic_curio_disable_no_eligible_notification",
 		"automatic_curio_target_mode",
 		"automatic_curio_buy_health",
 		"automatic_curio_buy_toughness",
@@ -1151,6 +1188,17 @@ local function bind_option_dependencies(options_templates)
 		"weapon_modifier_lowest_color_g",
 		"weapon_modifier_lowest_color_b",
 		"weapon_modifier_lowest_color_opacity",
+		"name_it_force_curio_name_in_detailed_mode",
+		"curio_content_name_it_curio_name",
+		"enable_custom_item_name_and_colors",
+		"custom_item_name_keybind",
+		"custom_item_name_color_keybind",
+		"custom_item_background_color_keybind",
+		"custom_item_skip_confirmation_prompts",
+		"custom_item_preserve_card_shading",
+		"custom_item_override_weapon_information_color",
+		"custom_item_override_weapon_rarity_keyword_color",
+		"custom_item_override_weapon_information_name_color",
 		"curio_information_width_percent",
 		"curio_preview_height_percent",
 		"inventory_options_panel_width",
@@ -1177,10 +1225,12 @@ local function bind_option_dependencies(options_templates)
 		"quick_discard_keep_stamina_curios",
 		"quick_discard_show_type_breakdown",
 		"quick_discard_show_summary_notification",
+		"quick_discard_disable_no_eligible_notification",
 		"automatic_curio_min_item_level",
 		"automatic_curio_min_health",
 		"automatic_curio_min_toughness",
 		"automatic_curio_diagnostic_logging",
+		"automatic_curio_disable_no_eligible_notification",
 		"automatic_curio_target_mode",
 		"automatic_curio_buy_health",
 		"automatic_curio_buy_toughness",
@@ -1297,6 +1347,21 @@ local function migrate_grid_column_settings()
 end
 
 function mod.on_enabled()
+	ItemCustomization.on_enabled(mod)
+
+	-- DMF requires unique setting IDs. Keep Curio content's mirror row aligned
+	-- with the established Name It setting, which remains authoritative across
+	-- upgrades and preserves the user's existing choice.
+	local name_it_curio_name_value = mod:get("name_it_force_curio_name_in_detailed_mode")
+
+	if name_it_curio_name_value == nil then
+		name_it_curio_name_value = true
+	end
+
+	if mod:get("curio_content_name_it_curio_name") ~= name_it_curio_name_value then
+		mod:set("curio_content_name_it_curio_name", name_it_curio_name_value, false)
+	end
+
 	-- DMF preserves saved values when a default changes. Apply the new compact
 	-- card defaults once for installs that already initialized the old values;
 	-- all three settings remain freely configurable afterward.
@@ -1394,9 +1459,21 @@ function mod.on_enabled()
 	refresh_option_dependencies()
 end
 
+function mod.on_all_mods_loaded()
+	ItemCustomization.on_all_mods_loaded(mod)
+end
+
 function mod.on_setting_changed(setting_id)
 	local color_change = color_target_by_setting_id[setting_id]
 	local automatic_curio_setting = type(setting_id) == "string" and string.sub(setting_id, 1, 16) == "automatic_curio_"
+
+	ItemCustomization.on_setting_changed(mod, setting_id)
+
+	if setting_id == "name_it_force_curio_name_in_detailed_mode" then
+		mod:set("curio_content_name_it_curio_name", mod:get(setting_id), false)
+	elseif setting_id == "curio_content_name_it_curio_name" then
+		mod:set("name_it_force_curio_name_in_detailed_mode", mod:get(setting_id), false)
+	end
 
 	if color_change then
 		if color_change.is_preset then
@@ -1406,7 +1483,7 @@ function mod.on_setting_changed(setting_id)
 		end
 	end
 
-	if setting_id == "enable_grid_layout" or setting_id == "melee_columns" or setting_id == "ranged_columns" or setting_id == "curio_columns" or setting_id == "automatic_card_height" or setting_id == "expand_inventory_window" or setting_id == "weapon_extra_width_column_threshold" or setting_id == "expand_curio_inventory_window" or setting_id == "enable_hadron_single_column_mirror" or setting_id == "enable_armoury_requisition_grid" or setting_id == "enable_armoury_single_column_mirror" or setting_id == "enable_armoury_requisition_sorting_panel" or setting_id == "brighten_armoury_item_levels" or setting_id == "three_column_weapon_name_font_size" or setting_id == "expand_armoury_requisition_window" or setting_id == "enable_global_store_integration" or setting_id == "enable_global_store_grid" or setting_id == "enable_global_store_sorting_panel" or setting_id == "global_store_character_photo_size_percent" or setting_id == "global_store_price_row_padding" or setting_id == "global_store_character_info_gap" or setting_id == "global_store_character_class_icon_size" or setting_id == "global_store_character_name_font_size" or setting_id == "global_store_compact_character_names" or setting_id == "global_store_single_column_modifier_horizontal_position" or setting_id == "global_store_single_column_modifier_vertical_position" or setting_id == "enable_character_overview_melee_mirror" or setting_id == "enable_character_overview_ranged_mirror" or setting_id == "enable_character_overview_curio_details" or setting_id == "character_overview_curio_name_mode" or setting_id == "weapon_blessing_display_mode" or setting_id == "show_weapon_perks" or setting_id == "show_weapon_perk_rank_symbols" or setting_id == "single_column_blessing_icons_on_right" or setting_id == "curio_display_profile" or setting_id == "enable_inventory_options_panel_prototype" or setting_id == "enable_experimental_quick_discard" or setting_id == "quick_discard_mode" or setting_id == "quick_discard_protect_high_level_curios" or setting_id == "enable_automatic_curio_acquisition" or automatic_curio_setting or setting_id == "enable_quick_look_card_single_column_integration" or setting_id == "enable_quick_look_card_grid_integration" or setting_id == "quick_look_card_grid_stat_position" then
+	if setting_id == "enable_grid_layout" or setting_id == "melee_columns" or setting_id == "ranged_columns" or setting_id == "curio_columns" or setting_id == "automatic_card_height" or setting_id == "expand_inventory_window" or setting_id == "weapon_extra_width_column_threshold" or setting_id == "expand_curio_inventory_window" or setting_id == "enable_hadron_single_column_mirror" or setting_id == "enable_armoury_requisition_grid" or setting_id == "enable_armoury_single_column_mirror" or setting_id == "enable_armoury_requisition_sorting_panel" or setting_id == "brighten_armoury_item_levels" or setting_id == "three_column_weapon_name_font_size" or setting_id == "expand_armoury_requisition_window" or setting_id == "enable_global_store_integration" or setting_id == "enable_global_store_grid" or setting_id == "enable_global_store_sorting_panel" or setting_id == "global_store_character_photo_size_percent" or setting_id == "global_store_price_row_padding" or setting_id == "global_store_character_info_gap" or setting_id == "global_store_character_class_icon_size" or setting_id == "global_store_character_name_font_size" or setting_id == "global_store_compact_character_names" or setting_id == "global_store_single_column_modifier_horizontal_position" or setting_id == "global_store_single_column_modifier_vertical_position" or setting_id == "enable_character_overview_melee_mirror" or setting_id == "enable_character_overview_ranged_mirror" or setting_id == "enable_character_overview_curio_details" or setting_id == "character_overview_curio_name_mode" or setting_id == "weapon_blessing_display_mode" or setting_id == "show_weapon_perks" or setting_id == "show_weapon_perk_rank_symbols" or setting_id == "single_column_blessing_icons_on_right" or setting_id == "curio_display_profile" or setting_id == "enable_inventory_options_panel_prototype" or setting_id == "enable_experimental_quick_discard" or setting_id == "quick_discard_mode" or setting_id == "quick_discard_protect_high_level_curios" or setting_id == "enable_automatic_curio_acquisition" or automatic_curio_setting or setting_id == "enable_quick_look_card_single_column_integration" or setting_id == "enable_quick_look_card_grid_integration" or setting_id == "quick_look_card_grid_stat_position" or setting_id == "enable_custom_item_name_and_colors" then
 		refresh_option_dependencies()
 	end
 
@@ -1439,11 +1516,13 @@ function mod.on_game_state_changed(status, state_name)
 end
 
 function mod.update(dt)
+	ItemCustomization.update_runtime(mod, dt)
 	Features.update_morningstar_auto_discard(mod, dt)
 	CurioAcquisition.update(mod, dt, Features.morningstar_auto_discard_is_busy(mod))
 end
 
 function mod.on_disabled()
+	ItemCustomization.on_disabled(mod)
 	Features.cancel_morningstar_auto_discard()
 	CurioAcquisition.cancel()
 	Features.disable_inventory_views()
@@ -1648,7 +1727,7 @@ if ensure_class_method(InventoryView, "_create_entry_widget_from_config") then
 		local visible_equipment_placement = config and config.widget_type == "gear_placement_slot"
 		local visible_equipment_mod = visible_equipment_placement and get_mod("visible_equipment")
 		local visible_equipment_active = visible_equipment_mod and (type(visible_equipment_mod.is_enabled) ~= "function" or visible_equipment_mod:is_enabled())
-		local preserve_visible_equipment_placement = visible_equipment_active and mod:get("enable_visible_equipment_character_overview_override") ~= false
+		local preserve_visible_equipment_placement = visible_equipment_active
 
 		if view and view.__class_name == "InventoryView" and not preserve_visible_equipment_placement and setting_id and mod:get(setting_id) ~= false then
 			local equipped_item = view.equipped_item_in_slot and view:equipped_item_in_slot(config.slot.name)
@@ -1791,6 +1870,77 @@ local function normalize_global_store_widgets(item_grid)
 			end
 		end
 	end
+end
+
+-- MyFavorites attaches its input hotspot to grid item widgets. Blueprint styles
+-- are cloned during widget construction, so retain the actual runtime hotspot
+-- style on shared content. configure_favorite_marker's working favorite-icon
+-- callback then moves both the visible icon and its click target together.
+if ensure_class_method(ViewElementGrid, "_create_entry_widget_from_config") then
+	mod:hook(ViewElementGrid, "_create_entry_widget_from_config", function(func, item_grid, config, suffix, callback_name, secondary_callback_name, double_click_callback_name)
+		local widget, alignment_widget = func(item_grid, config, suffix, callback_name, secondary_callback_name, double_click_callback_name)
+
+		if widget and widget.content and widget.style and widget.style.myfav_hotspot then
+			widget.content.better_inventory_myfavorites_hotspot_style = widget.style.myfav_hotspot
+
+			for index = 1, #(widget.passes or {}) do
+				local pass = widget.passes[index]
+
+				if pass.style_id == "equipped_icon" then
+					widget.content.better_inventory_equipped_icon_visibility_function = pass.visibility_function
+
+					break
+				end
+			end
+		end
+
+		return widget, alignment_widget
+	end)
+end
+
+local function synchronize_myfavorites_marker(widget)
+	local content = widget and widget.content
+	local styles = widget and widget.style
+	local hotspot_style = content and content.better_inventory_myfavorites_hotspot_style
+	local favorite_style = styles and styles.favorite_icon
+
+	if not hotspot_style or not hotspot_style.offset or hotspot_style.horizontal_alignment ~= "right" or hotspot_style.vertical_alignment ~= "top" then
+		return
+	end
+
+	local equipped_visible = content.equipped == true
+	local visibility_function = content.better_inventory_equipped_icon_visibility_function
+
+	if not equipped_visible and type(visibility_function) == "function" then
+		local ok, visible = pcall(visibility_function, content, styles and styles.equipped_icon)
+
+		equipped_visible = ok and visible == true
+	end
+
+	local offset_y = equipped_visible and 33 or 7
+
+	hotspot_style.offset[2] = offset_y
+
+	if favorite_style and favorite_style.offset then
+		favorite_style.offset[2] = offset_y
+	end
+end
+
+-- Synchronize independently of favorite_icon visibility. This is required for
+-- unfavorited items: equipping, unequipping, or adding/removing them from an
+-- inactive loadout can move Equipped Icon+'s marker while the favorite text
+-- pass is hidden. The input hotspot must still be ready at the correct place.
+if ensure_class_method(ViewElementGrid, "_update_grid_widgets") then
+	mod:hook(ViewElementGrid, "_update_grid_widgets", function(func, item_grid, ...)
+		local results = pack_values(func(item_grid, ...))
+		local widgets = item_grid and item_grid._grid_widgets
+
+		for index = 1, #(widgets or {}) do
+			synchronize_myfavorites_marker(widgets[index])
+		end
+
+		return unpack_values(results, 1, results.n)
+	end)
 end
 
 mod:hook(ViewElementGrid, "present_grid_layout", function(func, item_grid, layout, content_blueprints, ...)
