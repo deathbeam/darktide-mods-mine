@@ -5,11 +5,56 @@ local localization = {
 	mod_description = {
 		en = "A responsive, information-preserving inventory layout for Darktide.",
 	},
+	debug_group = {
+		en = "Debug (testing only)",
+	},
+	debug_expand_armoury_requisition_window_30_percent = {
+		en = "Increase Armoury Exchange store width",
+	},
+	debug_expand_armoury_requisition_window_30_percent_tooltip = {
+		en = "Debug geometry stress test. In Requisition Weapons & Curios only, increases the normally resolved store grid width by the percentage below and proportionally refits its equipment cards. Reopen the Armoury Exchange after changing this setting.",
+	},
+	debug_armoury_requisition_window_increase_percent = {
+		en = "Store width increase (%%)",
+	},
+	debug_armoury_requisition_window_increase_percent_tooltip = {
+		en = "Sets the artificial Armoury Exchange store-width increase from 10%% to 100%%. The default stress-test increase is 30%%.",
+	},
+	debug_adjust_inventory_window_width = {
+		en = "Adjust inventory window width",
+	},
+	debug_adjust_inventory_window_width_tooltip = {
+		en = "Debug geometry stress test for melee, ranged and Curio inventories. Applies the signed percentage below to the normally resolved grid width and proportionally refits its equipment cards. Reopen the inventory after changing this setting.",
+	},
+	debug_inventory_window_width_adjustment_percent = {
+		en = "Inventory width adjustment (%%)",
+	},
+	debug_inventory_window_width_adjustment_percent_tooltip = {
+		en = "Shrinks or enlarges the resolved inventory width from -50%% to +100%%. The default stress-test adjustment is +30%%.",
+	},
+	debug_adjust_global_store_window_width = {
+		en = "Adjust GlobalStore window width",
+	},
+	debug_adjust_global_store_window_width_tooltip = {
+		en = "Debug geometry stress test for GlobalStore's Multi-Operative Supply grid. Applies the signed percentage below to the normally resolved grid width and proportionally refits its equipment cards. Reopen GlobalStore after changing this setting.",
+	},
+	debug_global_store_window_width_adjustment_percent = {
+		en = "GlobalStore width adjustment (%%)",
+	},
+	debug_global_store_window_width_adjustment_percent_tooltip = {
+		en = "Shrinks or enlarges the resolved GlobalStore width from -50%% to +100%%. The default stress-test adjustment is +30%%.",
+	},
 	inventory_slots_group = {
 		en = "Inventory coverage",
 	},
 	inventory_sorting_group = {
 		en = "Inventory sorting",
+	},
+	show_inventory_options_widget = {
+		en = "Show inventory options widget",
+	},
+	show_inventory_options_widget_tooltip = {
+		en = "Shows BetterInventory's Sorting and item-management widget in melee, ranged and Curio inventories. Turning it off hides both the scalable panel and the compact fallback without changing their saved settings.",
 	},
 	prioritize_equipped_favorites = {
 		en = "Equipped and favorited items at the top",
@@ -31,6 +76,18 @@ local localization = {
 	},
 	enable_inventory_options_panel_prototype_tooltip = {
 		en = "Research prototype. After reopening the inventory, places BetterInventory's synchronized controls inside one bounded, scrollable Darktide panel with clickable collapsible section headers. Disable it to restore the established loose controls.",
+	},
+	inventory_options_controller_focus_keybind = {
+		en = "Items / widget focus keybind",
+	},
+	inventory_options_controller_focus_keybind_tooltip = {
+		en = "Switches controller focus between the inventory item grid and BetterInventory's options widget. RT is unused by Darktide's native melee, ranged and Curio inventory controls.",
+	},
+	inventory_options_controller_focus_keybind_rt = {
+		en = "[D / RT]",
+	},
+	inventory_options_controller_focus_legend = {
+		en = "Items / Widget Focus",
 	},
 	inventory_options_panel_geometry_group = {
 		en = "Scalable inventory panel (experimental)",
@@ -79,6 +136,9 @@ local localization = {
 	},
 	armoury_native_sorting_header = {
 		en = "Darktide Native Sorting",
+	},
+	item_sorting_mod_header = {
+		en = "ItemSorting mod",
 	},
 	inventory_discard_management_inventory_label = {
 		en = "Manual/Automated Item Discard Management",
@@ -569,6 +629,24 @@ local localization = {
 	myfavorites_integration_group = {
 		en = "Mod Integration: MyFavorites",
 	},
+	lantern_integration_group = {
+		en = "Mod Integration: Lantern of the Omnissiah",
+	},
+	enable_lantern_inventory_section = {
+		en = "Show Lantern recommendations in the inventory panel",
+	},
+	enable_lantern_inventory_section_tooltip = {
+		en = "When Lantern of the Omnissiah is installed, places its recommendation window in the top section of BetterInventory's scalable inventory-options panel and hides Lantern's duplicate floating weapon panel. Curio recommendations remain separate by default.",
+	},
+	keep_lantern_curio_panel_separate = {
+		en = "Keep Lantern's Curio panel separate",
+	},
+	keep_lantern_curio_panel_separate_tooltip = {
+		en = "Leaves Lantern's Recommended Curios window in its native standalone placement instead of hosting it inside BetterInventory's inventory-options panel. Enabled by default because Lantern's Curio layout already fits beside BetterInventory's panel.",
+	},
+	option_requires_lantern_of_the_omnissiah = {
+		en = "Requires Lantern of the Omnissiah and the scalable inventory-options panel.",
+	},
 	myfavorites_show_favorite_letter = {
 		en = "Show F below favorite icon",
 	},
@@ -736,6 +814,9 @@ local localization = {
 	},
 	custom_item_editor_keybind_r = {
 		en = "[R]",
+	},
+	custom_item_editor_keybind_lt = {
+		en = "[A / LT]",
 	},
 	custom_item_editor_keybind_off = {
 		en = "Off",
@@ -1778,6 +1859,8 @@ local zh_cn = {
 	automatic_curio_partial_failure = "- 后端验证失败后，剩余购买队列已停止。",
 	inventory_slots_group = "适用库存",
 	inventory_sorting_group = "库存排序",
+	show_inventory_options_widget = "显示库存选项组件",
+	show_inventory_options_widget_tooltip = "在近战、远程和珍品库存中显示 BetterInventory 的排序和物品管理组件。关闭后会隐藏可扩展面板及紧凑备用控件，但不会更改已保存的设置。",
 	prioritize_equipped_favorites = "已装备和收藏物品置顶",
 	prioritize_equipped_favorites_tooltip = "在近战、远程和珍品库存中，将已装备物品置于最前，收藏物品置于其后，同时仍由所选的原生排序方式排列各组。同步开关显示在珍品详情或武器操作按钮下方，并会在游戏会话间保存。",
 	prioritize_perfect_roll_weapons = "完美属性武器置顶",
@@ -2299,6 +2382,7 @@ zh_cn.custom_item_editor_keybind_e = "[E]"
 zh_cn.custom_item_editor_keybind_q = "[Q]"
 zh_cn.custom_item_editor_keybind_v = "[V]"
 zh_cn.custom_item_editor_keybind_r = "[R]"
+zh_cn.custom_item_editor_keybind_lt = "[A / LT]"
 zh_cn.custom_item_editor_keybind_off = "Off"
 zh_cn.custom_item_skip_confirmation_prompts = "Skip confirmation prompts"
 zh_cn.custom_item_skip_confirmation_prompts_tooltip = "Immediately applies reset actions instead of asking for confirmation. Enabled by default."
@@ -2322,6 +2406,7 @@ zh_cn.enable_character_overview_ranged_mirror = "Mirror ranged weapon single-col
 zh_cn.enable_character_overview_ranged_mirror_tooltip = "Uses the detailed BetterInventory single-column card for the equipped ranged weapon on the character overview screen. Enabled by default."
 zh_cn.enable_character_overview_curio_details = "Show detailed Curio card on character overview"
 zh_cn.enable_character_overview_curio_details_tooltip = "Shows the equipped Curio's primary and secondary stats in a compact BetterInventory card on the character overview screen. Enabled by default."
+zh_cn.item_sorting_mod_header = "ItemSorting mod"
 zh_cn.character_overview_curio_name_mode = "Curio title mode"
 zh_cn.character_overview_curio_name_mode_tooltip = "Hides Curio titles or fits them within one or two lines above the four stat rows on the character overview."
 zh_cn.character_overview_curio_name_mode_none = "No title"
@@ -2331,8 +2416,31 @@ zh_cn.character_overview_curio_font_size_percent = "Character overview Curio fon
 zh_cn.character_overview_curio_font_size_percent_tooltip = "Scales all text on detailed Curio cards in the character overview (50-150%%, default 110%%). Does not affect Curio cards in inventory or stores."
 zh_cn.option_requires_character_overview_curio_details = "Requires detailed Curio cards on the character overview."
 zh_cn.myfavorites_integration_group = "Mod Integration: MyFavorites"
+zh_cn.lantern_integration_group = "Mod Integration: Lantern of the Omnissiah"
+zh_cn.enable_lantern_inventory_section = "Show Lantern recommendations in the inventory panel"
+zh_cn.enable_lantern_inventory_section_tooltip = "When Lantern of the Omnissiah is installed, places its recommendation window in the top section of BetterInventory's scalable inventory-options panel and hides Lantern's duplicate floating weapon panel. Curio recommendations remain separate by default."
+zh_cn.keep_lantern_curio_panel_separate = "Keep Lantern's Curio panel separate"
+zh_cn.keep_lantern_curio_panel_separate_tooltip = "Leaves Lantern's Recommended Curios window in its native standalone placement instead of hosting it inside BetterInventory's inventory-options panel. Enabled by default because Lantern's Curio layout already fits beside BetterInventory's panel."
+zh_cn.option_requires_lantern_of_the_omnissiah = "Requires Lantern of the Omnissiah and the scalable inventory-options panel."
+zh_cn.inventory_options_controller_focus_keybind = "Items / widget focus keybind"
+zh_cn.inventory_options_controller_focus_keybind_tooltip = "Switches controller focus between the inventory item grid and BetterInventory's options widget. RT is unused by Darktide's native melee, ranged and Curio inventory controls."
+zh_cn.inventory_options_controller_focus_keybind_rt = "[D / RT]"
+zh_cn.inventory_options_controller_focus_legend = "Items / Widget Focus"
 zh_cn.myfavorites_show_favorite_letter = "Show F below favorite icon"
 zh_cn.myfavorites_show_favorite_letter_tooltip = "Adds a compact F beneath the coloured MyFavorites icon. Disabled by default."
+zh_cn.debug_group = "Debug (testing only)"
+zh_cn.debug_expand_armoury_requisition_window_30_percent = "Increase Armoury Exchange store width"
+zh_cn.debug_expand_armoury_requisition_window_30_percent_tooltip = "Debug geometry stress test. In Requisition Weapons & Curios only, increases the normally resolved store grid width by the percentage below and proportionally refits its equipment cards. Reopen the Armoury Exchange after changing this setting."
+zh_cn.debug_armoury_requisition_window_increase_percent = "Store width increase (%%)"
+zh_cn.debug_armoury_requisition_window_increase_percent_tooltip = "Sets the artificial Armoury Exchange store-width increase from 10%% to 100%%. The default stress-test increase is 30%%."
+zh_cn.debug_adjust_inventory_window_width = "Adjust inventory window width"
+zh_cn.debug_adjust_inventory_window_width_tooltip = "Debug geometry stress test for melee, ranged and Curio inventories. Applies the signed percentage below to the normally resolved grid width and proportionally refits its equipment cards. Reopen the inventory after changing this setting."
+zh_cn.debug_inventory_window_width_adjustment_percent = "Inventory width adjustment (%%)"
+zh_cn.debug_inventory_window_width_adjustment_percent_tooltip = "Shrinks or enlarges the resolved inventory width from -50%% to +100%%. The default stress-test adjustment is +30%%."
+zh_cn.debug_adjust_global_store_window_width = "Adjust GlobalStore window width"
+zh_cn.debug_adjust_global_store_window_width_tooltip = "Debug geometry stress test for GlobalStore's Multi-Operative Supply grid. Applies the signed percentage below to the normally resolved grid width and proportionally refits its equipment cards. Reopen GlobalStore after changing this setting."
+zh_cn.debug_global_store_window_width_adjustment_percent = "GlobalStore width adjustment (%%)"
+zh_cn.debug_global_store_window_width_adjustment_percent_tooltip = "Shrinks or enlarges the resolved GlobalStore width from -50%% to +100%%. The default stress-test adjustment is +30%%."
 
 for localization_id, text in pairs(zh_cn) do
 	local entry = localization[localization_id]

@@ -51,12 +51,16 @@ local INVENTORY_OPTIONS_PANEL_DEFAULT_MAX_HEIGHT = 360
 local INVENTORY_OPTIONS_PANEL_DEFAULT_ROW_SPACING = 8
 local INVENTORY_OPTIONS_PANEL_DEFAULT_VERTICAL_PADDING = 10
 local INVENTORY_OPTIONS_PANEL_DEFAULT_HORIZONTAL_PADDING = 12
+local INVENTORY_OPTIONS_PANEL_WEAPON_GAP = 20
+local INVENTORY_OPTIONS_PANEL_BUTTON_GAP = 15
 local ARMOURY_NATIVE_SORT_PANEL_REFERENCE = "better_inventory_armoury_native_sort_panel"
 local ARMOURY_NATIVE_SORT_PANEL_WIDTH = 350
 local ARMOURY_NATIVE_SORT_PANEL_HEIGHT = 520
 local ARMOURY_NATIVE_SORT_PANEL_MIN_HEIGHT = 140
 local ARMOURY_NATIVE_SORT_PANEL_TOP = 100
 local ARMOURY_NATIVE_SORT_PANEL_RIGHT_MARGIN = 120
+local ARMOURY_NATIVE_SORT_PANEL_WEAPON_GAP = 24
+local ARMOURY_NATIVE_SORT_PANEL_WALLET_GAP = 16
 local ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT = 32
 local ARMOURY_NATIVE_SORT_PANEL_ROW_SPACING = 4
 local ARMOURY_NATIVE_SORT_PANEL_PADDING = 10
@@ -114,6 +118,42 @@ local perfect_roll_cache = setmetatable({}, {
 	__mode = "k",
 })
 local curio_acquisition_provider
+local lantern_mod
+local lantern_overlay
+local item_sorting_mod
+local item_sorting_definitions
+local ITEM_SORTING_INVENTORY_VANILLA_SETTINGS = {
+	"enable_vanilla_level_desc",
+	"enable_vanilla_level_asc",
+	"enable_vanilla_rarity_desc",
+	"enable_vanilla_rarity_asc",
+	"enable_vanilla_name_asc",
+	"enable_vanilla_name_desc",
+}
+local ITEM_SORTING_STORE_VANILLA_SETTINGS = {
+	"enable_vanilla_level_desc",
+	"enable_vanilla_level_asc",
+	"enable_vanilla_rarity_desc",
+	"enable_vanilla_rarity_asc",
+	"enable_vanilla_price_asc",
+	"enable_vanilla_price_desc",
+	"enable_vanilla_name_asc",
+	"enable_vanilla_name_desc",
+}
+
+local function item_sorting_is_enabled()
+	if not item_sorting_mod then
+		return false
+	end
+
+	if type(item_sorting_mod.is_enabled) ~= "function" then
+		return true
+	end
+
+	local success, enabled = pcall(item_sorting_mod.is_enabled, item_sorting_mod)
+
+	return success and enabled == true
+end
 
 Features.set_curio_acquisition_provider = function(provider)
 	curio_acquisition_provider = type(provider) == "table" and provider or nil
@@ -163,6 +203,69 @@ end
 
 local function is_inventory_view(layout, view)
 	return inventory_slot_kind(layout, view) ~= nil
+end
+
+local function inventory_grid_has_right_neighbour(view)
+	local item_grid = view and view._item_grid
+	local selected_index = item_grid and type(item_grid.selected_grid_index) == "function" and item_grid:selected_grid_index()
+	local widgets = item_grid and type(item_grid.widgets) == "function" and item_grid:widgets()
+	local selected_widget = selected_index and widgets and widgets[selected_index]
+	local selected_row = selected_widget and selected_widget.content and selected_widget.content.row
+
+	if type(selected_index) ~= "number" or type(widgets) ~= "table" or type(selected_row) ~= "number" then
+		return false
+	end
+
+	for index = selected_index + 1, #widgets do
+		local widget = widgets[index]
+		local content = widget and widget.content
+		local row = content and content.row
+
+		if type(row) == "number" and row > selected_row then
+			break
+		end
+
+		if row == selected_row and content.hotspot then
+			return true
+		end
+	end
+
+	return false
+end
+
+Features.capture_inventory_controller_navigation = function(view, input_service)
+	if view then
+		view._better_inventory_keep_right_navigation_in_grid = false
+	end
+
+	local weapon_options = view and view._weapon_options_element
+	local item_grid = view and view._item_grid
+
+	if not view or view._using_cursor_navigation ~= false or view._selected_options == true or not weapon_options or not item_grid or not input_service or type(input_service.get) ~= "function" then
+		return false
+	end
+
+	local options_visible = type(weapon_options.visible) == "function" and weapon_options:visible()
+	local options_input_disabled = type(weapon_options.input_disabled) == "function" and weapon_options:input_disabled()
+	local item_grid_input_disabled = type(item_grid.input_disabled) == "function" and item_grid:input_disabled()
+
+	if not options_visible or not options_input_disabled or item_grid_input_disabled or not input_service:get("navigate_right_continuous") or not inventory_grid_has_right_neighbour(view) then
+		return false
+	end
+
+	view._better_inventory_keep_right_navigation_in_grid = true
+
+	return true
+end
+
+Features.consume_inventory_controller_grid_navigation = function(view)
+	local keep_in_grid = view and view._better_inventory_keep_right_navigation_in_grid == true
+
+	if view then
+		view._better_inventory_keep_right_navigation_in_grid = false
+	end
+
+	return keep_in_grid
 end
 
 local function is_armoury_requisition_view(view)
@@ -1185,6 +1288,18 @@ Features.add_inventory_sort_toggle_definition = function(mod, layout, definition
 	local adjusted_definitions = table.clone(definitions)
 	local scenegraph = adjusted_definitions.scenegraph_definition
 	local widget_definitions = adjusted_definitions.widget_definitions
+	local focus_action = mod:get("inventory_options_controller_focus_keybind")
+
+	if focus_action and focus_action ~= "off" and type(adjusted_definitions.legend_inputs) == "table" then
+		adjusted_definitions.legend_inputs[#adjusted_definitions.legend_inputs + 1] = {
+			alignment = "right_alignment",
+			display_name = "better_inventory_toggle_panel_focus",
+			input_action = focus_action,
+			visibility_function = function(parent)
+				return parent._using_cursor_navigation == false and parent._better_inventory_options_panel_visible == true
+			end,
+		}
+	end
 
 	if not scenegraph or not widget_definitions then
 		return adjusted_definitions
@@ -1426,6 +1541,38 @@ local INVENTORY_OPTIONS_PANEL_BLUEPRINTS = {
 			end
 		end,
 	},
+	better_inventory_lantern_section = {
+		size_function = function(_, entry)
+			return entry.size
+		end,
+		pass_template_function = function(_, entry)
+			return entry.pass_template
+		end,
+		init = function(_, widget, entry)
+			for key, value in pairs(entry.initial_content or {}) do
+				widget.content[key] = type(value) == "table" and table.clone(value) or value
+			end
+
+			widget.content.entry = entry
+
+			local view = entry.view
+
+			if view then
+				view._better_inventory_lantern_section_widget = widget
+			end
+
+			if entry.refresh then
+				entry.refresh(widget)
+			end
+		end,
+		update = function(_, widget)
+			local entry = widget.content.entry
+
+			if entry and entry.refresh then
+				entry.refresh(widget)
+			end
+		end,
+	},
 }
 
 local ARMOURY_NATIVE_SORT_BLUEPRINTS = {
@@ -1589,10 +1736,77 @@ local function armoury_native_sort_priority_entry(mod, layout, view, setting_id,
 	}
 end
 
-local function panel_entry(view, control_id, height, pass_template, initial_content, bind, refresh)
+local function panel_entry(view, control_id, height, pass_template, initial_content, bind, refresh, controller_targets)
 	local geometry = view._better_inventory_options_panel_geometry
 
+	if type(controller_targets) == "table" and #controller_targets > 0 then
+		initial_content = initial_content or {}
+		initial_content.hotspot = initial_content.hotspot or {}
+
+		if #controller_targets == 1 then
+			pass_template[#pass_template + 1] = {
+				pass_type = "rect",
+				style_id = "better_inventory_controller_focus",
+				style = {
+					color = Color.terminal_corner_selected(55, true),
+					offset = {
+						0,
+						0,
+						2,
+					},
+					size = {
+						geometry.content_width,
+						height,
+					},
+				},
+				visibility_function = function(content)
+					local hotspot = content.hotspot
+
+					return hotspot and (hotspot.is_selected or hotspot.is_focused) or false
+				end,
+			}
+		else
+			-- The grid selects a full-row proxy hotspot so vertical navigation and
+			-- scrolling continue to work. Multi-control rows must visualize only
+			-- the embedded hotspot selected with left/right, not that proxy row.
+			for target_index = 1, #controller_targets do
+				local target_id = controller_targets[target_index]
+				local target_style
+
+				for pass_index = 1, #pass_template do
+					local pass = pass_template[pass_index]
+
+					if pass.content_id == target_id then
+						target_style = pass.style
+						break
+					end
+				end
+
+				if target_style then
+					local target_offset = table.clone(target_style.offset or { 0, 0, 0 })
+					local focus_style = table.clone(target_style)
+
+					target_offset[3] = math.max(2, (tonumber(target_offset[3]) or 0) - 3)
+					focus_style.color = Color.terminal_corner_selected(75, true)
+					focus_style.offset = target_offset
+					focus_style.size = table.clone(target_style.size or { geometry.content_width, height })
+					pass_template[#pass_template + 1] = {
+						pass_type = "rect",
+						style_id = "better_inventory_controller_focus_" .. tostring(target_index),
+						style = focus_style,
+						visibility_function = function(content)
+							local hotspot = content[target_id]
+
+							return hotspot and (hotspot.is_selected or hotspot.is_focused) or false
+						end,
+					}
+				end
+			end
+		end
+	end
+
 	return {
+		controller_targets = controller_targets,
 		control_id = control_id,
 		initial_content = initial_content,
 		pass_template = pass_template,
@@ -1604,6 +1818,150 @@ local function panel_entry(view, control_id, height, pass_template, initial_cont
 		},
 		view = view,
 		widget_type = "better_inventory_control",
+	}
+end
+
+local function clone_lantern_value(value, seen, depth)
+	if type(value) ~= "table" then
+		return value
+	end
+
+	seen = seen or {}
+	depth = depth or 0
+
+	-- Initialized UI styles can contain engine-added parent/back references.
+	-- table.clone follows those references until DMF hits its duplicate-depth
+	-- guard. The hosted row needs only plain style/content data, so omit cycles
+	-- and unexpectedly deep runtime branches instead of cloning widget internals.
+	if seen[value] or depth >= 8 then
+		return
+	end
+
+	seen[value] = true
+
+	local copy = {}
+
+	for key, child in pairs(value) do
+		if type(key) ~= "table" then
+			local cloned_child = clone_lantern_value(child, seen, depth + 1)
+
+			if cloned_child ~= nil then
+				copy[key] = cloned_child
+			end
+		end
+	end
+
+	seen[value] = nil
+
+	return copy
+end
+
+local function lantern_proxy_definition(view)
+	local state = view._lantern_weapon_panel
+	local source_widget = state and state.widget
+	local source_passes = source_widget and source_widget.passes
+	local source_content = source_widget and source_widget.content
+	local source_styles = source_widget and source_widget.style
+	local geometry = view._better_inventory_options_panel_geometry
+	local background_style = source_styles and source_styles.background
+	local source_width = background_style and background_style.size and tonumber(background_style.size[1])
+
+	if type(source_passes) ~= "table" or type(source_content) ~= "table" or type(source_styles) ~= "table" or not geometry or not source_width then
+		return
+	end
+
+	local background_offset = background_style.offset or {}
+	local base_z = tonumber(background_offset[3]) or 0
+	local center_x = math.max(0, (geometry.content_width - source_width) * 0.5)
+	local pass_template = {}
+	local initial_content = {}
+	local value_ids = {}
+
+	for index = 1, #source_passes do
+		local source_pass = source_passes[index]
+		local style_id = source_pass and source_pass.style_id
+		local source_style = style_id and source_styles[style_id]
+
+		if source_pass and source_pass.pass_type and style_id and type(source_style) == "table" then
+			local style = clone_lantern_value(source_style)
+			local offset = style.offset or {
+				0,
+				0,
+				base_z,
+			}
+
+			style.offset = offset
+			offset[1] = (tonumber(offset[1]) or 0) + center_x
+			offset[3] = (tonumber(offset[3]) or base_z) - base_z
+
+			local pass = {
+				pass_type = source_pass.pass_type,
+				style_id = style_id,
+				style = style,
+			}
+			local value_id = source_pass.value_id
+
+			if value_id then
+				local value = clone_lantern_value(source_content[value_id])
+
+				pass.value_id = value_id
+				pass.value = clone_lantern_value(value)
+				initial_content[value_id] = value
+				value_ids[#value_ids + 1] = value_id
+			end
+
+			local content_id = source_pass.content_id
+
+			if content_id then
+				pass.content_id = content_id
+				pass.content = clone_lantern_value(source_content[content_id] or {})
+				initial_content[content_id] = clone_lantern_value(source_content[content_id] or {})
+			end
+
+			pass_template[#pass_template + 1] = pass
+		end
+	end
+
+	if #pass_template == 0 then
+		return
+	end
+
+	return pass_template, initial_content, value_ids
+end
+
+local function panel_lantern_entry(view)
+	local geometry = view._better_inventory_options_panel_geometry
+	local height = math.max(120, tonumber(view._better_inventory_lantern_panel_height) or 120)
+	local pass_template, initial_content, value_ids = lantern_proxy_definition(view)
+
+	if not pass_template then
+		return
+	end
+
+	return {
+		control_id = "better_inventory_lantern_section",
+		initial_content = initial_content,
+		pass_template = pass_template,
+		refresh = function(widget)
+			local state = view._lantern_weapon_panel
+			local source_content = state and state.widget and state.widget.content
+
+			if not source_content then
+				return
+			end
+
+			for index = 1, #value_ids do
+				local value_id = value_ids[index]
+
+				widget.content[value_id] = clone_lantern_value(source_content[value_id])
+			end
+		end,
+		size = {
+			geometry.content_width,
+			height,
+		},
+		view = view,
+		widget_type = "better_inventory_lantern_section",
 	}
 end
 
@@ -1627,7 +1985,7 @@ local function panel_header_entry(mod, layout, view, control_id, section_id, lab
 		local is_collapsed = view._better_inventory_options_panel_collapsed[section_id] == true
 
 		widget.content.chevron = is_collapsed and ">" or "v"
-	end)
+	end, { "hotspot" })
 end
 
 local function panel_sort_entry(mod, layout, view)
@@ -1641,7 +1999,7 @@ local function panel_sort_entry(mod, layout, view)
 		end
 	end, function(widget)
 		widget.content.checked = mod:get("prioritize_equipped_favorites") ~= false
-	end)
+	end, { "hotspot" })
 end
 
 local function panel_perfect_sort_entry(mod, layout, view)
@@ -1655,7 +2013,7 @@ local function panel_perfect_sort_entry(mod, layout, view)
 		end
 	end, function(widget)
 		widget.content.checked = mod:get("prioritize_perfect_roll_weapons") == true
-	end)
+	end, { "hotspot" })
 end
 
 local function panel_mode_entry(mod, layout, view)
@@ -1682,7 +2040,7 @@ local function panel_mode_entry(mod, layout, view)
 			widget.content.better_inventory_mode = mode
 			widget.content.value = mod:localize("quick_discard_mode_" .. mode) .. "  >"
 		end
-	end)
+	end, { "hotspot" })
 end
 
 local function panel_curio_buyer_target_mode_entry(mod, layout, view)
@@ -1714,7 +2072,7 @@ local function panel_curio_buyer_target_mode_entry(mod, layout, view)
 			widget.content.better_inventory_mode = mode
 			widget.content.value = mod:localize("automatic_curio_target_mode_" .. mode) .. "  >"
 		end
-	end)
+	end, { "hotspot" })
 end
 
 local function panel_sub_label_entry(mod, view, control_id, label_id)
@@ -1756,7 +2114,7 @@ local function panel_quick_discard_entry(mod, layout, view)
 				widget.style.rarity_label.text_color = table.clone(rarity_color)
 			end
 		end
-	end)
+	end, { "rarity_hotspot", "discard_hotspot" })
 end
 
 local function panel_stepper_entry(mod, layout, view, control_id, setting_id, label_id, default_value, sync_function, minimum, maximum, step, suffix)
@@ -1795,7 +2153,7 @@ local function panel_stepper_entry(mod, layout, view, control_id, setting_id, la
 			widget.content.better_inventory_value = value
 			widget.content.value = tostring(value) .. suffix
 		end
-	end)
+	end, { "decrease_hotspot", "increase_hotspot" })
 end
 
 local function panel_checkbox_entry(mod, layout, view, control_id, setting_id, label_id, default_enabled, defer_panel_rebuild, sync_function)
@@ -1823,7 +2181,76 @@ local function panel_checkbox_entry(mod, layout, view, control_id, setting_id, l
 		end
 	end, function(widget)
 		widget.content.checked = is_enabled()
-	end)
+	end, { "hotspot" })
+end
+
+local function item_sorting_custom_option_start(view)
+	local sort_options = view and view._sort_options or {}
+
+	if not item_sorting_is_enabled() or type(item_sorting_mod.get) ~= "function" then
+		return #sort_options + 1
+	end
+
+	local view_type = is_armoury_sort_view(view) and "store" or "inventory"
+	local definition_group = item_sorting_definitions and item_sorting_definitions.customized_vanilla_methods
+	local vanilla_definitions = definition_group and definition_group[view_type]
+
+	if type(vanilla_definitions) == "table" then
+		return math.min(#vanilla_definitions + 1, #sort_options + 1)
+	end
+
+	local setting_ids = view_type == "store" and ITEM_SORTING_STORE_VANILLA_SETTINGS or ITEM_SORTING_INVENTORY_VANILLA_SETTINGS
+	local native_count = 0
+
+	for index = 1, #setting_ids do
+		local success, enabled = pcall(item_sorting_mod.get, item_sorting_mod, setting_ids[index])
+
+		if success and enabled == true then
+			native_count = native_count + 1
+		end
+	end
+
+	return math.min(native_count + 1, #sort_options + 1)
+end
+
+local function item_sorting_options_signature(view)
+	if not item_sorting_is_enabled() then
+		return ""
+	end
+
+	local sort_options = view and view._sort_options or {}
+	local parts = {
+		tostring(item_sorting_custom_option_start(view)),
+		tostring(#sort_options),
+	}
+
+	for index = 1, #sort_options do
+		parts[#parts + 1] = tostring(sort_options[index].display_name or index)
+	end
+
+	return table.concat(parts, "|")
+end
+
+local function panel_item_sorting_option_entry(view, option, option_index)
+	local geometry = view._better_inventory_options_panel_geometry
+
+	return panel_entry(view, "better_inventory_item_sorting_option_" .. tostring(option_index), 32, armoury_native_sort_option_passes(geometry.content_width), {
+		hotspot = {},
+		label = option.display_name or tostring(option_index),
+		selected = (view._selected_sort_option_index or 1) == option_index,
+	}, function(widget)
+		widget.content.hotspot.pressed_callback = function()
+			local item_grid = view._item_grid
+
+			if item_grid and type(item_grid.trigger_sort_index) == "function" then
+				item_grid:trigger_sort_index(option_index)
+			elseif type(view.cb_on_sort_button_pressed) == "function" then
+				view:cb_on_sort_button_pressed(option)
+			end
+		end
+	end, function(widget)
+		widget.content.selected = (view._selected_sort_option_index or 1) == option_index
+	end, { "hotspot" })
 end
 
 local function panel_type_entry(mod, layout, view)
@@ -1875,7 +2302,7 @@ local function panel_type_entry(mod, layout, view)
 
 			widget.content[config.content_id .. "_checked"] = mod:get(config.setting_id) ~= false
 		end
-	end)
+	end, { "melee_hotspot", "ranged_hotspot", "curio_hotspot" })
 end
 
 local function panel_curio_protection_type_entry(mod, layout, view)
@@ -1936,13 +2363,14 @@ local function panel_curio_protection_type_entry(mod, layout, view)
 
 			widget.content[config.content_id .. "_checked"] = mod:get(config.setting_id) ~= false
 		end
-	end)
+	end, { "health_hotspot", "toughness_hotspot", "wounds_hotspot", "stamina_hotspot" })
 end
 
 local function panel_checkbox_group_entry(mod, layout, view, control_id, settings)
 	local geometry = view._better_inventory_options_panel_geometry
 	local content = {}
 	local passes = {}
+	local controller_targets = {}
 	local gap = 6
 	local width = math.floor((geometry.content_width - gap * math.max(#settings - 1, 0)) / math.max(#settings, 1))
 
@@ -1962,6 +2390,7 @@ local function panel_checkbox_group_entry(mod, layout, view, control_id, setting
 
 		content[config.content_id .. "_checked"] = is_enabled(config)
 		content[config.content_id .. "_label"] = mod:localize(config.label_id)
+		controller_targets[#controller_targets + 1] = config.content_id .. "_hotspot"
 		append_panel_checkbox_passes(passes, config.content_id, x, width, config.content_id .. "_checked", config.content_id .. "_label")
 	end
 
@@ -1985,7 +2414,7 @@ local function panel_checkbox_group_entry(mod, layout, view, control_id, setting
 
 			widget.content[config.content_id .. "_checked"] = is_enabled(config)
 		end
-	end)
+	end, controller_targets)
 end
 
 local function panel_curio_buyer_type_entry(mod, layout, view)
@@ -2081,6 +2510,7 @@ local function panel_curio_buyer_character_entry(mod, layout, view, profiles, fi
 	local content = {}
 	local passes = {}
 	local settings = {}
+	local controller_targets = {}
 	local last_index = math.min(first_index + 1, #profiles)
 	local gap = 6
 	local width = math.floor((geometry.content_width - gap * (last_index - first_index)) / (last_index - first_index + 1))
@@ -2096,6 +2526,7 @@ local function panel_curio_buyer_character_entry(mod, layout, view, profiles, fi
 		}
 		content[content_id .. "_checked"] = curio_acquisition_provider.character_is_enabled(mod, profile.character_id)
 		content[content_id .. "_label"] = character_profile_label(profile, profiles)
+		controller_targets[#controller_targets + 1] = content_id .. "_hotspot"
 		append_panel_checkbox_passes(passes, content_id, x, width, content_id .. "_checked", content_id .. "_label")
 	end
 
@@ -2118,7 +2549,7 @@ local function panel_curio_buyer_character_entry(mod, layout, view, profiles, fi
 
 			widget.content[config.content_id .. "_checked"] = curio_acquisition_provider.character_is_enabled(mod, config.character_id)
 		end
-	end)
+	end, controller_targets)
 end
 
 local function panel_structure_key(mod, view)
@@ -2137,8 +2568,211 @@ local function panel_structure_key(mod, view)
 	key = key + (mod:get("automatic_curio_buy_toughness") ~= false and 512 or 0)
 	key = key + (mod:get("automatic_curio_target_mode") == "characters" and 1024 or 0)
 	key = key + curio_buyer_profile_revision() * 2048
+	key = key + (item_sorting_is_enabled() and 4194304 or 0)
+	key = key + (collapsed.item_sorting and 8388608 or 0)
+	key = key + (collapsed.native_sorting and 16777216 or 0)
 
-	return key
+	return tostring(key) .. ":" .. tostring(view._better_inventory_lantern_panel_signature or "") .. ":" .. item_sorting_options_signature(view)
+end
+
+local function lantern_is_enabled()
+	if not lantern_mod then
+		return false
+	end
+
+	if type(lantern_mod.is_enabled) ~= "function" then
+		return true
+	end
+
+	local success, enabled = pcall(lantern_mod.is_enabled, lantern_mod)
+
+	return success and enabled == true
+end
+
+local function lantern_recommendations_enabled()
+	if not lantern_is_enabled() or type(lantern_mod.get) ~= "function" then
+		return false
+	end
+
+	local success, enabled = pcall(lantern_mod.get, lantern_mod, "show_recommendations")
+
+	return success and enabled == true
+end
+
+Features.lantern_recommendations_active = lantern_recommendations_enabled
+
+local function lantern_weapon_signature(view)
+	local slot = view and view._selected_slot
+
+	if not slot or not slot.name or type(ProfileUtils.get_active_profile_preset_id) ~= "function" then
+		return
+	end
+
+	local success, active_id = pcall(ProfileUtils.get_active_profile_preset_id)
+
+	if not success then
+		return
+	end
+
+	return tostring(active_id) .. "|" .. tostring(slot.name)
+end
+
+local function lantern_preview_is_active(view)
+	if not view or type(view.is_previewing_item) ~= "function" then
+		return false
+	end
+
+	local success, is_previewing = pcall(view.is_previewing_item, view)
+
+	return success and is_previewing == true
+end
+
+local function restore_lantern_weapon_panel(view)
+	if view then
+		view._better_inventory_lantern_panel_available = false
+		view._better_inventory_lantern_panel_height = nil
+		view._better_inventory_lantern_panel_signature = nil
+		view._better_inventory_lantern_panel_hosted = false
+	end
+end
+
+Features.should_host_lantern_panel = function(view)
+	return view and view._better_inventory_lantern_panel_hosted == true
+end
+
+Features.set_lantern_integration = function(_, integration_mod)
+	lantern_mod = type(integration_mod) == "table" and integration_mod or nil
+	lantern_overlay = lantern_mod and lantern_mod._modules and lantern_mod._modules.equipment_overlay or nil
+
+	if not lantern_overlay or type(lantern_overlay.draw_weapon_select) ~= "function" then
+		return false
+	end
+
+	if type(lantern_overlay._better_inventory_original_draw_weapon_select) ~= "function" then
+		lantern_overlay._better_inventory_original_draw_weapon_select = lantern_overlay.draw_weapon_select
+		lantern_overlay.draw_weapon_select = function(view, ...)
+			local should_host = lantern_overlay._better_inventory_should_host_panel
+
+			if type(should_host) == "function" and should_host(view) then
+				return
+			end
+
+			return lantern_overlay._better_inventory_original_draw_weapon_select(view, ...)
+		end
+	end
+
+	lantern_overlay._better_inventory_should_host_panel = Features.should_host_lantern_panel
+
+	return true
+end
+
+Features.set_item_sorting_integration = function(integration_mod)
+	item_sorting_mod = type(integration_mod) == "table" and integration_mod or nil
+	item_sorting_definitions = nil
+
+	if item_sorting_mod and type(item_sorting_mod.io_dofile) == "function" then
+		local success, definitions = pcall(item_sorting_mod.io_dofile, item_sorting_mod, "ItemSorting/scripts/mods/ItemSorting/ItemSorting_definitions")
+
+		if success and type(definitions) == "table" then
+			item_sorting_definitions = definitions
+		end
+	end
+
+	return item_sorting_is_enabled()
+end
+
+Features.preserve_item_sorting_native_options = function(view, selected_display_name)
+	if not item_sorting_is_enabled() or type(item_sorting_definitions) ~= "table" or not view then
+		return false
+	end
+
+	local view_type = is_armoury_sort_view(view) and "store" or view.__class_name == "InventoryWeaponsView" and "inventory" or nil
+	local vanilla_group = item_sorting_definitions.customized_vanilla_methods
+	local custom_group = item_sorting_definitions.modded_methods
+	local vanilla_definitions = view_type and vanilla_group and vanilla_group[view_type]
+	local custom_definitions = view_type and custom_group and custom_group[view_type]
+
+	if type(vanilla_definitions) ~= "table" or type(custom_definitions) ~= "table" then
+		return false
+	end
+
+	local options = {}
+	local function append_option(definition)
+		if type(definition) == "table" and type(definition.sort_function) == "function" then
+			options[#options + 1] = {
+				display_name = definition.display_name,
+				sort_function = definition.sort_function,
+			}
+		end
+	end
+
+	for index = 1, #vanilla_definitions do
+		append_option(vanilla_definitions[index])
+	end
+
+	for index = 1, #custom_definitions do
+		append_option(custom_definitions[index])
+	end
+
+	view._sort_options = options
+	local selected_index = 1
+
+	if selected_display_name ~= nil then
+		for index = 1, #options do
+			if options[index].display_name == selected_display_name then
+				selected_index = index
+				break
+			end
+		end
+	end
+
+	view._selected_sort_option_index = selected_index
+	view._selected_sort_option = options[selected_index]
+
+	local item_grid = view._item_grid
+
+	if item_grid and type(item_grid.setup_sort_button) == "function" and type(view.cb_on_sort_button_pressed) == "function" then
+		item_grid:setup_sort_button(options, function(...)
+			return view:cb_on_sort_button_pressed(...)
+		end)
+	end
+
+	return true
+end
+
+Features.release_lantern_inventory_section = function(view)
+	restore_lantern_weapon_panel(view)
+end
+
+Features.update_lantern_inventory_section = function(mod, view)
+	local selected_slot_name = view and view._selected_slot and view._selected_slot.name
+	local separate_curio_panel = mod:get("keep_lantern_curio_panel_separate") ~= false and type(selected_slot_name) == "string" and string.match(selected_slot_name, "^slot_attachment_") ~= nil
+	local blocked_by_native_view_state = view and (view._discard_items_element ~= nil or view._item_compare_toggled == true)
+
+	if not lantern_mod or not lantern_overlay or separate_curio_panel or blocked_by_native_view_state or mod:get("enable_lantern_inventory_section") ~= true or mod:get("enable_inventory_options_panel_prototype") ~= true or mod:get("show_inventory_options_widget") == false or not view or not view._better_inventory_options_panel or view._better_inventory_options_panel_visible ~= true or view._better_inventory_options_panel._visible == false or view._filter_panel_element and view._show_filter_panel == true or not lantern_recommendations_enabled() or not lantern_preview_is_active(view) then
+		restore_lantern_weapon_panel(view)
+
+		return false
+	end
+
+	local state = view._lantern_weapon_panel
+	local widget = state and state.widget
+	local expected_signature = lantern_weapon_signature(view)
+	local background_style = widget and widget.style and widget.style.background
+	local panel_height = background_style and tonumber(background_style.size and background_style.size[2])
+
+	if not state or not widget or not state.entry or not expected_signature or state.sig ~= expected_signature or not panel_height or panel_height <= 0 then
+		restore_lantern_weapon_panel(view)
+
+		return false
+	end
+
+	view._better_inventory_lantern_panel_available = true
+	view._better_inventory_lantern_panel_height = math.max(120, panel_height)
+	view._better_inventory_lantern_panel_signature = tostring(state.sig) .. "|" .. tostring(view._better_inventory_lantern_panel_height)
+	view._better_inventory_lantern_panel_hosted = view._better_inventory_lantern_section_widget ~= nil
+
+	return view._better_inventory_lantern_panel_hosted
 end
 
 rebuild_inventory_options_panel = function(mod, layout, view)
@@ -2151,15 +2785,55 @@ rebuild_inventory_options_panel = function(mod, layout, view)
 	local collapsed = view._better_inventory_options_panel_collapsed
 	local native_discard_active = view._discard_items_element ~= nil
 	local quick_discard_enabled = mod:get("enable_experimental_quick_discard") == true
-	local entries = {
-		panel_header_entry(mod, layout, view, "better_inventory_sort_header", "sorting", function()
+	local entries = {}
+
+	if view._better_inventory_lantern_panel_available == true then
+		local lantern_entry = panel_lantern_entry(view)
+
+		if lantern_entry then
+			entries[#entries + 1] = lantern_entry
+		end
+	end
+
+	entries[#entries + 1] = panel_header_entry(mod, layout, view, "better_inventory_sort_header", "sorting", function()
 			return mod:localize("inventory_sorting_inventory_label")
-		end),
-	}
+		end)
 
 	if not collapsed.sorting then
 		entries[#entries + 1] = panel_sort_entry(mod, layout, view)
 		entries[#entries + 1] = panel_perfect_sort_entry(mod, layout, view)
+	end
+
+	if item_sorting_is_enabled() then
+		entries[#entries + 1] = panel_header_entry(mod, layout, view, "better_inventory_item_sorting_header", "item_sorting", function()
+			return mod:localize("item_sorting_mod_header")
+		end)
+
+		if not collapsed.item_sorting then
+			local sort_options = view._sort_options or {}
+			local first_custom_option = item_sorting_custom_option_start(view)
+
+			for option_index = first_custom_option, #sort_options do
+				entries[#entries + 1] = panel_item_sorting_option_entry(view, sort_options[option_index], option_index)
+			end
+		end
+	end
+
+	if native_discard_active then
+		local sort_options = view._sort_options or {}
+		local last_native_option = item_sorting_custom_option_start(view) - 1
+
+		if last_native_option > 0 then
+			entries[#entries + 1] = panel_header_entry(mod, layout, view, "better_inventory_native_sorting_header", "native_sorting", function()
+				return mod:localize("armoury_native_sorting_header")
+			end)
+
+			if not collapsed.native_sorting then
+				for option_index = 1, math.min(last_native_option, #sort_options) do
+					entries[#entries + 1] = panel_item_sorting_option_entry(view, sort_options[option_index], option_index)
+				end
+			end
+		end
 	end
 
 	if quick_discard_enabled and not native_discard_active then
@@ -2249,6 +2923,8 @@ rebuild_inventory_options_panel = function(mod, layout, view)
 	local panel_height = math.clamp(content_height + 31 + geometry.top + geometry.bottom, INVENTORY_OPTIONS_PANEL_MIN_HEIGHT, geometry.max_height)
 
 	view._better_inventory_options_panel_widgets = {}
+	view._better_inventory_lantern_section_widget = nil
+	view._better_inventory_lantern_panel_hosted = false
 	view._better_inventory_options_panel_structure_key = panel_structure_key(mod, view)
 	view._better_inventory_options_panel_height = panel_height
 	panel:update_grid_height(panel_height, panel_height)
@@ -2337,7 +3013,7 @@ Features.setup_inventory_options_panel = function(mod, layout, view, ViewElement
 		title_height = 0,
 		top_padding = geometry.top,
 		use_is_focused_for_navigation = false,
-		use_select_on_focused = false,
+		use_select_on_focused = true,
 		use_terminal_background = true,
 	}
 	local success, panel = pcall(view._add_element, view, ViewElementGrid, INVENTORY_OPTIONS_PANEL_REFERENCE, 25, menu_settings)
@@ -2360,6 +3036,8 @@ Features.setup_inventory_options_panel = function(mod, layout, view, ViewElement
 	view._better_inventory_options_panel_collapsed = {
 		curio_buyer = false,
 		discard = false,
+		item_sorting = false,
+		native_sorting = false,
 		sorting = false,
 	}
 
@@ -2398,6 +3076,229 @@ Features.setup_inventory_options_panel = function(mod, layout, view, ViewElement
 	return true
 end
 
+local function controller_element_state(element)
+	if not element then
+		return
+	end
+
+	local state = {}
+
+	if type(element.input_disabled) == "function" then
+		state.input_disabled = element:input_disabled()
+	end
+
+	if type(element.selected_grid_index) == "function" then
+		state.selected_index = element:selected_grid_index()
+	end
+
+	return state
+end
+
+local function clear_controller_element_selection(element)
+	if element and type(element.select_grid_index) == "function" then
+		element:select_grid_index()
+	end
+end
+
+local function restore_controller_element(element, state)
+	if not element or not state then
+		return
+	end
+
+	if type(element.disable_input) == "function" and state.input_disabled ~= nil then
+		element:disable_input(state.input_disabled)
+	end
+
+	if type(element.select_grid_index) == "function" then
+		element:select_grid_index(state.selected_index)
+	end
+end
+
+local function set_inventory_options_panel_controller_focus(view, focused)
+	local panel = view and view._better_inventory_options_panel
+	local item_grid = view and view._item_grid
+
+	if not panel or not item_grid then
+		return false
+	end
+
+	if focused then
+		if view._better_inventory_options_panel_controller_focused == true then
+			return true
+		end
+
+		view._better_inventory_options_panel_controller_restore = {
+			discard = controller_element_state(view._discard_items_element),
+			item_grid = controller_element_state(item_grid),
+			weapon_options = controller_element_state(view._weapon_options_element),
+		}
+		view._better_inventory_options_panel_controller_focused = true
+
+		for _, element in pairs({ item_grid, view._weapon_options_element, view._discard_items_element }) do
+			if element then
+				if type(element.disable_input) == "function" then
+					element:disable_input(true)
+				end
+
+				clear_controller_element_selection(element)
+			end
+		end
+
+		if type(panel.disable_input) == "function" then
+			panel:disable_input(false)
+		end
+
+		if type(panel.select_first_index) == "function" then
+			panel:select_first_index()
+		end
+
+		return true
+	end
+
+	local restore = view._better_inventory_options_panel_controller_restore or {}
+
+	view._better_inventory_options_panel_controller_focused = false
+	view._better_inventory_options_panel_controller_restore = nil
+	view._better_inventory_options_panel_controller_target = nil
+	clear_controller_element_selection(panel)
+	restore_controller_element(item_grid, restore.item_grid)
+	restore_controller_element(view._weapon_options_element, restore.weapon_options)
+	restore_controller_element(view._discard_items_element, restore.discard)
+
+	return false
+end
+
+Features.capture_inventory_options_panel_controller_focus = function(mod, layout, view, input_service)
+	if not view or not is_inventory_view(layout, view) then
+		return false
+	end
+
+	local focused = view._better_inventory_options_panel_controller_focused == true
+	local panel_available = mod:get("enable_inventory_options_panel_prototype") == true and mod:get("show_inventory_options_widget") ~= false and view._better_inventory_options_panel_visible == true and view._better_inventory_options_panel and view._better_inventory_options_panel._visible ~= false
+
+	if view._using_cursor_navigation ~= false or not panel_available then
+		if focused then
+			set_inventory_options_panel_controller_focus(view, false)
+		end
+
+		return false
+	end
+
+	local focus_action = mod:get("inventory_options_controller_focus_keybind")
+
+	if focus_action and focus_action ~= "off" and input_service and type(input_service.get) == "function" and input_service:get(focus_action) then
+		focused = set_inventory_options_panel_controller_focus(view, not focused)
+	end
+
+	if focused then
+		-- Native inventory code may revisit its own focus state after previews or
+		-- discard-mode changes. Keep the custom panel as the sole controller owner.
+		for _, element in pairs({ view._item_grid, view._weapon_options_element, view._discard_items_element }) do
+			if element and type(element.disable_input) == "function" then
+				element:disable_input(true)
+			end
+		end
+
+		local panel = view._better_inventory_options_panel
+
+		if panel and type(panel.selected_grid_index) == "function" and not panel:selected_grid_index() and type(panel.select_first_index) == "function" then
+			panel:select_first_index()
+		end
+	end
+
+	return focused
+end
+
+Features.update_inventory_options_panel_controller_selection = function(view, input_service)
+	if not view or view._better_inventory_options_panel_controller_focused ~= true then
+		return false
+	end
+
+	local panel = view._better_inventory_options_panel
+	local selected_widget = panel and type(panel.selected_grid_widget) == "function" and panel:selected_grid_widget()
+	local entry = selected_widget and selected_widget.content and selected_widget.content.entry
+	local targets = entry and entry.controller_targets
+
+	for _, widget in pairs(view._better_inventory_options_panel_widgets or {}) do
+		local widget_entry = widget.content and widget.content.entry
+
+		for _, target_id in ipairs(widget_entry and widget_entry.controller_targets or {}) do
+			local hotspot = widget.content[target_id]
+
+			if hotspot and target_id ~= "hotspot" then
+				hotspot.is_focused = false
+				hotspot.is_selected = false
+			end
+		end
+	end
+
+	if type(targets) ~= "table" or #targets == 0 then
+		return false
+	end
+
+	local target_state = view._better_inventory_options_panel_controller_target
+
+	if not target_state or target_state.control_id ~= entry.control_id then
+		target_state = {
+			control_id = entry.control_id,
+			index = 1,
+		}
+		view._better_inventory_options_panel_controller_target = target_state
+	end
+
+	if #targets > 1 and input_service and type(input_service.get) == "function" then
+		if input_service:get("navigate_left_continuous") then
+			target_state.index = math.max(target_state.index - 1, 1)
+		elseif input_service:get("navigate_right_continuous") then
+			target_state.index = math.min(target_state.index + 1, #targets)
+		end
+	end
+
+	target_state.index = math.clamp(target_state.index, 1, #targets)
+	local target_hotspot = selected_widget.content[targets[target_state.index]]
+
+	if target_hotspot and targets[target_state.index] ~= "hotspot" then
+		target_hotspot.is_focused = true
+		target_hotspot.is_selected = true
+	end
+
+	return true
+end
+
+Features.inventory_options_panel_controller_focused = function(view)
+	return view and view._better_inventory_options_panel_controller_focused == true
+end
+
+local function scenegraph_rect(owner, scenegraph_id)
+	if type(owner) ~= "table" or type(owner._scenegraph_size) ~= "function" then
+		return nil
+	end
+
+	local world_position = owner.scenegraph_world_position or owner._scenegraph_world_position
+
+	if type(world_position) ~= "function" then
+		return nil
+	end
+
+	if type(owner._force_update_scenegraph) == "function" then
+		pcall(owner._force_update_scenegraph, owner)
+	end
+
+	local position_success, position = pcall(world_position, owner, scenegraph_id)
+	local size_success, width, height = pcall(owner._scenegraph_size, owner, scenegraph_id)
+
+	if not position_success or not size_success or type(position) ~= "table" or type(position[1]) ~= "number" or type(position[2]) ~= "number" or type(width) ~= "number" or type(height) ~= "number" then
+		return nil
+	end
+
+	return {
+		x = position[1],
+		y = position[2],
+		width = width,
+		height = height,
+	}
+end
+
 local function armoury_native_sort_panel_position(view)
 	local canvas_width = INVENTORY_VIRTUAL_CANVAS_WIDTH
 	local canvas_position = {
@@ -2419,11 +3320,30 @@ local function armoury_native_sort_panel_position(view)
 		end
 	end
 
-	return canvas_position[1] + canvas_width - ARMOURY_NATIVE_SORT_PANEL_RIGHT_MARGIN - ARMOURY_NATIVE_SORT_PANEL_WIDTH, canvas_position[2] + ARMOURY_NATIVE_SORT_PANEL_TOP
+	local fallback_x = canvas_position[1] + canvas_width - ARMOURY_NATIVE_SORT_PANEL_RIGHT_MARGIN - ARMOURY_NATIVE_SORT_PANEL_WIDTH
+	local fallback_y = canvas_position[2] + ARMOURY_NATIVE_SORT_PANEL_TOP
+	local weapon_rect = scenegraph_rect(view and view._weapon_stats, "grid_background")
+
+	if not weapon_rect then
+		return fallback_x, fallback_y
+	end
+
+	local x = weapon_rect.x + weapon_rect.width + ARMOURY_NATIVE_SORT_PANEL_WEAPON_GAP
+	local y = weapon_rect.y
+	local parent = view and view._context and view._context.parent
+	local wallet_frame = scenegraph_rect(parent, "corner_top_right")
+
+	if wallet_frame then
+		y = math.max(y, wallet_frame.y + wallet_frame.height + ARMOURY_NATIVE_SORT_PANEL_WALLET_GAP)
+	end
+
+	return x, y
 end
 
 local function armoury_native_sort_entries(mod, layout, view)
 	local collapsed = view._better_inventory_armoury_native_sort_collapsed
+	local sort_options = view._sort_options or {}
+	local first_item_sorting_option = item_sorting_custom_option_start(view)
 	local entries = {
 		armoury_native_sort_header_entry(mod, layout, view, "sorting", mod:localize("inventory_sorting_inventory_label")),
 	}
@@ -2433,15 +3353,23 @@ local function armoury_native_sort_entries(mod, layout, view)
 		entries[#entries + 1] = armoury_native_sort_priority_entry(mod, layout, view, "prioritize_perfect_roll_weapons", mod:localize("prioritize_perfect_roll_weapons_inventory_label"))
 	end
 
+	if item_sorting_is_enabled() then
+		entries[#entries + 1] = armoury_native_sort_header_entry(mod, layout, view, "item_sorting", mod:localize("item_sorting_mod_header"))
+
+		if not collapsed.item_sorting then
+			for option_index = first_item_sorting_option, #sort_options do
+				entries[#entries + 1] = armoury_native_sort_entry(view, sort_options[option_index], option_index)
+			end
+		end
+	end
+
 	-- Native sorting is a sibling section, not part of the custom-priority
 	-- section. Keep its header (and its own collapsed state) visible when the
 	-- Sorting section is collapsed.
 	entries[#entries + 1] = armoury_native_sort_header_entry(mod, layout, view, "native_sorting", mod:localize("armoury_native_sorting_header"))
 
 	if not collapsed.native_sorting then
-		local sort_options = view._sort_options or {}
-
-		for option_index = 1, #sort_options do
+		for option_index = 1, first_item_sorting_option - 1 do
 			entries[#entries + 1] = armoury_native_sort_entry(view, sort_options[option_index], option_index)
 		end
 	end
@@ -2469,7 +3397,7 @@ local function rebuild_armoury_native_sort_panel(view)
 	end
 
 	local entries = armoury_native_sort_entries(view._better_inventory_armoury_sort_mod, view._better_inventory_armoury_sort_layout, view)
-	local panel_height = armoury_native_sort_panel_height(entries)
+	local panel_height = math.min(ARMOURY_NATIVE_SORT_PANEL_HEIGHT, armoury_native_sort_panel_height(entries))
 
 	panel:update_grid_height(panel_height, panel_height)
 	panel:present_grid_layout(entries, ARMOURY_NATIVE_SORT_BLUEPRINTS)
@@ -2482,6 +3410,15 @@ Features.update_armoury_native_sort_panel = function(view)
 
 	if not panel or view._destroyed then
 		return false
+	end
+
+	local item_sorting_active = item_sorting_is_enabled()
+	local item_sorting_signature = item_sorting_options_signature(view)
+
+	if view._better_inventory_item_sorting_active ~= item_sorting_active or view._better_inventory_item_sorting_signature ~= item_sorting_signature then
+		view._better_inventory_item_sorting_active = item_sorting_active
+		view._better_inventory_item_sorting_signature = item_sorting_signature
+		view._better_inventory_armoury_native_sort_rebuild_pending = true
 	end
 
 	if view._better_inventory_armoury_native_sort_rebuild_pending then
@@ -2505,7 +3442,7 @@ Features.setup_armoury_native_sort_panel = function(mod, layout, view, ViewEleme
 
 	local sort_options = view._sort_options
 
-	if type(sort_options) ~= "table" or #sort_options == 0 or type(ViewElementGrid) ~= "table" or type(view._add_element) ~= "function" then
+	if type(sort_options) ~= "table" or (#sort_options == 0 and not item_sorting_is_enabled()) or type(ViewElementGrid) ~= "table" or type(view._add_element) ~= "function" then
 		return false
 	end
 
@@ -2551,9 +3488,12 @@ Features.setup_armoury_native_sort_panel = function(mod, layout, view, ViewEleme
 	view._better_inventory_armoury_native_sort_panel = panel
 	view._better_inventory_armoury_native_sort_widgets = {}
 	view._better_inventory_armoury_native_sort_collapsed = {
+		item_sorting = false,
 		native_sorting = false,
 		sorting = false,
 	}
+	view._better_inventory_item_sorting_active = item_sorting_is_enabled()
+	view._better_inventory_item_sorting_signature = item_sorting_options_signature(view)
 	view._better_inventory_armoury_native_sort_rebuild_pending = false
 	view._better_inventory_armoury_sort_layout = layout
 	view._better_inventory_armoury_sort_mod = mod
@@ -2567,9 +3507,8 @@ Features.setup_armoury_native_sort_panel = function(mod, layout, view, ViewEleme
 	end
 
 	local entries = armoury_native_sort_entries(mod, layout, view)
-	local panel_height = math.max(ARMOURY_NATIVE_SORT_PANEL_HEIGHT, armoury_native_sort_panel_height(entries))
 
-	panel:update_grid_height(panel_height, panel_height)
+	panel:update_grid_height(ARMOURY_NATIVE_SORT_PANEL_HEIGHT, ARMOURY_NATIVE_SORT_PANEL_HEIGHT)
 	panel:present_grid_layout(entries, ARMOURY_NATIVE_SORT_BLUEPRINTS)
 	Features.update_armoury_native_sort_panel(view)
 
@@ -4115,30 +5054,74 @@ local function update_inventory_options_panel(mod, layout, view, slot_kind)
 	local relative_x
 	local relative_y
 	local parent_id = slot_kind == "curio" and "weapon_stats_pivot" or "weapon_compare_stats_pivot"
+	local absolute_x
+	local absolute_y
 
 	if native_discard_active then
-		local expansion = tonumber(view._better_inventory_grid_expansion) or 0
+		local discard_rect = scenegraph_rect(view._discard_items_element, "window")
 
-		relative_x = slot_kind == "curio" and 0 or -566 - expansion
-		relative_y = weapon_stats_content_height(view, 660) + 15
+		if discard_rect then
+			-- The native filter window is the only stable free column in discard
+			-- mode. Align with its left edge and follow its live bottom so the
+			-- BetterInventory panel cannot cover item details or Discard Items.
+			absolute_x = discard_rect.x
+			absolute_y = discard_rect.y + discard_rect.height + INVENTORY_OPTIONS_PANEL_BUTTON_GAP
+		else
+			-- Keep the established fallback for the brief setup frame before the
+			-- item-grid scenegraph has resolved.
+			local expansion = tonumber(view._better_inventory_grid_expansion) or 0
+
+			parent_id = slot_kind == "curio" and "weapon_stats_pivot" or "weapon_compare_stats_pivot"
+			relative_x = slot_kind == "curio" and 0 or -566 - expansion
+			relative_y = weapon_stats_content_height(view, 660) + 15
+		end
 	elseif slot_kind == "curio" then
 		relative_x = 0
 		relative_y = weapon_stats_content_height(view, 480) + 15
 	else
-		local menu_settings = view._weapon_options_element and view._weapon_options_element._menu_settings
+		local weapon_stats = view._weapon_stats
+		local weapon_stats_pivot = weapon_stats and weapon_stats._pivot_offset
+		local weapon_stats_x = weapon_stats_pivot and tonumber(weapon_stats_pivot[1])
+		local weapon_stats_width
+		local weapon_options = view._weapon_options_element
+		local menu_settings = weapon_options and weapon_options._menu_settings
 		local grid_size = menu_settings and menu_settings.grid_size
+		local native_pivot = weapon_options and weapon_options._pivot_offset
+		local native_y = native_pivot and tonumber(native_pivot[2])
+		local native_x = native_pivot and tonumber(native_pivot[1])
 
-		relative_x = 20
-		relative_y = (grid_size and grid_size[2] or 300) + 15
+		if weapon_stats and type(weapon_stats._scenegraph_size) == "function" then
+			local size_success, width = pcall(weapon_stats._scenegraph_size, weapon_stats, "grid_background")
+
+			if size_success then
+				weapon_stats_width = tonumber(width)
+			end
+		end
+
+		if weapon_stats_x and weapon_stats_width and weapon_stats_width > 0 and native_y and native_x and (native_x ~= 0 or native_y ~= 0) then
+			-- Horizontal and vertical placement intentionally use different live
+			-- siblings: stay to the right of the weapon-information rectangle and
+			-- below Darktide's Marks/Cosmetics/Inspect button rectangle.
+			absolute_x = weapon_stats_x + weapon_stats_width + INVENTORY_OPTIONS_PANEL_WEAPON_GAP
+			absolute_y = native_y + (grid_size and grid_size[2] or 300) + INVENTORY_OPTIONS_PANEL_BUTTON_GAP
+		else
+			-- Preserve the old pivot contract only during the brief startup window
+			-- before both live sibling rectangles are available.
+			relative_x = 20
+			relative_y = (grid_size and grid_size[2] or 300) + INVENTORY_OPTIONS_PANEL_BUTTON_GAP
+		end
 	end
 
-	local success, parent_position = pcall(view._scenegraph_world_position, view, parent_id)
+	local success = absolute_x ~= nil and absolute_y ~= nil
+	local parent_position
 
-	if success and parent_position then
-		local unclamped_pivot_x = parent_position[1] + relative_x
-		local panel_width = view._better_inventory_options_panel_geometry and view._better_inventory_options_panel_geometry.width or INVENTORY_OPTIONS_PANEL_DEFAULT_WIDTH
-		local pivot_x = math.min(unclamped_pivot_x, INVENTORY_VIRTUAL_CANVAS_WIDTH - INVENTORY_VIRTUAL_EDGE_MARGIN - panel_width)
-		local pivot_y = parent_position[2] + relative_y
+	if not success then
+		success, parent_position = pcall(view._scenegraph_world_position, view, parent_id)
+	end
+
+	if success and (parent_position or absolute_x) then
+		local pivot_x = absolute_x or parent_position[1] + relative_x
+		local pivot_y = absolute_y or parent_position[2] + relative_y
 
 		if view._better_inventory_options_panel_pivot_x ~= pivot_x or view._better_inventory_options_panel_pivot_y ~= pivot_y then
 			view._better_inventory_options_panel_pivot_x = pivot_x
@@ -4281,6 +5264,22 @@ Features.update_inventory_sort_toggle = function(mod, layout, view)
 	if not slot_kind then
 		return
 	end
+
+	if mod:get("show_inventory_options_widget") == false then
+		local panel = view._better_inventory_options_panel
+
+		set_legacy_inventory_options_visible(view, false)
+
+		if panel then
+			set_options_panel_visible(view, panel, false)
+		end
+
+		Features.release_lantern_inventory_section(view)
+
+		return
+	end
+
+	Features.update_lantern_inventory_section(mod, view)
 
 	if update_inventory_options_panel(mod, layout, view, slot_kind) then
 		return
@@ -4506,6 +5505,7 @@ end
 
 Features.disable_inventory_views = function()
 	for view in pairs(registered_inventory_views) do
+		restore_lantern_weapon_panel(view)
 		local panel = view._better_inventory_options_panel
 
 		if panel then

@@ -672,6 +672,56 @@ local function is_armoury_sort_view(view)
 	return is_armoury_requisition_view(view) or is_global_store_view(view)
 end
 
+local function align_quick_level_mastery_buttons(view)
+	-- Quick Level Mastery adds Sacrifice as an offset child of Darktide's shared
+	-- purchase_button node. Center the complete action group on the actual weapon
+	-- information panel instead of deriving its position from the store grid:
+	-- the grid can have a different width, and another hook can independently
+	-- restore the purchase node to its native position.
+	local widgets_by_name = view and view._widgets_by_name
+	local ui_scenegraph = view and view._ui_scenegraph
+	local purchase_button = ui_scenegraph and ui_scenegraph.purchase_button
+	local sacrifice_button = widgets_by_name and widgets_by_name.quick_sacrifice_button
+	local weapon_stats = view and view._weapon_stats
+
+	if not sacrifice_button or not purchase_button or not purchase_button.position or not purchase_button.size or not weapon_stats or type(weapon_stats.scenegraph_world_position) ~= "function" or type(weapon_stats._scenegraph_size) ~= "function" or type(view._scenegraph_world_position) ~= "function" or type(view._set_scenegraph_position) ~= "function" then
+		return
+	end
+
+	if type(weapon_stats._force_update_scenegraph) == "function" then
+		pcall(weapon_stats._force_update_scenegraph, weapon_stats)
+	end
+
+	local position = purchase_button.position
+	local purchase_width = tonumber(purchase_button.size[1])
+	local purchase_widget = widgets_by_name.purchase_button
+	local purchase_offset = purchase_widget and purchase_widget.offset and tonumber(purchase_widget.offset[1]) or 0
+	local sacrifice_offset = sacrifice_button.offset and tonumber(sacrifice_button.offset[1])
+	local purchase_world_position = view:_scenegraph_world_position("purchase_button")
+	local weapon_stats_world_position = weapon_stats:scenegraph_world_position("grid_background")
+	local weapon_stats_width = weapon_stats:_scenegraph_size("grid_background")
+	local purchase_world_x = purchase_world_position and tonumber(purchase_world_position[1])
+	local weapon_stats_world_x = weapon_stats_world_position and tonumber(weapon_stats_world_position[1])
+
+	if type(position[1]) ~= "number" or not purchase_width or not purchase_world_x or not weapon_stats_world_x or type(weapon_stats_width) ~= "number" then
+		return
+	end
+
+	sacrifice_offset = sacrifice_offset or purchase_offset + purchase_width
+
+	local action_left = math.min(purchase_offset, sacrifice_offset)
+	local action_right = math.max(purchase_offset + purchase_width, sacrifice_offset + purchase_width)
+	local action_center = purchase_world_x + (action_left + action_right) * 0.5
+	local weapon_stats_center = weapon_stats_world_x + weapon_stats_width * 0.5
+	local delta = weapon_stats_center - action_center
+
+	if math.abs(delta) < 0.01 then
+		return
+	end
+
+	view:_set_scenegraph_position("purchase_button", position[1] + delta, position[2], position[3])
+end
+
 -- Darktide class tables can contain the exact same inherited function object.
 -- Give each target class its own forwarder before DMF hooks it, preventing
 -- duplicate-hook detection and keeping every view in the normal hook chain.
@@ -917,6 +967,8 @@ local function refresh_option_dependencies()
 	local automatic_curio_characters_reason = automatic_curio_enabled and mod:localize("option_requires_automatic_curio_characters_mode") or automatic_curio_reason
 	local inventory_options_panel_enabled = mod:get("enable_inventory_options_panel_prototype") == true
 	local inventory_options_panel_reason = mod:localize("option_requires_inventory_options_panel_prototype")
+	local lantern_installed = get_mod("Lantern of the Omnissiah") ~= nil
+	local lantern_reason = lantern_installed and inventory_options_panel_reason or mod:localize("option_requires_lantern_of_the_omnissiah")
 	local quick_look_card_grid_enabled = grid_enabled and mod:get("enable_quick_look_card_grid_integration") ~= false
 	local quick_look_card_grid_reason = grid_enabled and mod:localize("option_requires_quick_look_card_grid_integration") or native_reason
 	local quick_look_card_single_column_enabled = single_column_enabled and mod:get("enable_quick_look_card_single_column_integration") ~= false
@@ -1008,6 +1060,7 @@ local function refresh_option_dependencies()
 	set_option_enabled(option_dependency_entries.custom_item_override_weapon_information_name_color, custom_item_colors_enabled, custom_item_colors_reason)
 
 	for _, setting_id in ipairs({
+		"inventory_options_controller_focus_keybind",
 		"curio_information_width_percent",
 		"curio_preview_height_percent",
 		"inventory_options_panel_width",
@@ -1020,6 +1073,9 @@ local function refresh_option_dependencies()
 	}) do
 		set_option_enabled(option_dependency_entries[setting_id], inventory_options_panel_enabled, inventory_options_panel_reason)
 	end
+
+	set_option_enabled(option_dependency_entries.enable_lantern_inventory_section, lantern_installed and inventory_options_panel_enabled, lantern_reason)
+	set_option_enabled(option_dependency_entries.keep_lantern_curio_panel_separate, lantern_installed and inventory_options_panel_enabled and mod:get("enable_lantern_inventory_section") == true, lantern_reason)
 
 	for _, setting_id in ipairs({
 		"quick_discard_mode",
@@ -1199,8 +1255,11 @@ local function bind_option_dependencies(options_templates)
 		"custom_item_override_weapon_information_color",
 		"custom_item_override_weapon_rarity_keyword_color",
 		"custom_item_override_weapon_information_name_color",
+		"inventory_options_controller_focus_keybind",
 		"curio_information_width_percent",
 		"curio_preview_height_percent",
+		"enable_lantern_inventory_section",
+		"keep_lantern_curio_panel_separate",
 		"inventory_options_panel_width",
 		"inventory_options_panel_max_height",
 		"inventory_options_panel_row_spacing",
@@ -1460,7 +1519,46 @@ function mod.on_enabled()
 end
 
 function mod.on_all_mods_loaded()
+	-- v1.8.0 used R/R3 for Background Color, which collides with Darktide's
+	-- native inventory discard action. Move that legacy default to A/LT once;
+	-- explicitly configured alternatives are preserved.
+	if mod:get("custom_item_background_color_keybind") == "group_finder_refresh_groups" then
+		mod:set("custom_item_background_color_keybind", "navigate_secondary_left_pressed", true)
+	end
+
 	ItemCustomization.on_all_mods_loaded(mod)
+	Features.set_lantern_integration(mod, get_mod("Lantern of the Omnissiah"))
+	Features.set_item_sorting_integration(get_mod("ItemSorting"))
+end
+
+local function lantern_recommendations_active()
+	return type(Features.lantern_recommendations_active) == "function" and Features.lantern_recommendations_active()
+end
+
+local function synchronize_character_overview_equipped_icon(widget, lantern_active)
+	local equipped_style = widget and widget.style and widget.style.equipped_icon
+	local offset = equipped_style and equipped_style.offset
+	local content = widget and widget.content
+
+	if not offset or not content then
+		return
+	end
+
+	if content.better_inventory_equipped_icon_original_y == nil then
+		content.better_inventory_equipped_icon_original_y = offset[2] or 2
+	end
+
+	offset[2] = lantern_active and 34 or content.better_inventory_equipped_icon_original_y
+end
+
+
+local function synchronize_character_overview_equipped_icons(view)
+	local widgets = view and view._loadout_widgets
+	local lantern_active = lantern_recommendations_active()
+
+	for index = 1, #(widgets or {}) do
+		synchronize_character_overview_equipped_icon(widgets[index], lantern_active)
+	end
 end
 
 function mod.on_setting_changed(setting_id)
@@ -1483,7 +1581,7 @@ function mod.on_setting_changed(setting_id)
 		end
 	end
 
-	if setting_id == "enable_grid_layout" or setting_id == "melee_columns" or setting_id == "ranged_columns" or setting_id == "curio_columns" or setting_id == "automatic_card_height" or setting_id == "expand_inventory_window" or setting_id == "weapon_extra_width_column_threshold" or setting_id == "expand_curio_inventory_window" or setting_id == "enable_hadron_single_column_mirror" or setting_id == "enable_armoury_requisition_grid" or setting_id == "enable_armoury_single_column_mirror" or setting_id == "enable_armoury_requisition_sorting_panel" or setting_id == "brighten_armoury_item_levels" or setting_id == "three_column_weapon_name_font_size" or setting_id == "expand_armoury_requisition_window" or setting_id == "enable_global_store_integration" or setting_id == "enable_global_store_grid" or setting_id == "enable_global_store_sorting_panel" or setting_id == "global_store_character_photo_size_percent" or setting_id == "global_store_price_row_padding" or setting_id == "global_store_character_info_gap" or setting_id == "global_store_character_class_icon_size" or setting_id == "global_store_character_name_font_size" or setting_id == "global_store_compact_character_names" or setting_id == "global_store_single_column_modifier_horizontal_position" or setting_id == "global_store_single_column_modifier_vertical_position" or setting_id == "enable_character_overview_melee_mirror" or setting_id == "enable_character_overview_ranged_mirror" or setting_id == "enable_character_overview_curio_details" or setting_id == "character_overview_curio_name_mode" or setting_id == "weapon_blessing_display_mode" or setting_id == "show_weapon_perks" or setting_id == "show_weapon_perk_rank_symbols" or setting_id == "single_column_blessing_icons_on_right" or setting_id == "curio_display_profile" or setting_id == "enable_inventory_options_panel_prototype" or setting_id == "enable_experimental_quick_discard" or setting_id == "quick_discard_mode" or setting_id == "quick_discard_protect_high_level_curios" or setting_id == "enable_automatic_curio_acquisition" or automatic_curio_setting or setting_id == "enable_quick_look_card_single_column_integration" or setting_id == "enable_quick_look_card_grid_integration" or setting_id == "quick_look_card_grid_stat_position" or setting_id == "enable_custom_item_name_and_colors" then
+	if setting_id == "enable_grid_layout" or setting_id == "melee_columns" or setting_id == "ranged_columns" or setting_id == "curio_columns" or setting_id == "automatic_card_height" or setting_id == "expand_inventory_window" or setting_id == "weapon_extra_width_column_threshold" or setting_id == "expand_curio_inventory_window" or setting_id == "enable_hadron_single_column_mirror" or setting_id == "enable_armoury_requisition_grid" or setting_id == "enable_armoury_single_column_mirror" or setting_id == "enable_armoury_requisition_sorting_panel" or setting_id == "brighten_armoury_item_levels" or setting_id == "three_column_weapon_name_font_size" or setting_id == "expand_armoury_requisition_window" or setting_id == "debug_expand_armoury_requisition_window_30_percent" or setting_id == "enable_global_store_integration" or setting_id == "enable_global_store_grid" or setting_id == "enable_global_store_sorting_panel" or setting_id == "global_store_character_photo_size_percent" or setting_id == "global_store_price_row_padding" or setting_id == "global_store_character_info_gap" or setting_id == "global_store_character_class_icon_size" or setting_id == "global_store_character_name_font_size" or setting_id == "global_store_compact_character_names" or setting_id == "global_store_single_column_modifier_horizontal_position" or setting_id == "global_store_single_column_modifier_vertical_position" or setting_id == "enable_character_overview_melee_mirror" or setting_id == "enable_character_overview_ranged_mirror" or setting_id == "enable_character_overview_curio_details" or setting_id == "character_overview_curio_name_mode" or setting_id == "weapon_blessing_display_mode" or setting_id == "show_weapon_perks" or setting_id == "show_weapon_perk_rank_symbols" or setting_id == "single_column_blessing_icons_on_right" or setting_id == "curio_display_profile" or setting_id == "enable_inventory_options_panel_prototype" or setting_id == "enable_lantern_inventory_section" or setting_id == "keep_lantern_curio_panel_separate" or setting_id == "enable_experimental_quick_discard" or setting_id == "quick_discard_mode" or setting_id == "quick_discard_protect_high_level_curios" or setting_id == "enable_automatic_curio_acquisition" or automatic_curio_setting or setting_id == "enable_quick_look_card_single_column_integration" or setting_id == "enable_quick_look_card_grid_integration" or setting_id == "quick_look_card_grid_stat_position" or setting_id == "enable_custom_item_name_and_colors" then
 		refresh_option_dependencies()
 	end
 
@@ -1583,8 +1681,11 @@ end)
 
 if ensure_class_method(InventoryWeaponsView, "_setup_sort_options") then
 	mod:hook(InventoryWeaponsView, "_setup_sort_options", function(func, view, ...)
+		local selected_option = view._selected_sort_option or view._sort_options and view._sort_options[view._selected_sort_option_index or 1]
+		local selected_display_name = selected_option and selected_option.display_name
 		local result = func(view, ...)
 
+		Features.preserve_item_sorting_native_options(view, selected_display_name)
 		Features.configure_inventory_sort_options(mod, Layout, view)
 		Features.setup_inventory_options_panel(mod, Layout, view, ViewElementGrid)
 		Features.bind_inventory_sort_toggle(mod, Layout, view)
@@ -1595,8 +1696,11 @@ end
 
 if ensure_class_method(CreditsVendorView, "_setup_sort_options") then
 	mod:hook(CreditsVendorView, "_setup_sort_options", function(func, view, ...)
+		local selected_option = view._selected_sort_option or view._sort_options and view._sort_options[view._selected_sort_option_index or 1]
+		local selected_display_name = selected_option and selected_option.display_name
 		local result = func(view, ...)
 
+		Features.preserve_item_sorting_native_options(view, selected_display_name)
 		if is_armoury_requisition_view(view) then
 			Features.configure_armoury_sort_options(mod, view)
 
@@ -1615,6 +1719,33 @@ if ensure_class_method(CreditsVendorView, "_setup_sort_options") then
 	end)
 end
 
+if ensure_class_method(InventoryWeaponsView, "update") then
+	mod:hook(InventoryWeaponsView, "update", function(func, view, dt, t, input_service)
+		Features.capture_inventory_options_panel_controller_focus(mod, Layout, view, input_service)
+		Features.capture_inventory_controller_navigation(view, input_service)
+		local results = pack_values(func(view, dt, t, input_service))
+
+		Features.update_inventory_sort_toggle(mod, Layout, view)
+		Features.update_inventory_options_panel_controller_selection(view, input_service)
+
+		return unpack_values(results, 1, results.n)
+	end)
+end
+
+if ensure_class_method(InventoryWeaponsView, "_handle_input") then
+	mod:hook(InventoryWeaponsView, "_handle_input", function(func, view, input_service, ...)
+		if Features.inventory_options_panel_controller_focused(view) or Features.consume_inventory_controller_grid_navigation(view) then
+			-- View elements process directional input before the parent view. The
+			-- multi-column item grid has already moved right this frame, so bypass
+			-- only InventoryWeaponsView's single-column-era focus transfer while
+			-- retaining the normal ItemGridViewBase/BaseView input chain.
+			return ItemGridViewBase._handle_input(view, input_service, ...)
+		end
+
+		return func(view, input_service, ...)
+	end)
+end
+
 mod:hook_safe(InventoryWeaponsView, "cb_on_favorite_pressed", function(view)
 	if mod:get("prioritize_equipped_favorites") ~= false then
 		Features.resort_inventory(mod, Layout, view)
@@ -1627,11 +1758,8 @@ mod:hook_safe(InventoryWeaponsView, "_equip_item", function(view)
 	end
 end)
 
-mod:hook_safe(InventoryWeaponsView, "update", function(view)
-	Features.update_inventory_sort_toggle(mod, Layout, view)
-end)
-
 mod:hook_safe(InventoryWeaponsView, "on_exit", function(view)
+	Features.release_lantern_inventory_section(view)
 	Features.unregister_inventory_view(view)
 end)
 
@@ -1639,6 +1767,7 @@ if ensure_class_method(CreditsVendorView, "update") then
 	mod:hook_safe(CreditsVendorView, "update", function(view)
 		if is_armoury_sort_view(view) then
 			Features.update_armoury_native_sort_panel(view)
+			align_quick_level_mastery_buttons(view)
 		end
 	end)
 end
@@ -1728,6 +1857,17 @@ if ensure_class_method(InventoryView, "_create_entry_widget_from_config") then
 		local visible_equipment_mod = visible_equipment_placement and get_mod("visible_equipment")
 		local visible_equipment_active = visible_equipment_mod and (type(visible_equipment_mod.is_enabled) ~= "function" or visible_equipment_mod:is_enabled())
 		local preserve_visible_equipment_placement = visible_equipment_active
+		local adjust_runtime_equipped_icon = view and view.__class_name == "InventoryView" and not preserve_visible_equipment_placement and setting_id ~= nil
+
+		local function create_widget(resolved_config)
+			local results = pack_values(func(view, resolved_config, suffix, callback_name, secondary_callback_name, optional_scenegraph_id))
+
+			if adjust_runtime_equipped_icon then
+				synchronize_character_overview_equipped_icon(results[1], lantern_recommendations_active())
+			end
+
+			return unpack_values(results, 1, results.n)
+		end
 
 		if view and view.__class_name == "InventoryView" and not preserve_visible_equipment_placement and setting_id and mod:get(setting_id) ~= false then
 			local equipped_item = view.equipped_item_in_slot and view:equipped_item_in_slot(config.slot.name)
@@ -1742,13 +1882,17 @@ if ensure_class_method(InventoryView, "_create_entry_widget_from_config") then
 				adapted_config.widget_type = widget_type
 				adapted_config.item = equipped_item
 
-				return func(view, adapted_config, suffix, callback_name, secondary_callback_name, optional_scenegraph_id)
+				return create_widget(adapted_config)
 			end
 		end
 
-		return func(view, config, suffix, callback_name, secondary_callback_name, optional_scenegraph_id)
+		return create_widget(config)
 	end)
 end
+
+mod:hook_safe(InventoryView, "update", function(view)
+	synchronize_character_overview_equipped_icons(view)
+end)
 
 local function present_additional_grid(func, view, layout, on_present_callback, setting_id, configuration)
 	if mod:get("enable_grid_layout") == false or mod:get(setting_id) == false then
@@ -1821,6 +1965,8 @@ mod:hook(CreditsVendorView, "on_enter", function(func, view, ...)
 			20,
 		})
 	end
+
+	align_quick_level_mastery_buttons(view)
 
 	return result
 end)

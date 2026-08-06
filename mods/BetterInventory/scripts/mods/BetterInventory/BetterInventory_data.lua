@@ -1,4 +1,4 @@
-local MOD_VERSION = "1.7.0"
+local MOD_VERSION = "1.9.0"
 local mod = get_mod("BetterInventory")
 local DEFAULT_OPERATIVE_SLOT_CAPACITY = 10
 local MAX_REASONABLE_OPERATIVE_SLOT_CAPACITY = 64
@@ -161,6 +161,12 @@ return {
 				type = "group",
 				sub_widgets = {
 					{
+						setting_id = "show_inventory_options_widget",
+						tooltip = "show_inventory_options_widget_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
 						setting_id = "prioritize_equipped_favorites",
 						tooltip = "prioritize_equipped_favorites_tooltip",
 						type = "checkbox",
@@ -181,6 +187,16 @@ return {
 								tooltip = "enable_inventory_options_panel_prototype_tooltip",
 								type = "checkbox",
 								default_value = true,
+							},
+							{
+								setting_id = "inventory_options_controller_focus_keybind",
+								tooltip = "inventory_options_controller_focus_keybind_tooltip",
+								type = "dropdown",
+								default_value = "navigate_secondary_right_pressed",
+								options = {
+									{ text = "inventory_options_controller_focus_keybind_rt", value = "navigate_secondary_right_pressed" },
+									{ text = "custom_item_editor_keybind_off", value = "off" },
+								},
 							},
 							{
 								setting_id = "curio_information_width_percent",
@@ -974,8 +990,9 @@ return {
 						setting_id = "custom_item_background_color_keybind",
 						tooltip = "custom_item_background_color_keybind_tooltip",
 						type = "dropdown",
-						default_value = "group_finder_refresh_groups",
+						default_value = "navigate_secondary_left_pressed",
 						options = {
+							{ text = "custom_item_editor_keybind_lt", value = "navigate_secondary_left_pressed" },
 							{ text = "custom_item_editor_keybind_e", value = "hotkey_menu_special_1" },
 							{ text = "custom_item_editor_keybind_q", value = "hotkey_menu_special_2" },
 							{ text = "custom_item_editor_keybind_v", value = "hotkey_item_inspect" },
@@ -1188,6 +1205,24 @@ return {
 						tooltip = "myfavorites_show_favorite_letter_tooltip",
 						type = "checkbox",
 						default_value = false,
+					},
+				},
+			},
+			{
+				setting_id = "lantern_integration_group",
+				type = "group",
+				sub_widgets = {
+					{
+						setting_id = "enable_lantern_inventory_section",
+						tooltip = "enable_lantern_inventory_section_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "keep_lantern_curio_panel_separate",
+						tooltip = "keep_lantern_curio_panel_separate_tooltip",
+						type = "checkbox",
+						default_value = true,
 					},
 				},
 			},
@@ -1642,6 +1677,60 @@ return {
 					color_group("curio_wound_color_group", "curio_wound_color", "purple", 190, 105, 230),
 					color_group("curio_stamina_color_group", "curio_stamina_color", "yellow", 235, 205, 80),
 					color_group("curio_secondary_text_color_group", "curio_secondary_text_color", "neutral", 220, 230, 210),
+				},
+			},
+			{
+				setting_id = "debug_group",
+				type = "group",
+				sub_widgets = {
+					{
+						setting_id = "debug_expand_armoury_requisition_window_30_percent",
+						tooltip = "debug_expand_armoury_requisition_window_30_percent_tooltip",
+						type = "checkbox",
+						default_value = false,
+					},
+					{
+						setting_id = "debug_armoury_requisition_window_increase_percent",
+						tooltip = "debug_armoury_requisition_window_increase_percent_tooltip",
+						type = "numeric",
+						default_value = 30,
+						range = {
+							10,
+							100,
+						},
+					},
+					{
+						setting_id = "debug_adjust_inventory_window_width",
+						tooltip = "debug_adjust_inventory_window_width_tooltip",
+						type = "checkbox",
+						default_value = false,
+					},
+					{
+						setting_id = "debug_inventory_window_width_adjustment_percent",
+						tooltip = "debug_inventory_window_width_adjustment_percent_tooltip",
+						type = "numeric",
+						default_value = 30,
+						range = {
+							-50,
+							100,
+						},
+					},
+					{
+						setting_id = "debug_adjust_global_store_window_width",
+						tooltip = "debug_adjust_global_store_window_width_tooltip",
+						type = "checkbox",
+						default_value = false,
+					},
+					{
+						setting_id = "debug_global_store_window_width_adjustment_percent",
+						tooltip = "debug_global_store_window_width_adjustment_percent_tooltip",
+						type = "numeric",
+						default_value = 30,
+						range = {
+							-50,
+							100,
+						},
+					},
 				},
 			},
 		},
