@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.1.6
+
+### Features
+
+- **Hide Cinematic Black Bars** — New checkbox (off by default) that removes the letterbox black bars shown during mission intro/outro cinematics and other in-game cutscenes. The bars are stripped at HUD-build time, so the element is never created and the option has zero per-frame cost. Everything else about cutscenes is unchanged. Localised in English, Chinese and Russian.
+
+### Bug Fixes
+
+- **HUD no longer self-destructs on a partial mod file** — If the customizer's element file could not be fully read when the HUD was being built (typically: reloading mods while the mod files were still being copied into the game folder), the game's HUD builder would crash on the broken module and take the entire HUD down with it. The mod now verifies the file actually loads before handing it to the HUD builder — at both HUD-build entry points — and, as a last line of defence, skips only its own element inside the game's element constructor. A broken load now costs you the customizer for that session (with a clear error message telling you to reload) instead of the whole HUD.
+- **HUD rebuild can no longer crash with the old HUD already destroyed** — The pre-rebuild check that strips unloadable third-party elements now also catches modules that load to an invalid value (not just modules that are missing), so the rebuild can't throw after the old HUD is gone.
+
+### Performance
+
+- **Element hide hooks moved from instances to classes** — The draw hook that suppresses right-click-hidden elements is now installed once per element *class* instead of on every element *instance*. The mod framework never releases instance hooks, so each hooked instance — and its widgets, renderer and engine handles — was retained for the rest of the session; rebuilt HUDs (every mission/hub transition and every mods reload) piled those dead copies up over time. Class tables are permanent anyway, so the new scheme retains nothing extra, survives hot reloads correctly, and hidden elements can no longer "come back" after a mods reload.
+
 ## v2.1.5
 
 ### Features

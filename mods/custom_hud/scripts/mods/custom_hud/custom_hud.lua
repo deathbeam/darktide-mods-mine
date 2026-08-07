@@ -78,6 +78,20 @@ end
 
 local hud_element_customizer_path = "custom_hud/scripts/mods/custom_hud/hud_element_customizer"
 
+-- DMF routes this path through io_dofile (see mod:add_require_path below), which
+-- re-reads AND recompiles the file from disk on every single require - there is no
+-- module cache. Any read/compile failure is swallowed and returned as `false`
+-- (dmf/modules/core/io.lua:104), and vanilla UIHud._add_element then calls
+-- `class:new()` on that boolean: UIHud:init throws, Managers.ui._hud is never
+-- assigned, the entire HUD disappears and the mod is left in an errored state.
+-- A truncated read is enough to trigger it - reloading mods while the 160 KB
+-- element file is still being copied into the game folder does exactly that.
+-- So: never hand a definition to the HUD builder without proving it loads first.
+local function _customizer_class_loads()
+    local ok, class = pcall(require, hud_element_customizer_path)
+    return ok and type(class) == "table"
+end
+
 local function _mod_enabled()
     return not mod.is_enabled or mod:is_enabled()
 end
@@ -109,6 +123,59 @@ local function _remove_custom_hud_entries(elements, visibility_groups, remove_hi
     end
 end
 
+-- ============================================================================
+-- Cinematic black bars (HudElementCutsceneOverlay)
+-- ============================================================================
+-- The letterbox bars shown during mission intro/outro cinematics are a regular
+-- HUD element gated by the "cutscene"/"prologue_cutscene" visibility groups.
+-- Hiding = stripping its definition from the elements list at HUD-build time:
+-- the element is then never instantiated, so there is zero per-frame cost.
+--
+-- The restore branch is load-bearing, not just the inverse toggle:
+-- human_gameplay._create_player_hud passes the require-cached master list from
+-- hud_elements_player.lua straight into UIHud.init (no clone before our hook
+-- runs), so a strip mutates that master table and would otherwise persist for
+-- every later build even with the setting off or the mod disabled. Every
+-- vanilla list (mission/hub/onboarding/spectator) ships this element, so
+-- restore-if-missing only ever heals our own strips.
+
+local CUTSCENE_OVERLAY_CLASS = "HudElementCutsceneOverlay"
+
+-- Verbatim copy of the vanilla definition (hud_elements_player.lua). No
+-- package field and no draw_layer: the layer comes from
+-- UIHudSettings.element_draw_layers[class_name], so list position is irrelevant
+-- and appending at the end is safe.
+local _cutscene_overlay_definition = {
+    class_name = CUTSCENE_OVERLAY_CLASS,
+    filename = "scripts/ui/hud/elements/cutscene_overlay/hud_element_cutscene_overlay",
+    visibility_groups = {
+        "prologue_cutscene",
+        "cutscene",
+    },
+}
+
+local function _apply_cutscene_bars_setting(elements)
+    if not elements then
+        return
+    end
+
+    -- Direct mod:get is fine here: this runs once per HUD build (cold path),
+    -- and reading at build time avoids any cache-ordering dependency.
+    local hide = _mod_enabled() and mod:get("hide_cutscene_bars")
+    local index = table.find_by_key(elements, "class_name", CUTSCENE_OVERLAY_CLASS)
+
+    if hide then
+        while index do
+            table.remove(elements, index)
+            index = table.find_by_key(elements, "class_name", CUTSCENE_OVERLAY_CLASS)
+        end
+    elseif not index then
+        -- Clone so the engine never holds a reference into our module-level
+        -- table across builds.
+        elements[#elements + 1] = table.clone(_cutscene_overlay_definition)
+    end
+end
+
 local function _clear_runtime_overrides()
     local position_overrides = mod._position_overrides or {}
     for element in pairs(position_overrides) do
@@ -124,17 +191,32 @@ local function ui_hud_init_hook(func, self, elements, visibility_groups, params)
     -- New HUD build = new element instances. Drop references to the old ones so
     -- our bookkeeping tables don't accumulate dead instances across rebuilds.
     -- (Class-level hook tables must persist: those hooks stay installed on the
-    -- class and re-hooking would trigger DMF rehook warnings.)
-    mod._hooked_elements = {}
+    -- class and re-hooking would trigger DMF rehook warnings. The customizer's
+    -- draw-hook guard [mod._hooked_draw_classes] is NOT reset here either -- it is
+    -- scoped to the mod object, which matches the DMF hook's lifetime; wiping it
+    -- while the DMF hook stayed live was what produced the "rehook active hook
+    -- [draw]" warning.)
     mod._position_overrides = {}
 
     _remove_custom_hud_entries(elements, visibility_groups)
+    -- Must run BEFORE the enabled early-out: the restore branch has to heal a
+    -- previously stripped master list even when the mod is being disabled.
+    _apply_cutscene_bars_setting(elements)
 
     if not _mod_enabled() then
         return func(self, elements, visibility_groups, params)
     end
 
     _remove_custom_hud_entries(elements, visibility_groups, true)
+
+    -- Never register the element definition unless its file actually loads.
+    -- This is the guard for game-initiated HUD builds (mission start / level
+    -- load), which never go through recreate_hud's _remove_unloadable_elements.
+    if not _customizer_class_loads() then
+        mod:error("hud_element_customizer failed to load (partial or invalid file) - " ..
+                  "building the HUD without the customizer. Reload mods again once the file has settled.")
+        return func(self, elements, visibility_groups, params)
+    end
 
     local class_name = "HudElementCustomizer"
     table.insert(elements, {
@@ -168,6 +250,32 @@ end
 mod:add_require_path(hud_element_customizer_path)
 mod:hook("UIHud", "init", ui_hud_init_hook)
 
+-- Last line of defence for OUR element only. Vanilla _add_element does
+-- `require(filename)` and calls `class:new()` on the result with no validation, so
+-- a customizer file that fails to load throws out of UIHud:init and destroys the
+-- whole HUD (see the note above _customizer_class_loads). This closes the read race
+-- between the pre-check in ui_hud_init_hook and vanilla's own require.
+--
+-- Scoped strictly to hud_element_customizer_path. `definition.filename` is NOT a
+-- reliable require target for other mods' elements: better_buff_management's
+-- HudElementBuffBar* definitions carry a filename plain require() cannot resolve
+-- (it is never registered as an io require path), and BBM's own _add_element hook
+-- builds the element from an already-loaded upvalue without ever calling require
+-- or the vanilla body. Probing require() for every definition reports a false
+-- failure there, and skipping on it deletes every BBM buff bar.
+mod:hook("UIHud", "_add_element", function(func, self, definition, elements, elements_array)
+    if definition and definition.filename == hud_element_customizer_path then
+        local ok, class = pcall(require, hud_element_customizer_path)
+        if not ok or type(class) ~= "table" then
+            mod:error("skipping the HUD customizer element - require returned %s. " ..
+                      "Reload mods again once the file has settled.", tostring(class))
+            return
+        end
+    end
+
+    return func(self, definition, elements, elements_array)
+end)
+
 local function _is_missing_module_error(error_message, filename)
     if not error_message or not filename then
         return false
@@ -187,8 +295,17 @@ local function _remove_unloadable_elements(elements)
         local filename = element and element.filename
 
         if filename then
-            local ok, error_message = pcall(require, filename)
-            if not ok and _is_missing_module_error(error_message, filename) then
+            local ok, result = pcall(require, filename)
+            if not ok then
+                if _is_missing_module_error(result, filename) then
+                    table.remove(elements, i)
+                end
+            elseif type(result) ~= "table" then
+                -- DMF's io_dofile swallowed a read/compile failure and handed
+                -- back `false`. Strip the entry here, BEFORE destroy_player_hud,
+                -- so the rebuild can't throw with the old HUD already gone.
+                mod:error("dropping unloadable HUD element '%s' - require returned %s",
+                          tostring(element.class_name), tostring(result))
                 table.remove(elements, i)
             end
         end
@@ -235,6 +352,16 @@ function mod.on_setting_changed(setting_id)
     -- Editor colours are captured by reference into the overlay-box widget styles
     -- at build time, so a colour/alpha change needs a HUD rebuild to take effect.
     if string.find(setting_id, "editor_color_", 1, true) == 1 then
+        if _mod_enabled() then
+            recreate_hud()
+        end
+        return
+    end
+
+    -- Element-list membership is decided at HUD-build time, so this needs a
+    -- rebuild too. In menus recreate_hud no-ops (no hud/player) and the next
+    -- mission build picks the setting up in ui_hud_init_hook anyway.
+    if setting_id == "hide_cutscene_bars" then
         if _mod_enabled() then
             recreate_hud()
         end
@@ -313,8 +440,8 @@ local _ignored_elements = {
 local function draw_hook(func, self, dt, t, ui_renderer, render_settings, input_service)
     -- Fast path first: at default opacity and not hidden there is nothing to do,
     -- so skip the DMF is_enabled() call and the class-name lookup entirely.
-    -- (_is_hidden is only ever set on customized elements, which also carry a
-    -- per-instance draw hook that suppresses them - this check is a fallback.)
+    -- (_is_hidden is only ever set on customized elements, whose own class carries
+    -- the customizer draw hook that suppresses them - this check is a fallback.)
     local opacity = _cached_opacity
     if opacity == 1 and not self._is_hidden then
         return func(self, dt, t, ui_renderer, render_settings, input_service)
@@ -430,13 +557,16 @@ mod:hook_safe("UIHud", "update", _repin_all_overrides)
 -- compares - effectively free.
 mod:hook_safe("UIConstantElements", "update", _repin_all_overrides)
 
--- NOTE: deliberately no mod.on_unload cleanup of _hooked_elements /
--- _position_overrides. On reload the OLD mod object's hooks stay permanently
--- active and keep running during the next load phase; wiping its bookkeeping
--- made the old HudElementCustomizer re-hook every element instance again
--- (visible in console_logs as custom_hud instance draw hooks appearing BEFORE
--- "Loading mod custom_hud"). Leave the old object's state intact so its
--- handlers stay idempotent.
+-- NOTE: deliberately no mod.on_unload cleanup of _position_overrides. On reload
+-- the OLD mod object's hooks stay permanently active and keep running during the
+-- next load phase; wiping its bookkeeping made the old HudElementCustomizer
+-- re-hook every element instance again (visible in console_logs as custom_hud
+-- instance draw hooks appearing BEFORE "Loading mod custom_hud"). Leave the old
+-- object's state intact so its handlers stay idempotent. The draw hook is now
+-- installed on the element's CLASS, guarded by mod._hooked_draw_classes -- one entry
+-- per class, never reset per HUD rebuild, so no re-hook and no per-instance
+-- retention to leak. A fresh mod object after a mods reload starts with an empty
+-- table, which is correct: DMF's hooks_unload already stripped every hook.
 
 mod:hook_safe(UIViewHandler, "open_view", function(self, view_name)
     mod.is_customizing = false
@@ -449,8 +579,12 @@ mod:hook_safe(UIViewHandler, "close_view", function(self, view_name, force_close
     end
 end)
 
-mod._hooked_elements = {}
 mod._hooked_element_draw_widgets = {}
+-- class table -> the draw function DMF installed on it. See the notes above
+-- _ensure_element_draw_hook in hud_element_customizer.lua. Lives here, on the mod
+-- object, because this file runs once per mod object and is never re-run per HUD
+-- rebuild -- exactly the lifetime of DMF's hook registry.
+mod._hooked_draw_classes = {}
 mod._position_overrides = {}
 -- Plain value read by the customizer's per-instance draw hooks (avoids a
 -- function call per customized element per frame).

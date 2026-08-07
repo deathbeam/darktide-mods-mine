@@ -74,6 +74,11 @@ return {
                         function_name = "toggle_hud_hidden"
                     },
                     {
+                        setting_id = "hide_cutscene_bars",
+                        type = "checkbox",
+                        default_value = false
+                    },
+                    {
                         setting_id = "opacity",
                         type = "numeric",
                         range = { 0, 1 },

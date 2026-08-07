@@ -58,6 +58,16 @@ return {
         ["zh-cn"] = "切换 HUD 的开关。",
         ru = "Включение/отключение игрового интерфейса.",
     },
+    hide_cutscene_bars = {
+        en = "Hide Cinematic Black Bars",
+        ["zh-cn"] = "隐藏过场动画黑边",
+        ru = "Скрыть чёрные полосы в катсценах",
+    },
+    hide_cutscene_bars_description = {
+        en = "Removes the letterbox black bars shown during mission intro/outro cinematics and other in-game cutscenes. Everything else about cutscenes is unchanged.",
+        ["zh-cn"] = "移除任务开场/结尾等过场动画期间显示的上下黑边，过场动画的其他部分保持不变。",
+        ru = "Убирает чёрные полосы (леттербокс) во время вступительных и финальных роликов миссии и других кат-сцен. Всё остальное в кат-сценах не меняется.",
+    },
     show_info_panel = {
         en = "Show Info Panel",
         ["zh-cn"] = "显示信息面板",

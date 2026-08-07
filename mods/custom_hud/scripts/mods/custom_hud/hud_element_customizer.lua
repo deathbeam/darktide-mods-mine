@@ -16,13 +16,31 @@ end
 -- custom_hud.lua (main script); the helper is reached via
 -- mod._set_element_sg_position, looked up at call time.
 
--- Per-instance draw hook: suppresses draw while right-click hidden (vanilla
--- draw ignores _is_hidden - it's a mod-invented field). Installed ONLY when an
--- element is actually hidden: moved-but-visible elements don't need it (their
--- position is applied via the scenegraph, and opacity is handled by the lazily
--- installed base-class hooks), and every needless instance hook is a permanent
--- per-frame DMF chain + alloc. One shared handler, so no closure per instance.
+-- Draw hook: suppresses draw while right-click hidden (vanilla draw ignores
+-- _is_hidden - it's a mod-invented field). Opted into per instance, but INSTALLED
+-- ON THE CLASS, never on the instance.
+--
+-- DMF has no unhook API, and every hook strong-refs its target forever:
+-- _origs[obj][method], _registry[mod][uid].obj and the _hooks[type][uid] closure
+-- chain are never cleared. Hooking an element instance therefore pins that element
+-- - and through it its widgets, its ui_renderer, and the Gui/World handles the
+-- engine frees at world teardown - for the rest of the process. HUD elements are
+-- rebuilt on every mission/hub transition AND on every mod hot reload, so those
+-- dead graphs pile up and the GC keeps walking them. Class tables live in CLASSES
+-- for the whole process, so hooking them retains nothing that wasn't permanent.
+--
+-- The class table has to be the element's OWN: Darktide's class() flat-copies
+-- super's members into the subclass at definition time (no __index chain up to
+-- super), so a hook installed later on HudElementBase.draw never reaches a
+-- subclass that already took its own copy of draw.
 local function _element_draw_hook(func, self, dt, t, ui_renderer, render_settings, input_service)
+    -- Opt-in marker. The hook now fires for every instance of the class, so this
+    -- keeps the affected set identical to the old per-instance hook: only elements
+    -- _ensure_element_draw_hook was called for take the customizer path.
+    if not rawget(self, "_custom_hud_draw_hooked") then
+        return func(self, dt, t, ui_renderer, render_settings, input_service)
+    end
+
     if self._is_hidden and _mod_enabled() then
         return
     end
@@ -35,12 +53,58 @@ local function _element_draw_hook(func, self, dt, t, ui_renderer, render_setting
     return func(self, dt, t, ui_renderer, render_settings, input_service)
 end
 
+-- The guard for the hook above is mod._hooked_draw_classes (declared in
+-- custom_hud.lua): class table -> the function DMF installed on it.
+--
+-- WHERE it lives matters. It must die exactly when DMF's hooks die, and they die on
+-- a mods reload: dmf_loader's on_reload calls hooks_unload, which walks _origs and
+-- restores every hooked method to its original. A guard kept ON THE CLASS TABLE
+-- outlives that -- vanilla class tables are process-lifetime -- so after any hot
+-- reload the flag still said "hooked" while the hook was gone, and every hidden
+-- element came back and could not be re-hidden. The mod object is re-created by the
+-- same reload (dmf_mod_manager's _mods table is rebuilt), so a field on it has the
+-- right lifetime. It must NOT be reset per HUD rebuild either: the old mod object
+-- keeps its entries, so a surviving old customizer instance won't re-hook and trip
+-- DMF's "rehook active hook [draw]" warning.
+--
+-- WHAT it stores matters too. class() (scripts/foundation/utilities/class.lua:100)
+-- re-copies every super member into the subclass on each run --
+-- `class_table.draw = HudElementBase.draw` -- silently dropping our hook. Vanilla
+-- element files hit that once, but a mod element registered with
+-- mod:add_require_path is routed to io_dofile, which has no module cache
+-- (dmf/modules/core/require.lua:66), so every require re-executes its file and
+-- re-clobbers the hook -- and every HUD rebuild require()s them all. Storing the
+-- installed function instead of a boolean lets us put it straight back. Re-hooking
+-- would not work there: _origs[class_table].draw still exists, so DMF takes the
+-- bare original as the unique id and appends to a chain nothing calls.
 local function _ensure_element_draw_hook(element)
-    local hooked_elements = mod._hooked_elements
-    if hooked_elements and not hooked_elements[element] then
-        hooked_elements[element] = true
-        mod:hook(element, "draw", _element_draw_hook)
+    -- Instance flag: opt-in marker read by the handler above.
+    element._custom_hud_draw_hooked = true
+
+    local class_name = element.__class_name
+    if not class_name then
+        return
     end
+
+    -- CLASS.__index returns the key itself for unknown names, so rawget is what
+    -- distinguishes a real class table from that string fallback.
+    local class_table = rawget(CLASS, class_name)
+    if type(class_table) ~= "table" or type(rawget(class_table, "draw")) ~= "function" then
+        return
+    end
+
+    local hooked = mod._hooked_draw_classes
+    local installed = hooked[class_table]
+    if installed then
+        if rawget(class_table, "draw") ~= installed then
+            class_table.draw = installed
+        end
+        return
+    end
+
+    mod:hook(class_table, "draw", _element_draw_hook)
+    -- Whatever DMF left in place: its internal chain entry for this obj/method.
+    hooked[class_table] = rawget(class_table, "draw")
 end
 
 -- ============================================================================
@@ -368,7 +432,10 @@ local _excluded_element_names = {
     HudElementPrologueTutorialSequenceTransitionEnd = true,
     HudElementPrologueTutorialInfoBox = true,
     HudElementCrosshair = true,
-    HudElementCrosshairHud = true,
+    -- Crosshair HUD (third-party element) stays editable: shipped editable in
+    -- 2.1.5 and users position it. Not to be confused with HudElementCrosshair
+    -- (the actual crosshair) above, which stays locked.
+    HudElementCrosshairHud = false,
     HudElementInteraction = true,
     HudElementWorldMarkers = true,
     HudElementEmoteWheel = true,
@@ -1881,7 +1948,7 @@ function HudElementCustomizer:_process_widget_press_right(node_name)
             element:set_visible(not should_hide)
         end
         element._is_hidden = should_hide
-        -- _is_hidden only takes effect through the instance draw hook; install it
+        -- _is_hidden only takes effect through the customizer draw hook; install it
         -- now so the hide is immediate (base-class draw hooks may not exist).
         -- Unhiding needs no hook: an existing one passes through, and without
         -- one the element just draws normally.

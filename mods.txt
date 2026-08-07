@@ -22,7 +22,7 @@ GetOutOfTheWay 967 1.7
 stamina_dodge_bars 915 1.3
 controlled_chaos 953 1.2
 # crosshair_hud 9 2.0.5b
-custom_hud 1091 2.1.5
+custom_hud 1091 2.1.6
 danger_zone 440 1.1.1
 enemies_improved 809 2.0.14
 FirstPersonBody 1135 1.1.3
