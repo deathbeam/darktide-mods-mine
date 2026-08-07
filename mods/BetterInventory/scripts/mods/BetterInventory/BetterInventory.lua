@@ -1526,6 +1526,17 @@ function mod.on_all_mods_loaded()
 		mod:set("custom_item_background_color_keybind", "navigate_secondary_left_pressed", true)
 	end
 
+	-- v1.9.2 originally inherited Q/Y for Change Name. Y is Darktide's native
+	-- Favorite action in inventory views, so migrate that released default once
+	-- to I / View / Touchpad. Other explicitly selected bindings are preserved.
+	if mod:get("_custom_item_name_keybind_v2_migrated") ~= true then
+		if mod:get("custom_item_name_keybind") == "hotkey_menu_special_2" then
+			mod:set("custom_item_name_keybind", "lobby_open_inventory", false)
+		end
+
+		mod:set("_custom_item_name_keybind_v2_migrated", true, true)
+	end
+
 	ItemCustomization.on_all_mods_loaded(mod)
 	Features.set_lantern_integration(mod, get_mod("Lantern of the Omnissiah"))
 	Features.set_item_sorting_integration(get_mod("ItemSorting"))
@@ -1764,11 +1775,31 @@ mod:hook_safe(InventoryWeaponsView, "on_exit", function(view)
 end)
 
 if ensure_class_method(CreditsVendorView, "update") then
-	mod:hook_safe(CreditsVendorView, "update", function(view)
+	mod:hook(CreditsVendorView, "update", function(func, view, dt, t, input_service)
+		if is_armoury_sort_view(view) then
+			Features.capture_armoury_sort_panel_controller_focus(mod, view, input_service)
+		end
+
+		local results = pack_values(func(view, dt, t, input_service))
+
 		if is_armoury_sort_view(view) then
 			Features.update_armoury_native_sort_panel(view)
 			align_quick_level_mastery_buttons(view)
 		end
+
+		return unpack_values(results, 1, results.n)
+	end)
+end
+
+if ensure_class_method(CreditsVendorView, "_handle_input") then
+	mod:hook(CreditsVendorView, "_handle_input", function(func, view, input_service, ...)
+		if Features.armoury_sort_panel_controller_focused(view) then
+			-- The panel's ViewElementGrid already processed navigation this frame.
+			-- Skip VendorViewBase's A-to-purchase path while widget focus is active.
+			return ItemGridViewBase._handle_input(view, input_service, ...)
+		end
+
+		return func(view, input_service, ...)
 	end)
 end
 
