@@ -50,7 +50,8 @@ DynamicCrosshair
 stamina_dodge_bars
 BetterNameplate
 RemoveTagSkulls
-FirstPersonBody
+GetOutOfTheWay
+-- FirstPersonBody -- conflicts with GetOutOfTheWay
 ForTheEmperor
 pointer
 RecolorBossHealthBars
@@ -63,4 +64,3 @@ crosshair_hud
 PlayerOutlines
 enemies_improved
 danger_zone
-GetOutOfTheWay
