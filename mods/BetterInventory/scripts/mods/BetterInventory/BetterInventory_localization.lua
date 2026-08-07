@@ -276,7 +276,25 @@ local localization = {
 		en = "Enable automatic curio acquisition",
 	},
 	enable_automatic_curio_acquisition_tooltip = {
-		en = "Performs one cross-character Armoury Exchange scan after each Morningstar entry and automatically purchases every Curio matching the enabled item-level, primary-roll, type and target filters. Targets can be selected by class or by individual character. This spends Ordo Dockets without a confirmation prompt. Automatic discard finishes first, and Curios matching the acquisition rule remain protected from later automatic-discard passes.",
+		en = "Performs one cross-character Armoury Exchange scan after each eligible context entry and automatically purchases every Curio matching the enabled item-level, primary-roll, type and target filters. Morningstar is enabled by the existing buyer setting; Operative Selection requires its separate option. Targets can be selected by class or by individual character. This spends Ordo Dockets without a confirmation prompt. Automatic discard finishes first in Morningstar, and matching Curios remain protected from later automatic-discard passes.",
+	},
+	automatic_curio_scan_operative_selection = {
+		en = "Scan and purchase from Operative Selection",
+	},
+	automatic_curio_scan_operative_selection_tooltip = {
+		en = "Allows the Automatic Curio Buyer to run while the Operative Selection screen is open. Disabled by default. It still respects the store-rotation throttle and never waits for a selected Morningstar player.",
+	},
+	automatic_curio_once_per_store_rotation = {
+		en = "Scan at most once per store rotation (experimental)",
+	},
+	automatic_curio_once_per_store_rotation_tooltip = {
+		en = "Experimental. When enabled, Morningstar and Operative Selection share one account-scoped Armoury rotation gate. A scan at 17:06 permits the next scan after the store reset at 18:00; this is not a rolling 60-minute timer. Disabled by default.",
+	},
+	automatic_curio_rescan_on_store_refresh = {
+		en = "Rescan when store refreshes while idle (experimental)",
+	},
+	automatic_curio_rescan_on_store_refresh_tooltip = {
+		en = "Experimental. When enabled, performs one additional pass after the next Armoury store reset if you remain in an eligible screen. A scan just before reset can therefore be followed by another scan just after reset. Disabled by default to limit backend work and unexpected close-together purchases.",
 	},
 	automatic_curio_min_item_level = {
 		en = "Minimum curio item level to acquire",
@@ -590,17 +608,41 @@ local localization = {
 	enable_character_overview_melee_mirror_tooltip = {
 		en = "Uses the detailed BetterInventory single-column card for the equipped melee weapon on the character overview screen. Enabled by default.",
 	},
+	character_overview_show_melee_rarity_strip = {
+		en = "Show melee weapon colour strip",
+	},
+	character_overview_show_melee_rarity_strip_tooltip = {
+		en = "Draws the left rarity-colour strip on the mirrored melee weapon card. Enabled by default.",
+	},
 	enable_character_overview_ranged_mirror = {
 		en = "Mirror ranged weapon single-column format from inventory",
 	},
 	enable_character_overview_ranged_mirror_tooltip = {
 		en = "Uses the detailed BetterInventory single-column card for the equipped ranged weapon on the character overview screen. Enabled by default.",
 	},
+	character_overview_show_ranged_rarity_strip = {
+		en = "Show ranged weapon colour strip",
+	},
+	character_overview_show_ranged_rarity_strip_tooltip = {
+		en = "Draws the left rarity-colour strip on the mirrored ranged weapon card. Enabled by default.",
+	},
 	enable_character_overview_curio_details = {
 		en = "Show detailed Curio card on character overview",
 	},
 	enable_character_overview_curio_details_tooltip = {
 		en = "Shows the equipped Curio's primary and secondary stats in a compact BetterInventory card on the character overview screen. Enabled by default.",
+	},
+	character_overview_show_curio_rarity_strip = {
+		en = "Show Curio colour strip",
+	},
+	character_overview_show_curio_rarity_strip_tooltip = {
+		en = "Draws the left rarity-colour strip on the detailed Curio card. Enabled by default.",
+	},
+	character_overview_use_native_curio_overlay = {
+		en = "Use native Curio overlay",
+	},
+	character_overview_use_native_curio_overlay_tooltip = {
+		en = "Uses Darktide's ornate Curio frame and portrait layout for detailed Character Overview Curios while keeping BetterInventory's title and stat lines. Disabled by default.",
 	},
 	character_overview_curio_name_mode = {
 		en = "Curio title mode",
@@ -1816,7 +1858,13 @@ local zh_cn = {
 	mod_description = "为《暗潮》提供响应式且完整保留信息的库存布局。",
 	automatic_curio_buyer_group = "自动珍品购买器",
 	enable_automatic_curio_acquisition = "启用自动获取珍品",
-	enable_automatic_curio_acquisition_tooltip = "每次进入晨星号后，对所有角色的军械库交易所执行一次扫描，并自动购买符合物品等级、主要属性数值、类型和职业筛选条件的所有珍品。此功能会在没有确认提示的情况下花费审判庭双子币。自动丢弃会先完成，且符合获取规则的珍品会在以后的自动丢弃流程中保持受保护状态。",
+	enable_automatic_curio_acquisition_tooltip = "每次进入符合条件的界面后，对所有角色的军械库交易所执行一次扫描，并自动购买符合物品等级、主要属性数值、类型和目标筛选条件的所有珍品。晨星号使用现有购买器设置；干员选择界面需要单独启用。此功能会在没有确认提示的情况下花费审判庭双子币。自动丢弃会先完成，且符合获取规则的珍品会在以后的自动丢弃流程中保持受保护状态。",
+	automatic_curio_scan_operative_selection = "从干员选择界面扫描并购买",
+	automatic_curio_scan_operative_selection_tooltip = "允许自动珍品购买器在干员选择界面打开时运行。默认关闭。它仍会遵守商店轮换限制，也不需要晨星号中的已选玩家。",
+	automatic_curio_once_per_store_rotation = "每次商店轮换最多扫描一次（实验性）",
+	automatic_curio_once_per_store_rotation_tooltip = "实验性功能。启用后，晨星号和干员选择界面共享一个按账户保存的军械库轮换限制。17:06 扫描后，商店在 18:00 刷新后才能再次扫描；这不是滚动 60 分钟计时器。默认关闭。",
+	automatic_curio_rescan_on_store_refresh = "闲置时商店刷新后重新扫描（实验性）",
+	automatic_curio_rescan_on_store_refresh_tooltip = "实验性功能。启用后，如果你仍停留在符合条件的界面，军械库商店刷新后会额外执行一次扫描。刷新前刚扫描可能导致刷新后再次扫描。默认关闭，以限制后端请求和短时间内的连续购买。",
 	automatic_curio_min_item_level = "获取珍品的最低物品等级",
 	automatic_curio_min_item_level_tooltip = "只有显示物品等级达到或超过此值的军械库珍品才符合条件。生命和韧性珍品还必须达到对应的最低主要属性数值。货币充足时，会购买所有已启用职业的每个匹配商品。默认值为 410。",
 	automatic_curio_diagnostic_logging = "启用详细诊断日志",
@@ -2324,7 +2372,7 @@ zh_cn.automatic_curio_character_options_placeholder = "正在发现角色……"
 zh_cn.automatic_curio_character_slot_placeholder = "角色"
 zh_cn.automatic_curio_character_slot_unavailable = "（当前未找到）"
 zh_cn.automatic_curio_character_slot_empty_reason = "当前没有角色分配到此栏位。BetterInventory 会在进入晨星号后刷新角色列表，并在枢纽中定期刷新。"
-zh_cn.enable_automatic_curio_acquisition_tooltip = "每次进入晨星号后，对所有角色的军械库交易所执行一次扫描，并自动购买符合物品等级、主要属性数值、类型和目标筛选条件的所有珍品。目标可按职业或单个角色选择。此功能会在没有确认提示的情况下花费审判庭双子币。自动丢弃会先完成，且符合获取规则的珍品会在以后的自动丢弃流程中保持受保护状态。"
+zh_cn.enable_automatic_curio_acquisition_tooltip = "每次进入符合条件的界面后，对所有角色的军械库交易所执行一次扫描，并自动购买符合物品等级、主要属性数值、类型和目标筛选条件的所有珍品。晨星号使用现有购买器设置；干员选择界面需要单独启用。目标可按职业或单个角色选择。此功能会在没有确认提示的情况下花费审判庭双子币。自动丢弃会先完成，且符合获取规则的珍品会在以后的自动丢弃流程中保持受保护状态。"
 zh_cn.automatic_curio_min_item_level_tooltip = "只有显示物品等级达到或超过此值的军械库珍品才符合条件。生命和韧性珍品还必须达到对应的最低主要属性数值。货币充足时，会购买每个已启用目标的所有匹配商品。默认值为 410。"
 
 zh_cn.enable_armoury_requisition_sorting_panel = "显示军械库排序组件"
@@ -2406,10 +2454,18 @@ zh_cn.curio_content_name_it_curio_name_tooltip = "Shows a two-line Curio name ab
 zh_cn.character_overview_group = "Character overview"
 zh_cn.enable_character_overview_melee_mirror = "Mirror melee weapon single-column format from inventory"
 zh_cn.enable_character_overview_melee_mirror_tooltip = "Uses the detailed BetterInventory single-column card for the equipped melee weapon on the character overview screen. Enabled by default."
+zh_cn.character_overview_show_melee_rarity_strip = "Show melee weapon colour strip"
+zh_cn.character_overview_show_melee_rarity_strip_tooltip = "Draws the left rarity-colour strip on the mirrored melee weapon card. Enabled by default."
 zh_cn.enable_character_overview_ranged_mirror = "Mirror ranged weapon single-column format from inventory"
 zh_cn.enable_character_overview_ranged_mirror_tooltip = "Uses the detailed BetterInventory single-column card for the equipped ranged weapon on the character overview screen. Enabled by default."
+zh_cn.character_overview_show_ranged_rarity_strip = "Show ranged weapon colour strip"
+zh_cn.character_overview_show_ranged_rarity_strip_tooltip = "Draws the left rarity-colour strip on the mirrored ranged weapon card. Enabled by default."
 zh_cn.enable_character_overview_curio_details = "Show detailed Curio card on character overview"
 zh_cn.enable_character_overview_curio_details_tooltip = "Shows the equipped Curio's primary and secondary stats in a compact BetterInventory card on the character overview screen. Enabled by default."
+zh_cn.character_overview_show_curio_rarity_strip = "Show Curio colour strip"
+zh_cn.character_overview_show_curio_rarity_strip_tooltip = "Draws the left rarity-colour strip on the detailed Curio card. Enabled by default."
+zh_cn.character_overview_use_native_curio_overlay = "Use native Curio overlay"
+zh_cn.character_overview_use_native_curio_overlay_tooltip = "Uses Darktide's ornate Curio frame and portrait layout for detailed Character Overview Curios while keeping BetterInventory's title and stat lines. Disabled by default."
 zh_cn.item_sorting_mod_header = "ItemSorting mod"
 zh_cn.character_overview_curio_name_mode = "Curio title mode"
 zh_cn.character_overview_curio_name_mode_tooltip = "Hides Curio titles or fits them within one or two lines above the four stat rows on the character overview."

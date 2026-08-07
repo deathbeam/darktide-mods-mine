@@ -1,4 +1,4 @@
-local MOD_VERSION = "1.9.2"
+local MOD_VERSION = "1.9.4"
 local mod = get_mod("BetterInventory")
 local DEFAULT_OPERATIVE_SLOT_CAPACITY = 10
 local MAX_REASONABLE_OPERATIVE_SLOT_CAPACITY = 64
@@ -433,6 +433,24 @@ return {
 						default_value = false,
 						sub_widgets = {
 							{
+								setting_id = "automatic_curio_scan_operative_selection",
+								tooltip = "automatic_curio_scan_operative_selection_tooltip",
+								type = "checkbox",
+								default_value = false,
+							},
+							{
+								setting_id = "automatic_curio_once_per_store_rotation",
+								tooltip = "automatic_curio_once_per_store_rotation_tooltip",
+								type = "checkbox",
+								default_value = false,
+							},
+							{
+								setting_id = "automatic_curio_rescan_on_store_refresh",
+								tooltip = "automatic_curio_rescan_on_store_refresh_tooltip",
+								type = "checkbox",
+								default_value = false,
+							},
+							{
 								setting_id = "automatic_curio_min_item_level",
 								tooltip = "automatic_curio_min_item_level_tooltip",
 								type = "numeric",
@@ -759,8 +777,20 @@ return {
 								default_value = true,
 							},
 							{
+								setting_id = "character_overview_show_melee_rarity_strip",
+								tooltip = "character_overview_show_melee_rarity_strip_tooltip",
+								type = "checkbox",
+								default_value = true,
+							},
+							{
 								setting_id = "enable_character_overview_ranged_mirror",
 								tooltip = "enable_character_overview_ranged_mirror_tooltip",
+								type = "checkbox",
+								default_value = true,
+							},
+							{
+								setting_id = "character_overview_show_ranged_rarity_strip",
+								tooltip = "character_overview_show_ranged_rarity_strip_tooltip",
 								type = "checkbox",
 								default_value = true,
 							},
@@ -769,6 +799,18 @@ return {
 								tooltip = "enable_character_overview_curio_details_tooltip",
 								type = "checkbox",
 								default_value = true,
+							},
+							{
+								setting_id = "character_overview_show_curio_rarity_strip",
+								tooltip = "character_overview_show_curio_rarity_strip_tooltip",
+								type = "checkbox",
+								default_value = true,
+							},
+							{
+								setting_id = "character_overview_use_native_curio_overlay",
+								tooltip = "character_overview_use_native_curio_overlay_tooltip",
+								type = "checkbox",
+								default_value = false,
 							},
 							{
 								setting_id = "character_overview_curio_name_mode",
