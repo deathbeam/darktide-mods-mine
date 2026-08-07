@@ -52,7 +52,6 @@ BetterNameplate
 RemoveTagSkulls
 FirstPersonBody
 ForTheEmperor
-GetOutOfTheWay
 pointer
 RecolorBossHealthBars
 crosshair_remap
@@ -64,3 +63,4 @@ crosshair_hud
 PlayerOutlines
 enemies_improved
 danger_zone
+GetOutOfTheWay
