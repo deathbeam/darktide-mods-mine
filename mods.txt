@@ -1,4 +1,4 @@
-SimpleActivate 1145 0.0.2
+SimpleActivate 1145 0.0.3
 SimpleCharging 1141 0.0.6
 SimpleMovement 1146 0.0.2
 CharacterStats 1093 0.2.9
