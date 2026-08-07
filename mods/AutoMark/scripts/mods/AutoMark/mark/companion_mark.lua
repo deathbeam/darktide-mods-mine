@@ -5,6 +5,7 @@ local mod_settings                         = mod.settings
 local mark_context                         = mod.mark_context
 local TAG_NAMES                            = mod.TAG_NAMES
 local companion_cancel_mark_breed_settings = mod.companion_cancel_mark_breed_settings
+local DISABLING_TYPES                      = mod.DISABLING_TYPES
 
 -- Imports
 local Health                               = require("scripts/utilities/health")
@@ -20,6 +21,7 @@ local ScriptUnit_extension                 = ScriptUnit.extension
 
 -- Outline Name For Execution Order Detection
 local EXECUTION_ORDER_OUTLINE_NAME         = "adamant_mark_target"
+local CANCEL_INTERVAL                      = 0.5
 
 -- Callback Function for Companion Mark
 local function companion_mark_callback()
@@ -122,22 +124,33 @@ function mod:init_execution_order_units()
     end
 end
 
-function mod:auto_cancel_companion_mark(t)
+local cancel_interval = 0
+function mod:auto_cancel_companion_mark(dt, t)
     if not mod_settings.toggle_mod or not mod_settings.companion_cancel_mark or context.class_name ~= "adamant" or not context.has_companion then
         return
     end
 
+    if cancel_interval > 0 then
+        cancel_interval = cancel_interval - dt
+        return
+    end
+
+    local disabled_character_state_component = context.disabled_character_state_component
+    if disabled_character_state_component and disabled_character_state_component.is_disabled and DISABLING_TYPES[disabled_character_state_component.disabling_type] then
+        return
+    end
+
     local tag_context = mark_context[TAG_NAMES.COMPANION_TAG]
-    if tag_context.is_manual then
-        return
-    end
-
     local marked_tag = tag_context.tag
-    if not marked_tag or not tag_context.is_cancelable then
+    local marked_unit = marked_tag and marked_tag._target_unit
+    if not marked_tag or not marked_unit then
         return
     end
 
-    local marked_unit = marked_tag._target_unit
+    if tag_context.is_manual or not tag_context.is_cancelable then
+        return
+    end
+
     local unit_data_extension = ScriptUnit_extension(marked_unit, "unit_data_system")
     local breed_data = unit_data_extension and unit_data_extension._breed
     local breed_name = breed_data and breed_data.name
@@ -157,7 +170,8 @@ function mod:auto_cancel_companion_mark(t)
         local health_percent = Health.current_health_percent(marked_unit)
         if health_percent < health_threshold then
             mod:print_debug("cancel companion mark due to health threshold, health_percent:", health_percent)
-            tag_context.canceled_unit = marked_unit
+            tag_context.canceled_units[marked_unit] = math.huge
+            cancel_interval = CANCEL_INTERVAL
             mod:cancel_mark(marked_tag._id)
             return
         end
@@ -167,7 +181,8 @@ function mod:auto_cancel_companion_mark(t)
         local elapsed_time = t - tag_context.pounce_start_time
         if elapsed_time > time_threshold then
             mod:print_debug("cancel companion mark due to time threshold, elapsed_time:", elapsed_time)
-            tag_context.canceled_unit = marked_unit
+            tag_context.canceled_units[marked_unit] = t + 3
+            cancel_interval = CANCEL_INTERVAL
             mod:cancel_mark(marked_tag._id)
             return
         end
@@ -198,7 +213,8 @@ function mod:auto_cancel_companion_mark(t)
             local distance_squared = Vector3_distance_squared(companion_position, player_position)
             if distance_squared > distance_threshold * distance_threshold then
                 mod:print_debug("cancel companion mark due to distance threshold, distance squared:", distance_squared)
-                tag_context.canceled_unit = marked_unit
+                tag_context.canceled_units[marked_unit] = t + 3
+                cancel_interval = CANCEL_INTERVAL
                 mod:cancel_mark(marked_tag._id)
                 return
             end

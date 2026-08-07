@@ -1,26 +1,29 @@
 ---@class AutoMarkMod:DMFMod
-local mod                         = get_mod("AutoMark")
-local context                     = mod.context
-local mark_context                = mod.mark_context
-local TAG_NAMES                   = mod.TAG_NAMES
-local mod_settings                = mod.settings
+local mod                               = get_mod("AutoMark")
+local context                           = mod.context
+local mark_context                      = mod.mark_context
+local TAG_NAMES                         = mod.TAG_NAMES
+local mod_settings                      = mod.settings
+local noospheric_command_breed_settings = mod.noospheric_command_breed_settings
+local DISABLING_TYPES                   = mod.DISABLING_TYPES
 
 -- Imports
-local SpecialRulesSettings        = require("scripts/settings/ability/special_rules_settings")
-local CompanionServoSkullSettings = require("scripts/settings/companion/companion_servo_skull_settings")
-local Hud                         = require("scripts/utilities/ui/hud")
-local special_rules               = SpecialRulesSettings.special_rules
-local servo_skull_states          = CompanionServoSkullSettings.STATES
+local SpecialRulesSettings              = require("scripts/settings/ability/special_rules_settings")
+local CompanionServoSkullSettings       = require("scripts/settings/companion/companion_servo_skull_settings")
+local Hud                               = require("scripts/utilities/ui/hud")
+local Health                            = require("scripts/utilities/health")
+local special_rules                     = SpecialRulesSettings.special_rules
+local servo_skull_states                = CompanionServoSkullSettings.STATES
 
 -- Global Cache
-local RESOLUTION_LOOKUP           = RESOLUTION_LOOKUP
-local Managers                    = Managers
-local callback                    = callback
-local GameSession                 = GameSession
+local RESOLUTION_LOOKUP                 = RESOLUTION_LOOKUP
+local Managers                          = Managers
+local callback                          = callback
+local GameSession                       = GameSession
+local ScriptUnit_extension              = ScriptUnit.extension
 
-local HACK_TAG_NAME               = "hacking_over_here_companion"
-
-local mark_interval               = 0
+local HACK_TAG_NAME                     = "hacking_over_here_companion"
+local CANCEL_INTERVAL                   = 0.5
 
 local function servo_skull_mark_callback()
     local smart_tag_system = context.smart_tag_system
@@ -197,13 +200,18 @@ local find_hackable_target_unit = function()
     return selected_marker_unit, selected_marker_distance
 end
 
+local hack_interval             = 0
 function mod:auto_hack(dt, t, fixed_frame)
-    if not mod_settings.toggle_mod or not mod_settings.auto_hack or (mod_settings.disable_auto_hack_for_noospheric_command and context.has_noospheric_command) or context.class_name ~= "cryptic" or not context.has_servo_skull or mod:is_servo_skull_hacking() then
+    if not mod_settings.toggle_mod or not mod_settings.auto_hack or (mod_settings.disable_auto_hack_for_noospheric_command and context.has_noospheric_command) or context.class_name ~= "cryptic" or not context.has_servo_skull then
         return
     end
 
-    if mark_interval > 0 then
-        mark_interval = mark_interval - dt
+    if hack_interval > 0 then
+        hack_interval = hack_interval - dt
+        return
+    end
+
+    if mod:is_servo_skull_hacking() then
         return
     end
 
@@ -230,35 +238,73 @@ function mod:auto_hack(dt, t, fixed_frame)
         smart_tag_system:cancel_tag(target_tag._id, tagger_player_unit, true)
     end
 
-    mark_interval = 0.5
+    hack_interval = 1
     smart_tag_system:set_tag(HACK_TAG_NAME, player_unit, target_unit)
 end
 
-function mod:auto_cancel_servo_skull_mark(t, fixed_frame)
-    if not mod_settings.toggle_mod or mod_settings.servo_skull_cancel_mark_time_threshold <= 0 or context.class_name ~= "cryptic" or not context.has_servo_skull then
+local cancel_interval = 0
+function mod:auto_cancel_servo_skull_mark(dt, t, fixed_frame)
+    if not mod_settings.toggle_mod or not mod_settings.servo_skull_cancel_mark or context.class_name ~= "cryptic" or not context.has_servo_skull then
         return
     end
 
+    if cancel_interval > 0 then
+        cancel_interval = cancel_interval - dt
+        return
+    end
+
+    local disabled_character_state_component = context.disabled_character_state_component
+    if disabled_character_state_component and disabled_character_state_component.is_disabled and DISABLING_TYPES[disabled_character_state_component.disabling_type] then
+        return
+    end
 
     local tag_context = mark_context[TAG_NAMES.SERVO_SKULL_TAG]
-    if tag_context.is_manual then
-        return
-    end
-
     local marked_tag = tag_context.tag
     local marked_unit = marked_tag and marked_tag._target_unit
     if not marked_tag or not marked_unit then
         return
     end
 
-    if mod:is_servo_skull_target_visible(marked_unit, fixed_frame, true) then
-        tag_context.servo_skull_lose_sight_time = nil
-    elseif tag_context.servo_skull_lose_sight_time == nil then
-        tag_context.servo_skull_lose_sight_time = t
+    if tag_context.is_manual then
+        return
     end
 
-    if tag_context.servo_skull_lose_sight_time and t - tag_context.servo_skull_lose_sight_time > mod_settings.servo_skull_cancel_mark_time_threshold then
-        mod:print_debug("cancel servo skull mark due to time threshold")
-        mod:cancel_mark(marked_tag._id)
+    local unit_data_extension = ScriptUnit_extension(marked_unit, "unit_data_system")
+    local breed_data = unit_data_extension and unit_data_extension._breed
+    local breed_name = breed_data and breed_data.name
+    local breed_settings = noospheric_command_breed_settings[breed_name]
+    local time_threshold, health_threshold
+    if breed_settings and breed_settings.override then
+        health_threshold = breed_settings.health_threshold or 0
+        time_threshold = breed_settings.time_threshold or 0
+    else
+        time_threshold = mod_settings.servo_skull_cancel_mark_time_threshold
+        health_threshold = mod_settings.servo_skull_cancel_mark_health_threshold
+    end
+
+    if time_threshold > 0 then
+        if mod:is_servo_skull_target_visible(marked_unit, fixed_frame, true) then
+            tag_context.servo_skull_lose_sight_time = nil
+        elseif tag_context.servo_skull_lose_sight_time == nil then
+            tag_context.servo_skull_lose_sight_time = t
+        end
+
+        if tag_context.servo_skull_lose_sight_time and t - tag_context.servo_skull_lose_sight_time > time_threshold then
+            mod:print_debug("cancel servo skull mark due to time threshold")
+            tag_context.canceled_units[marked_unit] = t + 0.5
+            cancel_interval = CANCEL_INTERVAL
+            mod:cancel_mark(marked_tag._id)
+        end
+    end
+
+    if health_threshold > 0 then
+        local health_percent = Health.current_health_percent(marked_unit)
+        if health_percent < health_threshold then
+            mod:print_debug("cancel servo skull mark due to health threshold, health_percent:", health_percent)
+            tag_context.canceled_units[marked_unit] = math.huge
+            cancel_interval = CANCEL_INTERVAL
+            mod:cancel_mark(marked_tag._id)
+            return
+        end
     end
 end

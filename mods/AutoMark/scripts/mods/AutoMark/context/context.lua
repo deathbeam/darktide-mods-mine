@@ -53,11 +53,13 @@ local function init_player_components(player_data_extension)
     end
 
     context.talent_resource_component = player_data_extension:read_component("talent_resource")
+    context.disabled_character_state_component = player_data_extension:read_component("disabled_character_state")
     mod:print_debug("Init talent_resource_component")
 end
 
 local function destroy_player_components()
     context.talent_resource_component = nil
+    context.disabled_character_state_component = nil
 end
 
 -- Track Player Extensions

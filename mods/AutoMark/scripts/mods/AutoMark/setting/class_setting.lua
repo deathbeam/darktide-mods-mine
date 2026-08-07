@@ -47,7 +47,7 @@ cryptic_servo_skull_breed_priorities["chaos_poxwalker_bomber"] = 0
 
 local VETERAN_FOCUS_TARGET_DEFAULT_CLASS_SETTINGS = table_clone(DEFAULT_CLASS_SETTINGS)
 local veteran_focus_target_breed_priorities = VETERAN_FOCUS_TARGET_DEFAULT_CLASS_SETTINGS.breed_priorities
-veteran_focus_target_breed_priorities["chaos_daemonhost_passive"] = 0
+-- veteran_focus_target_breed_priorities["chaos_daemonhost_passive"] = 0
 veteran_focus_target_breed_priorities["chaos_mutator_daemonhost_passive"] = 0
 
 local function get_default_class_settings(class_name)

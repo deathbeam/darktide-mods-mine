@@ -177,17 +177,6 @@ local widgets = {
         type = "group",
         sub_widgets = {
             {
-                setting_id    = "companion_mark_ignore_unaggroed",
-                type          = "checkbox",
-                default_value = false,
-            },
-            {
-                setting_id    = "companion_range_limitation",
-                type          = "numeric",
-                default_value = 0,
-                range         = { 0, 100 },
-            },
-            {
                 setting_id      = "companion_mark_keybind",
                 type            = "keybind",
                 default_value   = {},
@@ -196,12 +185,56 @@ local widgets = {
                 function_name   = "companion_mark",
             },
             {
+                setting_id    = "companion_mark_ignore_unaggroed",
+                title         = "ignore_unaggroed",
+                type          = "checkbox",
+                default_value = false,
+            },
+            {
+                setting_id    = "companion_range_limitation",
+                title         = "companion_range_limitation",
+                tooltip       = "companion_range_limitation_tooltip",
+                type          = "numeric",
+                default_value = 0,
+                range         = { 0, 100 },
+            },
+            {
                 setting_id    = "execution_order_priority",
                 type          = "checkbox",
                 default_value = false,
                 sub_widgets   = {
                     {
                         setting_id    = "execution_order_force_mark",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
+                }
+            },
+            {
+                setting_id    = "companion_mark_sticky_targeting",
+                title         = "sticky_targeting",
+                tooltip       = "sticky_targeting_tooltip",
+                type          = "checkbox",
+                default_value = false,
+                sub_widgets   = {
+                    {
+                        setting_id    = "companion_mark_sticky_targeting_elite",
+                        title         = "elite",
+                        tooltip       = "elite_tooltip",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
+                    {
+                        setting_id    = "companion_mark_sticky_targeting_special",
+                        title         = "special",
+                        tooltip       = "special_tooltip",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
+                    {
+                        setting_id    = "companion_mark_sticky_targeting_boss",
+                        title         = "boss",
+                        tooltip       = "boss_tooltip",
                         type          = "checkbox",
                         default_value = false,
                     },
@@ -224,6 +257,8 @@ local widgets = {
                     },
                     {
                         setting_id      = "companion_health_threshold",
+                        title           = "health_threshold",
+                        tooltip         = "companion_health_threshold_tooltip",
                         type            = "numeric",
                         default_value   = 0,
                         range           = { 0, 1 },
@@ -231,6 +266,8 @@ local widgets = {
                     },
                     {
                         setting_id      = "companion_time_threshold",
+                        title           = "time_threshold",
+                        tooltip         = "companion_time_threshold_tooltip",
                         type            = "numeric",
                         default_value   = 0,
                         range           = { 0, 25 },
@@ -238,6 +275,8 @@ local widgets = {
                     },
                     {
                         setting_id      = "companion_distance_threshold",
+                        title           = "distance_threshold",
+                        tooltip         = "companion_distance_threshold_tooltip",
                         type            = "numeric",
                         default_value   = 0,
                         range           = { 0, 100 },
@@ -247,12 +286,16 @@ local widgets = {
             },
             {
                 setting_id    = "companion_cancel_mark_breed_name",
+                title         = "enemy_settings",
+                tooltip       = "enemy_settings_tooltip",
                 type          = "dropdown",
                 default_value = breed_name_options[1].value,
                 options       = table.clone(breed_name_options),
                 sub_widgets   = {
                     {
                         setting_id    = "companion_cancel_mark_reset",
+                        title         = "enemy_settings_reset",
+                        tooltip       = "enemy_settings_reset_tooltip",
                         type          = "dropdown",
                         default_value = "blank",
                         options       = {
@@ -262,11 +305,36 @@ local widgets = {
                     },
                     {
                         setting_id    = "companion_cancel_mark_breed_override",
+                        title         = "enemy_settings_override",
+                        tooltip       = "enemy_settings_override_tooltip",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
+                    {
+                        setting_id    = "companion_range_limitation_breed",
+                        title         = "companion_range_limitation",
+                        tooltip       = "companion_range_limitation_tooltip",
+                        type          = "numeric",
+                        default_value = 0,
+                        range         = { 0, 100 },
+                    },
+                    {
+                        setting_id    = "companion_mark_max_distance_breed",
+                        type          = "numeric",
+                        default_value = 0,
+                        range         = { 0, 100 },
+                    },
+                    {
+                        setting_id    = "companion_mark_sticky_targeting_breed",
+                        title         = "sticky_targeting",
+                        tooltip       = "sticky_targeting_tooltip",
                         type          = "checkbox",
                         default_value = false,
                     },
                     {
                         setting_id      = "companion_cancel_mark_breed_health_threshold",
+                        title           = "health_threshold",
+                        tooltip         = "companion_health_threshold_tooltip",
                         type            = "numeric",
                         default_value   = 0,
                         range           = { 0, 1 },
@@ -274,6 +342,8 @@ local widgets = {
                     },
                     {
                         setting_id      = "companion_cancel_mark_breed_time_threshold",
+                        title           = "time_threshold",
+                        tooltip         = "companion_time_threshold_tooltip",
                         type            = "numeric",
                         default_value   = 0,
                         range           = { 0, 25 },
@@ -281,6 +351,8 @@ local widgets = {
                     },
                     {
                         setting_id      = "companion_cancel_mark_breed_distance_threshold",
+                        title           = "distance_threshold",
+                        tooltip         = "companion_distance_threshold_tooltip",
                         type            = "numeric",
                         default_value   = 0,
                         range           = { 0, 100 },
@@ -295,24 +367,26 @@ local widgets = {
         type = "group",
         sub_widgets = {
             {
-                setting_id    = "servo_skull_mark_ignore_unaggroed",
-                type          = "checkbox",
-                default_value = false,
-            },
-            {
-                setting_id      = "servo_skull_cancel_mark_time_threshold",
-                type            = "numeric",
-                default_value   = 0,
-                range           = { 0, 25 },
-                decimals_number = 1
-            },
-            {
                 setting_id      = "servo_skull_mark_keybind",
                 type            = "keybind",
                 default_value   = {},
                 keybind_trigger = "pressed",
                 keybind_type    = "function_call",
                 function_name   = "servo_skull_mark",
+            },
+            {
+                setting_id    = "servo_skull_mark_ignore_unaggroed",
+                title         = "ignore_unaggroed",
+                type          = "checkbox",
+                default_value = false,
+            },
+            {
+                setting_id    = "servo_skull_range_limitation",
+                title         = "companion_range_limitation",
+                tooltip       = "companion_range_limitation_tooltip",
+                type          = "numeric",
+                default_value = 0,
+                range         = { 0, 100 },
             },
             {
                 setting_id      = "hack_mark_keybind",
@@ -341,16 +415,19 @@ local widgets = {
                 sub_widgets   = {
                     {
                         setting_id    = "noospheric_command_boost_elite",
+                        title         = "elite",
                         type          = "checkbox",
                         default_value = false,
                     },
                     {
                         setting_id    = "noospheric_command_boost_special",
+                        title         = "special",
                         type          = "checkbox",
                         default_value = false,
                     },
                     {
                         setting_id    = "noospheric_command_boost_boss",
+                        title         = "boss",
                         type          = "checkbox",
                         default_value = false,
                     },
@@ -363,6 +440,7 @@ local widgets = {
                 sub_widgets   = {
                     {
                         setting_id      = "capacitance_retention_elite_threshold",
+                        title           = "elite",
                         type            = "numeric",
                         default_value   = 0,
                         range           = { -10, 10 },
@@ -370,6 +448,7 @@ local widgets = {
                     },
                     {
                         setting_id      = "capacitance_retention_special_threshold",
+                        title           = "special",
                         type            = "numeric",
                         default_value   = 0,
                         range           = { -10, 10 },
@@ -377,6 +456,7 @@ local widgets = {
                     },
                     {
                         setting_id      = "capacitance_retention_boss_threshold",
+                        title           = "boss",
                         type            = "numeric",
                         default_value   = 0,
                         range           = { -10, 10 },
@@ -385,13 +465,72 @@ local widgets = {
                 }
             },
             {
+                setting_id    = "servo_skull_mark_sticky_targeting",
+                title         = "sticky_targeting",
+                tooltip       = "sticky_targeting_tooltip",
+                type          = "checkbox",
+                default_value = false,
+                sub_widgets   = {
+                    {
+                        setting_id    = "servo_skull_mark_sticky_targeting_elite",
+                        title         = "elite",
+                        tooltip       = "elite_tooltip",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
+                    {
+                        setting_id    = "servo_skull_mark_sticky_targeting_special",
+                        title         = "special",
+                        tooltip       = "special_tooltip",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
+                    {
+                        setting_id    = "servo_skull_mark_sticky_targeting_boss",
+                        title         = "boss",
+                        tooltip       = "boss_tooltip",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
+                }
+            },
+            {
+                setting_id    = "servo_skull_cancel_mark",
+                type          = "checkbox",
+                default_value = false,
+                sub_widgets   = {
+                    {
+                        setting_id      = "servo_skull_cancel_mark_time_threshold",
+                        title           = "servo_skull_lose_sight_tolerance",
+                        tooltip         = "servo_skull_lose_sight_tolerance_tooltip",
+                        type            = "numeric",
+                        default_value   = 0,
+                        range           = { 0, 25 },
+                        decimals_number = 1
+                    },
+                    {
+                        setting_id      = "servo_skull_cancel_mark_health_threshold",
+                        title           = "health_threshold",
+                        tooltip         = "servo_skull_health_threshold_tooltip",
+                        type            = "numeric",
+                        default_value   = 0,
+                        range           = { 0, 1 },
+                        decimals_number = 2
+                    },
+                }
+            },
+            {
                 setting_id    = "noospheric_command_boost_breed_name",
+                title         = "enemy_settings",
+                tooltip       = "enemy_settings_tooltip",
                 type          = "dropdown",
                 default_value = breed_name_options[1].value,
                 options       = table.clone(breed_name_options),
                 sub_widgets   = {
                     {
                         setting_id    = "noospheric_command_boost_reset",
+                        title         = "enemy_settings_reset",
+                        tooltip       = "enemy_settings_reset_tooltip",
                         type          = "dropdown",
                         default_value = "blank",
                         options       = {
@@ -401,8 +540,18 @@ local widgets = {
                     },
                     {
                         setting_id    = "noospheric_command_boost_breed_override",
+                        title         = "enemy_settings_override",
+                        tooltip       = "enemy_settings_override_tooltip",
                         type          = "checkbox",
                         default_value = false,
+                    },
+                    {
+                        setting_id    = "servo_skull_range_limitation_breed",
+                        title         = "companion_range_limitation",
+                        tooltip       = "companion_range_limitation_tooltip",
+                        type          = "numeric",
+                        default_value = 0,
+                        range         = { 0, 100 },
                     },
                     {
                         setting_id    = "noospheric_command_boost_breed_toggle",
@@ -416,6 +565,31 @@ local widgets = {
                         range           = { -10, 10 },
                         decimals_number = 2,
                     },
+                    {
+                        setting_id    = "servo_skull_mark_sticky_targeting_breed",
+                        title         = "sticky_targeting",
+                        tooltip       = "sticky_targeting_tooltip",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
+                    {
+                        setting_id      = "servo_skull_cancel_mark_breed_time_threshold",
+                        title           = "servo_skull_lose_sight_tolerance",
+                        tooltip         = "servo_skull_lose_sight_tolerance_tooltip",
+                        type            = "numeric",
+                        default_value   = 0,
+                        range           = { 0, 25 },
+                        decimals_number = 1
+                    },
+                    {
+                        setting_id      = "servo_skull_cancel_mark_breed_health_threshold",
+                        title           = "health_threshold",
+                        tooltip         = "servo_skull_health_threshold_tooltip",
+                        type            = "numeric",
+                        default_value   = 0,
+                        range           = { 0, 1 },
+                        decimals_number = 2
+                    },
                 }
             },
         }
@@ -426,6 +600,7 @@ local widgets = {
         sub_widgets = {
             {
                 setting_id    = "focus_target_ignore_unaggroed",
+                title         = "ignore_unaggroed",
                 type          = "checkbox",
                 default_value = false,
             },
@@ -445,6 +620,11 @@ local widgets = {
                 type          = "checkbox",
                 default_value = false,
                 sub_widgets   = {
+                    {
+                        setting_id    = "focus_target_switch_override_manual",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
                     {
                         setting_id    = "focus_target_switch_melee",
                         type          = "checkbox",
@@ -498,7 +678,7 @@ local widgets = {
                 setting_id    = "cooldown",
                 type          = "numeric",
                 default_value = 25,
-                range         = { 1, 50 },
+                range         = { 3, 50 },
             },
             {
                 setting_id = "reset_cooldown",

@@ -11,7 +11,7 @@ local Managers     = Managers
 local callback     = callback
 
 -- Constants
-local MELEE_RANGE  = 5
+local MELEE_RANGE  = 4.5
 
 -- Manual Focus Target Mark on Attack
 local function focus_target_switch_callback(is_melee)
@@ -35,12 +35,30 @@ local function focus_target_switch_callback(is_melee)
         return
     end
 
-    mod:on_manual_mark(mark_context[tag_name], target_unit)
+    local tag_context = mark_context[tag_name]
+    if is_melee then
+        tag_context.switch_melee_unit = target_unit
+    else
+        tag_context.switch_range_unit = target_unit
+    end
+    tag_context.switch_unit_expired_time = mod:get_latest_fixed_time() + 1
+
+    mod:on_manual_mark(tag_context, target_unit)
+    mod:print_debug("Focus Target Switch", target_unit)
     mod:mark(tag_name, target_unit, target_tag)
 end
 
 local function focus_target_switch(is_melee)
     if not context.mod_enabled or not context.game_mode_valid or context.class_name ~= "veteran" or not context.has_focus_target then
+        return
+    end
+
+    local tag_context = mark_context[TAG_NAMES.VETERAN_TAG]
+    if mark_context.auto_mark_interval > 0 or tag_context.delay > 0 then
+        return
+    end
+
+    if not mod_settings.focus_target_switch_override_manual and tag_context.is_manual and not tag_context.is_switch_melee and not tag_context.is_switch_range then
         return
     end
 
@@ -64,19 +82,14 @@ mod:hook_safe(CLASS.ActionHandler, "start_action",
             return
         end
 
-        if not mod_settings.toggle_mod
-            or not mod_settings.focus_target_switch
-            or id ~= "weapon_action"
-            or mark_context.auto_mark_interval > 0
-            or mark_context[TAG_NAMES.VETERAN_TAG].delay > 0
-        then
-            return
-        end
-
-        local action_kind = action_settings.kind
-        if mod_settings.focus_target_switch_melee and MELEE_ACTION_KINDS[action_kind] then
-            focus_target_switch(true)
-        elseif mod_settings.focus_target_switch_range and RANGED_ACTION_KINDS[action_kind] then
-            focus_target_switch(false)
+        if id == "weapon_action" then
+            if mod_settings.toggle_mod and mod_settings.focus_target_switch then
+                local action_kind = action_settings.kind
+                if mod_settings.focus_target_switch_melee and MELEE_ACTION_KINDS[action_kind] then
+                    focus_target_switch(true)
+                elseif mod_settings.focus_target_switch_range and RANGED_ACTION_KINDS[action_kind] then
+                    focus_target_switch(false)
+                end
+            end
         end
     end)

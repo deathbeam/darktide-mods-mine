@@ -4,6 +4,7 @@ local context                                          = mod.context
 local mark_context                                     = mod.mark_context
 local TAG_NAMES                                        = mod.TAG_NAMES
 local mod_settings                                     = mod.settings
+local companion_cancel_mark_breed_settings             = mod.companion_cancel_mark_breed_settings
 local noospheric_command_breed_settings                = mod.noospheric_command_breed_settings
 local visibility_cache                                 = mod.visibility_cache
 local visibility_check_frame                           = mod.visibility_check_frame
@@ -92,14 +93,14 @@ end
 
 local function get_breed_priority(unit, breed_data, breed_priorities)
     local breed_name = breed_data and breed_data.name
-    if breed_data.tags.witch then
-        if is_daemonhost_aggroed(unit) then
-            return breed_priorities[breed_name]
+    if breed_data and breed_data.tags.witch then
+        if is_target_aggroed(unit) then
+            return breed_priorities[breed_name] or 0, false
         else
-            return breed_priorities[breed_name .. "_passive"]
+            return breed_priorities[breed_name .. "_passive"] or 0, true
         end
     else
-        return breed_priorities[breed_name]
+        return breed_priorities[breed_name] or 0, false
     end
 end
 
@@ -170,14 +171,22 @@ local function can_focus_target_overwrite(target_unit, target_tag)
         return false
     end
 
-    if player_stack_count == context.focus_target_max_stacks or player_stack_count - target_stack_count >= mod_settings.focus_target_overwrite_delta then
-        return true
-    end
+    return player_stack_count == context.focus_target_max_stacks
+        or player_stack_count - target_stack_count >= mod_settings.focus_target_overwrite_delta
 end
 
 -- Check if Tagged Target Unit can be Marked with Current Tag
 local function is_target_valid(tag_name, target_tag, target_unit, target_position, target_breed_data)
     if tag_name == TAG_NAMES.COMPANION_TAG then
+        local target_tag_name = target_tag and target_tag._template.name
+        if target_tag_name == TAG_NAMES.VETERAN_TAG then
+            local tag_context = mark_context[tag_name]
+            local removed_units = tag_context.removed_units
+            if removed_units[target_unit] then
+                return false
+            end
+        end
+
         if not target_breed_data then
             local unit_data_extension = ScriptUnit_extension(target_unit, "unit_data_system")
             target_breed_data = unit_data_extension and unit_data_extension._breed
@@ -187,19 +196,16 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_positio
             return false
         end
 
-        local target_tag_name = target_tag and target_tag._template.name
-        local pounce_setting = target_breed_data.companion_pounce_setting
-        local pounce_action = pounce_setting and pounce_setting.companion_pounce_action
-        if pounce_action == "human" then
-            if target_tag_name == TAG_NAMES.COMPANION_TAG or target_tag_name == TAG_NAMES.VETERAN_TAG then
-                return false
-            end
-        else
-            if target_tag_name == TAG_NAMES.VETERAN_TAG then
+        -- do not target same pouncable unit or unit tagged by focus target
+        if target_tag_name == TAG_NAMES.COMPANION_TAG then
+            local pounce_setting = target_breed_data.companion_pounce_setting
+            local pounce_action = pounce_setting and pounce_setting.companion_pounce_action
+            if pounce_action == "human" then
                 return false
             end
         end
 
+        -- check if target is aggroed or if ritual is started
         local breed_name = target_breed_data.name
         if breed_name == "chaos_mutator_ritualist" then
             if not is_ritual_started(target_unit) then
@@ -213,25 +219,69 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_positio
             end
         end
 
-        local companion_range_limitation = mod_settings.companion_range_limitation
-        if companion_range_limitation <= 0 then
-            return true
+        -- check if target is within range limitation
+        local breed_settings = companion_cancel_mark_breed_settings[breed_name]
+        local player_max_distance = 0
+        local companion_range_limitation = 0
+        if breed_settings and breed_settings.override then
+            player_max_distance = breed_settings.max_distance or 0
+            companion_range_limitation = breed_settings.range_limitation or 0
+        else
+            companion_range_limitation = mod_settings.companion_range_limitation or 0
         end
 
-        local companion_spawner_extension = context.companion_spawner_extension
-        local companion_units = companion_spawner_extension and companion_spawner_extension:companion_units()
-        local companion_unit = companion_units and companion_units[1]
-        if not companion_unit then
-            return false
-        end
+        if player_max_distance > 0 or companion_range_limitation > 0 then
+            local POSITION_LOOKUP = POSITION_LOOKUP
+            target_position = target_position or POSITION_LOOKUP[target_unit] or Unit_world_position(target_unit, 1)
+            if not target_position then
+                return false
+            end
 
-        local companion_unit_position = POSITION_LOOKUP[companion_unit] or Unit_world_position(companion_unit, 1)
-        if not companion_unit_position or not target_position then
-            return false
-        end
+            if player_max_distance > 0 then
+                local player = context.player
+                local player_unit = player and player.player_unit
+                if not player_unit then
+                    return false
+                end
 
-        return Vector3_distance_squared(companion_unit_position, target_position) <= companion_range_limitation * companion_range_limitation
+                local player_position = POSITION_LOOKUP[player_unit] or Unit_world_position(player_unit, 1)
+                if not player_position then
+                    return false
+                end
+
+                if Vector3_distance_squared(player_position, target_position) > player_max_distance * player_max_distance then
+                    return false
+                end
+            end
+
+            if companion_range_limitation > 0 then
+                local companion_spawner_extension = context.companion_spawner_extension
+                local companion_units = companion_spawner_extension and companion_spawner_extension:companion_units()
+                local companion_unit = companion_units and companion_units[1]
+                if not companion_unit then
+                    return false
+                end
+
+                local companion_unit_position = POSITION_LOOKUP[companion_unit] or Unit_world_position(companion_unit, 1)
+                if not companion_unit_position then
+                    return false
+                end
+
+                if Vector3_distance_squared(companion_unit_position, target_position) > companion_range_limitation * companion_range_limitation then
+                    return false
+                end
+            end
+        end
     elseif tag_name == TAG_NAMES.VETERAN_TAG then
+        local target_tag_name = target_tag and target_tag._template.name
+        if target_tag_name == TAG_NAMES.VETERAN_TAG or target_tag_name == TAG_NAMES.COMPANION_TAG or target_tag_name == TAG_NAMES.SERVO_SKULL_TAG then
+            local tag_context = mark_context[tag_name]
+            local removed_units = tag_context.removed_units
+            if removed_units[target_unit] then
+                return false
+            end
+        end
+
         if not target_breed_data then
             local unit_data_extension = ScriptUnit_extension(target_unit, "unit_data_system")
             target_breed_data = unit_data_extension and unit_data_extension._breed
@@ -246,11 +296,18 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_positio
             return false
         end
 
-        return can_focus_target_overwrite(target_unit, target_tag)
+        if not can_focus_target_overwrite(target_unit, target_tag) then
+            return false
+        end
     elseif tag_name == TAG_NAMES.SERVO_SKULL_TAG then
+        -- do not target unit tagged by focus target
         local target_tag_name = target_tag and target_tag._template.name
         if target_tag_name == TAG_NAMES.VETERAN_TAG then
-            return false
+            local tag_context = mark_context[tag_name]
+            local removed_units = tag_context.removed_units
+            if removed_units[target_unit] then
+                return false
+            end
         end
 
         if not target_breed_data then
@@ -262,6 +319,7 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_positio
             return false
         end
 
+        -- check if target is aggroed or if ritual is started
         local breed_name = target_breed_data.name
         if breed_name == "chaos_mutator_ritualist" then
             if not is_ritual_started(target_unit) then
@@ -275,56 +333,90 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_positio
             end
         end
 
-        if not mod_settings.capacitance_retention or not context.has_noospheric_command then
-            return true
-        end
-
-        local player_ability_extension = context.player_ability_extension
-        if not player_ability_extension then
+        local companion_spawner_extension = context.companion_spawner_extension
+        local servo_skull_unit = companion_spawner_extension and companion_spawner_extension:spawned_unit_lookup(special_rules.cryptic_servo_skull_hack)
+        if not servo_skull_unit then
             return false
         end
 
+        -- check if target is within range limitation
         local breed_settings = noospheric_command_breed_settings[breed_name]
-        local capacitance_retention_threshold
+        local servo_skull_range_limitation = 0
         if breed_settings and breed_settings.override then
-            capacitance_retention_threshold = breed_settings.threshold or 0
-        end
-
-        if capacitance_retention_threshold == nil then
-            if target_breed_data.is_boss then
-                capacitance_retention_threshold = mod_settings.capacitance_retention_boss_threshold
-            elseif target_breed_data.tags.special then
-                capacitance_retention_threshold = mod_settings.capacitance_retention_special_threshold
-            else
-                capacitance_retention_threshold = mod_settings.capacitance_retention_elite_threshold
-            end
-        end
-
-        local max_ability_charges = player_ability_extension:max_ability_charges("combat_ability")
-        local remaining_ability_charges = player_ability_extension:remaining_ability_charges("combat_ability")
-        local max_ability_cooldown = player_ability_extension:max_ability_cooldown("combat_ability")
-        local remaining_ability_cooldown = player_ability_extension:remaining_ability_cooldown("combat_ability")
-
-        if 1 / capacitance_retention_threshold < 0 then
-            capacitance_retention_threshold = max_ability_charges + capacitance_retention_threshold
-        end
-
-        if remaining_ability_charges >= max_ability_charges then
-            return remaining_ability_charges >= capacitance_retention_threshold
+            servo_skull_range_limitation = breed_settings.range_limitation or 0
         else
-            if remaining_ability_cooldown == 0 then
+            servo_skull_range_limitation = mod_settings.servo_skull_range_limitation or 0
+        end
+
+        if servo_skull_range_limitation > 0 then
+            local POSITION_LOOKUP = POSITION_LOOKUP
+            local servo_skull_position = POSITION_LOOKUP[servo_skull_unit] or Unit_world_position(servo_skull_unit, 1)
+            if not servo_skull_position then
                 return false
             end
 
-            return remaining_ability_charges + (max_ability_cooldown - remaining_ability_cooldown) / max_ability_cooldown >= capacitance_retention_threshold
+            target_position = target_position or POSITION_LOOKUP[target_unit] or Unit_world_position(target_unit, 1)
+            if not target_position then
+                return false
+            end
+
+            if Vector3_distance_squared(servo_skull_position, target_position) > servo_skull_range_limitation * servo_skull_range_limitation then
+                return false
+            end
+        end
+
+        -- check if capacitance is sufficient
+        if mod_settings.capacitance_retention and context.has_noospheric_command then
+            local player_ability_extension = context.player_ability_extension
+            if not player_ability_extension then
+                return false
+            end
+
+            local capacitance_retention_threshold
+            if breed_settings and breed_settings.override then
+                capacitance_retention_threshold = breed_settings.threshold or 0
+            end
+
+            if capacitance_retention_threshold == nil then
+                if target_breed_data.is_boss then
+                    capacitance_retention_threshold = mod_settings.capacitance_retention_boss_threshold
+                elseif target_breed_data.tags.special then
+                    capacitance_retention_threshold = mod_settings.capacitance_retention_special_threshold
+                else
+                    capacitance_retention_threshold = mod_settings.capacitance_retention_elite_threshold
+                end
+            end
+
+            local max_ability_charges = player_ability_extension:max_ability_charges("combat_ability")
+            local remaining_ability_charges = player_ability_extension:remaining_ability_charges("combat_ability")
+            local max_ability_cooldown = player_ability_extension:max_ability_cooldown("combat_ability")
+            local remaining_ability_cooldown = player_ability_extension:remaining_ability_cooldown("combat_ability")
+
+            if 1 / capacitance_retention_threshold < 0 then
+                capacitance_retention_threshold = max_ability_charges + capacitance_retention_threshold
+            end
+
+            if remaining_ability_charges >= max_ability_charges then
+                if remaining_ability_charges < capacitance_retention_threshold then
+                    return false
+                end
+            else
+                if remaining_ability_cooldown == 0 then
+                    return false
+                end
+
+                if remaining_ability_charges + (max_ability_cooldown - remaining_ability_cooldown) / max_ability_cooldown < capacitance_retention_threshold then
+                    return false
+                end
+            end
         end
     elseif tag_name == TAG_NAMES.ENEMY_TAG then
-        if not target_tag then
-            return true
+        if target_tag then
+            return false
         end
     end
 
-    return false
+    return true
 end
 
 local function is_target_visible(ray_origin, up, hit_unit_center_pos, half_height, hit_unit, fixed_frame)
@@ -459,12 +551,13 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
     end
 
     local fixed_frame = smart_targeting_extension._latest_fixed_frame
-    local canceled_unit = tag_context and tag_context.canceled_unit
+    local canceled_units = tag_context and tag_context.canceled_units or EMPTY_TABLE
     local breed_priorities = class_settings and class_settings.breed_priorities or EMPTY_TABLE
-    local execution_order_units = mark_context.execution_order_units
+    local execution_order_units = mark_context.execution_order_units or EMPTY_TABLE
     local best_unit = nil
     local best_unit_tag = nil
     local best_unit_priority = -math.huge
+    local best_unit_is_dormant_daemonhost = false
     local best_unit_marked_by_execution_order = false
     local best_unit_dot = -math.huge
     local best_unit_distance = math.huge
@@ -474,7 +567,7 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
         best_unit = marked_unit
         local unit_data_extension = ScriptUnit_extension(best_unit, "unit_data_system")
         local breed_data = unit_data_extension and unit_data_extension._breed
-        best_unit_priority = get_breed_priority(best_unit, breed_data, breed_priorities) or 0
+        best_unit_priority, best_unit_is_dormant_daemonhost = get_breed_priority(best_unit, breed_data, breed_priorities)
         best_unit_marked_by_execution_order = not not execution_order_units[best_unit]
     end
 
@@ -488,7 +581,7 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
 
         local hit_unit = Actor_unit(hit_actor)
         -- ignore player unit, already marked unit and dead unit
-        if hit_unit == player_unit or hit_unit == marked_unit or hit_unit == canceled_unit or not HEALTH_ALIVE[hit_unit] then
+        if hit_unit == player_unit or hit_unit == marked_unit or canceled_units[hit_unit] or not HEALTH_ALIVE[hit_unit] then
             goto continue
         end
 
@@ -498,7 +591,7 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
         if not breed_data or breed_data.smart_tag_target_type ~= "breed" then
             goto continue
         end
-        local hit_unit_priority = get_breed_priority(hit_unit, breed_data, breed_priorities) or 0
+        local hit_unit_priority, hit_unit_is_dormant_daemonhost = get_breed_priority(hit_unit, breed_data, breed_priorities)
         local hit_unit_marked_by_execution_order = not not execution_order_units[hit_unit]
         -- filter unit by type and priority
         if use_filter and (hit_unit_priority <= 0 or not is_breed_group_valid(breed_data, class_settings)) then
@@ -508,7 +601,7 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
                 or not hit_unit_marked_by_execution_order
                 or breed_name == "chaos_poxwalker_bomber"
                 or breed_name == "chaos_ogryn_houndmaster"
-                or (breed_name == "chaos_daemonhost" or breed_name == "chaos_mutator_daemonhost_passive") and not is_daemonhost_aggroed(hit_unit)
+                or hit_unit_is_dormant_daemonhost
             then
                 goto continue
             end
@@ -565,6 +658,7 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
             best_unit = hit_unit
             best_unit_tag = hit_unit_tag
             best_unit_priority = hit_unit_priority
+            best_unit_is_dormant_daemonhost = hit_unit_is_dormant_daemonhost
             best_unit_marked_by_execution_order = hit_unit_marked_by_execution_order
         elseif type == "focus_target_melee" then
             if best_unit and best_unit_distance <= 3.5 and distance > 3.5 then
@@ -602,10 +696,10 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
     end
 
     if best_unit ~= marked_unit then
-        return best_unit, best_unit_tag
+        return best_unit, best_unit_tag, best_unit_is_dormant_daemonhost
     end
 
-    return nil
+    return nil, nil, nil
 end
 
 function mod:is_target_valid(tag_name, target_tag, target_unit, target_position, target_breed_data)
@@ -627,7 +721,7 @@ function mod:is_noospheric_command_boost_breed_valid(target_unit)
         return false
     end
 
-    if breed_data.tags.witch and not is_daemonhost_aggroed(target_unit) then
+    if breed_data.tags.witch and not is_target_aggroed(target_unit) then
         return false
     end
 

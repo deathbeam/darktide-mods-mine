@@ -16,10 +16,11 @@ local CLASS                                = CLASS
 local ScriptUnit                           = ScriptUnit
 
 -- Delay for Server Latency, Interval for Auto Mark
-local AUTO_MARK_DELAY                      = 0.5
-local AUTO_MARK_INTERVAL                   = 0.25
-local ENEMY_TAG_DELAY                      = 1
+local AUTO_MARK_DELAY                      = 1
+local AUTO_MARK_INTERVAL                   = 0.5
+local ENEMY_TAG_DELAY                      = 3
 local PRIORITY_SWITCH_DELAY                = 0.5
+local FOCUS_TARGET_DELAY                   = 1.5
 
 -- set delay and interval for auto mark
 local function on_set_tag(tag_context)
@@ -31,10 +32,7 @@ end
 local function on_manual_mark(tag_context, target_unit)
     mod:print_debug("manual mark unit:", target_unit)
     tag_context.manual_unit = target_unit
-end
-
-function mod:on_set_tag(tag_context)
-    on_set_tag(tag_context)
+    tag_context.manual_unit_expired_time = mod:get_latest_fixed_time() + 1
 end
 
 function mod:on_manual_mark(tag_context, target_unit)
@@ -192,6 +190,19 @@ mod:hook_safe(CLASS.SmartTag, "init",
                 tag_context.noospheric_command_next_time = math.huge
             end
             delay_normal_tag()
+        elseif tag_name == TAG_NAMES.VETERAN_TAG then
+            if tag_context.switch_melee_unit == target_unit then
+                tag_context.is_switch_melee = true
+                tag_context.is_switch_range = false
+            elseif tag_context.switch_range_unit == target_unit then
+                tag_context.is_switch_melee = false
+                tag_context.is_switch_range = true
+            else
+                tag_context.is_switch_melee = false
+                tag_context.is_switch_range = false
+            end
+            tag_context.switch_melee_unit = nil
+            tag_context.switch_range_unit = nil
         end
     end)
 
@@ -200,21 +211,30 @@ mod:hook(CLASS.SmartTag, "destroy",
         local tag_name = self._template.name
         local tag_context = mark_context[tag_name]
         if not tag_context then
-            return func(self)
+            return func(self, ...)
         end
 
         if tag_context.tag == self then
             if mod:get_class_settings(tag_name).reset_cooldown then
                 tag_context.cooldown = 0
             end
-            tag_context.tag = nil
-            tag_context.is_manual = false
             if tag_name == TAG_NAMES.COMPANION_TAG then
+                tag_context.removed_units[self._target_unit] = mod:get_latest_fixed_time() + 3
                 tag_context.pounce_start_time = nil
                 tag_context.is_cancelable = false
             elseif tag_name == TAG_NAMES.SERVO_SKULL_TAG then
+                tag_context.removed_units[self._target_unit] = mod:get_latest_fixed_time() + 3
                 tag_context.noospheric_command_next_time = math.huge
+            elseif tag_name == TAG_NAMES.VETERAN_TAG then
+                tag_context.removed_units[self._target_unit] = mod:get_latest_fixed_time() + 3
+                if tag_context.is_switch_melee and tag_context.cooldown < FOCUS_TARGET_DELAY then
+                    tag_context.cooldown = FOCUS_TARGET_DELAY
+                end
+                tag_context.is_switch_melee = false
+                tag_context.is_switch_range = false
             end
+            tag_context.tag = nil
+            tag_context.is_manual = false
         end
 
         return func(self, ...)
