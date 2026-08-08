@@ -620,7 +620,7 @@ function SequenceEngine:handle_input(action_name, raw_value)
             self.secondary_down = not not raw_value
             self.primary_release_required = is_block
         else
-            -- Movement interrupts must keep the held primary from re-arming an attack, so sprint/slide can sustain until the player releases.
+            -- Keep sprint/slide active until the held primary is released.
             self.interrupt_halt = true
         end
 
