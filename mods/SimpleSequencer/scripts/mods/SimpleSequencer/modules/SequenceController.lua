@@ -287,7 +287,7 @@ function SequenceController:_event_input(action_token)
 end
 
 -- Action start events are the authoritative progress signal; polling only fills gaps.
-function SequenceController:on_action_started(action_name, _used_input, t)
+function SequenceController:on_action_started(action_name, t)
     if not action_name or action_name == 'none' then
         return
     end
