@@ -1,4 +1,3 @@
-local mod = get_mod('SimpleSequencer')
 local Profiles = {
     sequence_step_count = 6,
     sequence_step_prefix = 'sequence_step_',
@@ -126,7 +125,7 @@ function Profiles.get(data, mode, kind, weapon_name)
     return kind_data[global_key], global_key
 end
 
-function Profiles.build_sequence(profile, kind, ranged_mode)
+function Profiles.build_sequence(profile, kind, aim_mode)
     local steps = {}
     local cycle_step = 0
     local repeating = false
@@ -150,7 +149,7 @@ function Profiles.build_sequence(profile, kind, ranged_mode)
             end
         end
     elseif profile and kind == 'RANGED' then
-        local fire_mode = ranged_mode == 'ads' and profile.automatic_fire_ads or profile.automatic_fire_hip
+        local fire_mode = aim_mode == 'ads' and profile.automatic_fire_ads or profile.automatic_fire_hip
 
         if fire_mode and fire_mode ~= 'none' then
             steps[1] = fire_mode

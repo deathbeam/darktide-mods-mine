@@ -66,6 +66,9 @@ local last_collect_low_yield = false
 local routine_collect_suppressed = false
 local gameplay_exit_clean_pending = false
 local gameplay_exit_clean_delay = nil
+local gameplay_exit_wait_for_debrief = false
+local gameplay_exit_debrief_seen = false
+local gameplay_exit_debrief_complete = false
 local high_threshold_cycle_active = false
 local warning_acknowledged = false
 local ninety_collect_done = false
@@ -90,6 +93,7 @@ local context_snapshot = {
 hud_allowed = false,
 collection_allowed = true,
 exit_cinematic_active = false,
+debrief_active = false,
 }
 local collection_context_was_blocked = false
 mod.cleaning_permitted = mod:get("cleaning_permitted") ~= false
@@ -380,8 +384,11 @@ return true
 end
 return false
 end
+local function gameplay_exit_collection_locked()
+return gameplay_exit_clean_pending and gameplay_exit_wait_for_debrief and not gameplay_exit_debrief_complete
+end
 local function perform_collect(notification_mode)
-if not context_snapshot.collection_allowed then
+if not context_snapshot.collection_allowed or gameplay_exit_collection_locked() then
 return current_heap_mb,current_heap_mb,0,false
 end
 if not cleaning_allowed() then
@@ -632,6 +639,7 @@ if not ok then
 context_snapshot.hud_allowed = false
 context_snapshot.collection_allowed = false
 context_snapshot.exit_cinematic_active = true
+context_snapshot.debrief_active = false
 context_snapshot.game_mode_name = nil
 return context_snapshot
 end
@@ -646,6 +654,7 @@ else
 context_snapshot.collection_allowed = not transition_blocked
 end
 context_snapshot.exit_cinematic_active = is_cinematic_active or cinematic_view or cutscene_view or mission_outro_view
+context_snapshot.debrief_active = end_view or end_player_view
 context_snapshot.game_mode_name = name
 return context_snapshot
 end
@@ -841,16 +850,29 @@ remove_scheduled_clean(i)
 end
 end
 end
-local function schedule_gameplay_exit_clean()
+local function schedule_gameplay_exit_clean(wait_for_debrief)
 if not mod.convenient_moment_cleans or not cleaning_allowed() then
 return
 end
+local was_pending = gameplay_exit_clean_pending
 gameplay_exit_clean_pending = true
 gameplay_exit_clean_delay = nil
+if wait_for_debrief == true then
+gameplay_exit_wait_for_debrief = true
+gameplay_exit_debrief_seen = false
+gameplay_exit_debrief_complete = false
+elseif not was_pending then
+gameplay_exit_wait_for_debrief = false
+gameplay_exit_debrief_seen = false
+gameplay_exit_debrief_complete = true
+end
 end
 local function clear_gameplay_exit_clean()
 gameplay_exit_clean_pending = false
 gameplay_exit_clean_delay = nil
+gameplay_exit_wait_for_debrief = false
+gameplay_exit_debrief_seen = false
+gameplay_exit_debrief_complete = false
 end
 local function tick_gameplay_exit_clean(dt)
 if not gameplay_exit_clean_pending then
@@ -860,7 +882,7 @@ if not mod.convenient_moment_cleans or not cleaning_allowed() then
 clear_gameplay_exit_clean()
 return false
 end
-if context_snapshot.exit_cinematic_active then
+if gameplay_exit_collection_locked() or context_snapshot.exit_cinematic_active then
 gameplay_exit_clean_delay = nil
 return false
 end
@@ -879,7 +901,7 @@ local function check_convenient_transitions()
 local name = context_snapshot.game_mode_name
 if name ~= previous_game_mode_name then
 if previous_game_mode_name and (is_training_mode(previous_game_mode_name) or is_mortis_mode(previous_game_mode_name) or is_expedition_mode(previous_game_mode_name)) then
-schedule_gameplay_exit_clean()
+schedule_gameplay_exit_clean(false)
 end
 if is_hub_mode(name) then
 if mourningstar_visit_state == "unseen" then
@@ -1070,10 +1092,13 @@ end
 mod.on_game_state_changed = function(status,state_name)
 if status == "enter" then
 if state_name == "StateGameplay" then
+if gameplay_exit_collection_locked() then
+gameplay_exit_debrief_complete = true
+end
 schedule_convenient_clean("gameplay_enter",1)
 end
 elseif status == "exit" and state_name == "StateGameplay" then
-schedule_gameplay_exit_clean()
+schedule_gameplay_exit_clean(true)
 end
 end
 mod.update = function(dt)
@@ -1088,6 +1113,13 @@ heap_sample_accumulator = math_min(heap_sample_accumulator + dt,check_interval)
 local frame_dt = math_min(dt,0.1)
 smoothed_frame_time = smoothed_frame_time * 0.9 + frame_dt * 0.1
 refresh_context_snapshot()
+if gameplay_exit_clean_pending and gameplay_exit_wait_for_debrief and not gameplay_exit_debrief_complete then
+if context_snapshot.debrief_active then
+gameplay_exit_debrief_seen = true
+elseif gameplay_exit_debrief_seen then
+gameplay_exit_debrief_complete = true
+end
+end
 if not first_update_done then
 first_update_done = true
 previous_game_mode_name = context_snapshot.game_mode_name
@@ -1097,7 +1129,7 @@ mourningstar_visit_state = "waiting"
 schedule_convenient_clean("mourningstar",mourningstar_clean_delay_seconds)
 end
 end
-local collection_blocked = not context_snapshot.collection_allowed
+local collection_blocked = not context_snapshot.collection_allowed or gameplay_exit_collection_locked()
 if collection_blocked then
 if not collection_context_was_blocked then
 collection_context_was_blocked = true

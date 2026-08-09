@@ -100,7 +100,7 @@ local function _resolve_command(context, command)
     local candidates = COMMAND_TARGETS[command]
     local default_candidates = candidates
 
-    if context.ranged_mode == 'ads' and (command == 'standard' or command == 'charged') then
+    if context.aim_mode == 'ads' and (command == 'standard' or command == 'charged') then
         candidates = { 'shoot_braced' }
     end
 
@@ -155,6 +155,19 @@ local function _action_chain_matches_input(template, input_name, action_name)
     return false
 end
 
+function ActionSemantics.action_matches_input(template, input_name, action_name)
+    if not template or not input_name or not action_name then
+        return false
+    end
+
+    local action = template.actions and template.actions[action_name]
+    if action and action.start_input == input_name then
+        return true
+    end
+
+    return _action_chain_matches_input(template, input_name, action_name)
+end
+
 -- Runtime action matching
 function ActionSemantics.matched_input_index(goal, start_input, action_name, template, used_input)
     if not goal then
@@ -177,16 +190,8 @@ function ActionSemantics.matched_input_index(goal, start_input, action_name, tem
     end
 
     if action_name and template then
-        local action = template.actions and template.actions[action_name]
-
         for index, input_name in ipairs(goal.inputs or {}) do
-            if action and action.start_input == input_name then
-                return index
-            end
-        end
-
-        for index, input_name in ipairs(goal.inputs or {}) do
-            if _action_chain_matches_input(template, input_name, action_name) then
+            if ActionSemantics.action_matches_input(template, input_name, action_name) then
                 return index
             end
         end
@@ -200,7 +205,6 @@ function ActionSemantics.compile(sequence, context)
     local plan = {
         goals = {},
         goal_cycle_index = 0,
-        repeating = false,
         unresolved_steps = {},
     }
 
@@ -252,9 +256,6 @@ function ActionSemantics.compile(sequence, context)
             plan.goal_cycle_index = 1
         end
     end
-
-    plan.repeating = sequence.repeating
-
     return plan
 end
 
