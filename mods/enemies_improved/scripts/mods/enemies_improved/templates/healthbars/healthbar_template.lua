@@ -77,6 +77,8 @@ local math_floor = math.floor
 
 local string_format = string.format
 local table_remove = table.remove
+local table_insert = table.insert
+local table_contains = table.contains
 local table_index_of = table.index_of
 local table_clone = table.clone
 local next = next
@@ -125,6 +127,14 @@ local peak_cluster_max_by_rep = {}
 local damage_number_pool = {}
 mod.damage_number_pool = damage_number_pool
 
+if mod.DEBUG then
+	local mem = mod.mem_profile
+	mem.track("healthbar.previous_health", previous_health)
+	mem.track("healthbar.last_damaged_time", last_damaged_time)
+	mem.track("healthbar.peak_cluster_max_by_rep", peak_cluster_max_by_rep)
+	mem.track("healthbar.damage_number_pool", damage_number_pool)
+end
+
 local armor_type_string_lookup = {
 	armored = "loc_weapon_stats_display_armored",
 	berserker = "loc_weapon_stats_display_berzerker",
@@ -135,7 +145,10 @@ local armor_type_string_lookup = {
 }
 
 mod.latest_damaged_enemies = {}
-mod.latest_damaged_enemies_set = {}
+
+if mod.DEBUG then
+	mod.mem_profile.track("mod.latest_damaged_enemies", mod.latest_damaged_enemies)
+end
 
 -----------------------------------------------------------------------
 -- Damage number dispatcher
@@ -998,13 +1011,13 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 		if show_damage_number then
 			if fs.hb_damage_show_only_latest then
 				-- add new unit to the end
-				table.insert(mod.latest_damaged_enemies, unit)
-				mod.latest_damaged_enemies_set[unit] = true
+				if not table_contains(mod.latest_damaged_enemies, unit) then
+					table_insert(mod.latest_damaged_enemies, unit)
+				end
 
 				-- remove oldest entries if we exceed the limit
 				while #mod.latest_damaged_enemies > fs.hb_damage_show_only_latest_value do
-					local removed = table_remove(mod.latest_damaged_enemies, 1)
-					mod.latest_damaged_enemies_set[removed] = nil
+					table_remove(mod.latest_damaged_enemies, 1)
 				end
 			end
 
@@ -1337,6 +1350,13 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 			content.draw_hb = false
 			mod.enemy_healthbars[unit] = nil
 			marker.remove = true
+			-- Release marker entry references so the (now removed) marker + widget can be GC'd
+			local cache_entry = mod.enemy_cache[unit]
+			if cache_entry then
+				cache_entry.marker = nil
+				cache_entry.healthbar = nil
+				cache_entry.dot_debuffs = nil
+			end
 			--Managers.event:trigger("remove_world_marker", marker.id)
 		end
 	end
@@ -1400,7 +1420,9 @@ template.update_function = function(parent, ui_renderer, widget, marker, templat
 	end
 
 	if fs.hb_damage_show_only_latest then
-		if not mod.latest_damaged_enemies_set[unit] then
+		if table_contains(mod.latest_damaged_enemies, unit) then
+			content.draw_hb = true
+		else
 			content.draw_hb = false
 		end
 	end

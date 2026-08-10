@@ -3,27 +3,6 @@ local WeaponContext = {}
 -- The calibration data below is adapted from Skitarius (GPL-3.0-only).
 -- See SimpleSequencer/NOTICE and SimpleSequencer/LICENSE.
 local CHAIN_TIME_OVERRIDES = {
-    ogryn_powermaul_slabshield_p1_m1 = {
-        action_right_heavy = { [0.35] = 0.5, [0.4] = 0.45 },
-    },
-    ogryn_club_p2_m3 = {
-        action_right_heavy = { [0.5] = 0.55 },
-    },
-    combataxe_p2_m3 = {
-        action_left_heavy = { [0.25] = 0.3 },
-    },
-    powermaul_2h_p1_m1 = {
-        action_right_heavy = { [0.35] = 0.45 },
-    },
-    combataxe_p2_m1 = {
-        action_left_heavy = { [0.25] = 0.3 },
-    },
-    combatknife_p1_m1 = {
-        action_left_heavy = { [0.3] = 0.35 },
-    },
-    combatknife_p1_m2 = {
-        action_left_heavy = { [0.3] = 0.35 },
-    },
 }
 
 local INVERTED_TIME_SCALE_KINDS = {

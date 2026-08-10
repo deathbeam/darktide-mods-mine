@@ -26,6 +26,14 @@ local Quaternion_forward = Quaternion.forward
 mod.DEBUG = false
 if mod.DEBUG then
 	dbg_mod = mod
+
+	local MemProfile = mod:io_dofile("enemies_improved/scripts/mods/enemies_improved/utils/mem_profile")
+	mod.mem_profile = MemProfile
+
+	mod.update = function(dt)
+		mod.mem_profile.tick(dt)
+		mod.mem_profile.render_gui()
+	end
 end
 
 mod.detect_alive = function(unit)
@@ -122,6 +130,25 @@ local _spatial_hash = {}
 local _visited = {}
 local _z_samples = {}
 local _bfs_queue = {}
+
+-- track variables with the memory profiler for growth/leak monitoring
+if mod.DEBUG then
+	local mem = mod.mem_profile
+	mem.track("cluster._horde_clusters", _horde_clusters)
+	mem.track("cluster._horde_cluster_by_unit", _horde_cluster_by_unit)
+	mem.track("cluster._cull_pool", _cull_pool)
+	mem.track("cluster._spatial_hash", _spatial_hash)
+	mem.track("cluster._visited", _visited)
+	mem.track("cluster._z_samples", _z_samples)
+	mem.track("cluster._bfs_queue", _bfs_queue)
+	mem.track("mod._broadphase_results", mod._broadphase_results)
+	mem.track("mod.enemy_cache", mod.enemy_cache)
+	mem.track("mod.enemy_markers", mod.enemy_markers)
+	mem.track("mod.enemy_healthbars", mod.enemy_healthbars)
+	mem.track("mod.enemy_debuffs", mod.enemy_debuffs)
+	mem.track("mod.marked_dead", mod.marked_dead)
+	mem.track("mod.source_unit_cache", mod.source_unit_cache)
+end
 
 local COLOUR_LOOKUP = {
 	Gold = { 255, 232, 188, 109 },
@@ -276,9 +303,57 @@ mod:hook_safe(CLASS.HudElementWorldMarkers, "init", function(self)
 	add_custom_templates(self)
 end)
 
+-- Vanilla _unregister_marker never frees the marker widget: it stays referenced in HudElementBase._widgets_by_name (and the element's _widgets render list) forever, leaking memory every time a marker is removed.
+-- This hook captures the marker before vanilla drops all references to it, then release the widget afterwards.
+mod:hook(CLASS.HudElementWorldMarkers, "_unregister_marker", function(previous_hook, self, marker)
+	local widget = marker and marker.widget
+
+	previous_hook(self, marker)
+
+	if widget then
+		local widgets_by_name = self._widgets_by_name
+
+		if widgets_by_name then
+			local widget_name = marker.widget_name
+
+			if not widget_name and marker.id then
+				widget_name = "marker_widget_id_" .. marker.id
+			end
+
+			if widget_name and widgets_by_name[widget_name] == widget then
+				widgets_by_name[widget_name] = nil
+			else
+				for name, w in pairs(widgets_by_name) do
+					if w == widget then
+						widgets_by_name[name] = nil
+						break
+					end
+				end
+			end
+		end
+
+		local widgets = self._widgets
+
+		if widgets then
+			for i = 1, #widgets do
+				if widgets[i] == widget then
+					table_remove(widgets, i)
+					break
+				end
+			end
+		end
+	end
+end)
+
 mod.aimed_unit = {}
 mod.tagged_units = {}
 mod._periodic_cache_clear_timer = 0
+
+if mod.DEBUG then
+	mod.mem_profile.track("mod.aimed_unit", mod.aimed_unit)
+	mod.mem_profile.track("mod.tagged_units", mod.tagged_units)
+end
+
 -----------------------------------------------------------------------
 -- Hook into the markers update to recalculate enemies.
 -----------------------------------------------------------------------
@@ -408,7 +483,7 @@ mod:hook_safe(CLASS.HudElementWorldMarkers, "update", function(self, dt, t)
 
 		-- PERIODIC FULL CACHE CLEAR — runs every ~2 minutes to flush any accumulated stale data
 		mod._periodic_cache_clear_timer = mod._periodic_cache_clear_timer + dt
-		if mod._periodic_cache_clear_timer >= 120 then
+		if mod._periodic_cache_clear_timer >= 60 then
 			mod._periodic_cache_clear_timer = 0
 			mod.clear_caches()
 		end
@@ -423,7 +498,7 @@ mod.get_marker_by_id = function(id)
 
 	-- DEBUG TO CREATE MARKER LIST
 	--if mod.DEBUG then
-		--dbg_markers = world_markers._markers_by_type
+	--dbg_markers = world_markers._markers_by_type
 	--end
 
 	if markers_by_id then
@@ -463,6 +538,10 @@ mod.force_remove_unit_markers = function(unit)
 	if entry then
 		entry._ei_marker_created = false
 		entry._ei_marker_pending = nil
+		-- Release marker entry references so the (now removed) marker + widget can be GC'd
+		entry.marker = nil
+		entry.healthbar = nil
+		entry.dot_debuffs = nil
 		mod.disable_enemy_outlines(unit, entry)
 		mod.remove_alert_outline(entry)
 		mod.remove_stagger_outline(entry)
@@ -504,6 +583,24 @@ mod.remove_all_ei_markers = function()
 	table_clear(mod.enemy_markers)
 	table_clear(mod.enemy_healthbars)
 	table_clear(mod.enemy_debuffs)
+
+	-- Free orphaned marker widgets are still referenced by name in _widgets_by_name.
+	-- Vanilla never removes marker widgets on unregister, so this reclaims any widget whose marker id is no longer registered (including previously leaked ones).
+	local widgets_by_name = world_markers._widgets_by_name
+	local markers_by_id = world_markers._markers_by_id
+
+	if widgets_by_name and markers_by_id then
+		local prefix = "marker_widget_id_"
+
+		for name, w in pairs(widgets_by_name) do
+			if type(name) == "string" and string.sub(name, 1, #prefix) == prefix then
+				local id = tonumber(string.sub(name, #prefix + 1))
+				if id and not markers_by_id[id] then
+					widgets_by_name[name] = nil
+				end
+			end
+		end
+	end
 end
 
 -- Clean up markers whose unit has no cache entry at all (mod reload, stale callbacks, etc.)
@@ -693,7 +790,7 @@ mod.scan_enemies = function()
 
 			-- build animation map for this enemy
 			if mod.DEBUG then
-				mod.init_breed_anim_db(unit, breed, breed.name)
+				--mod.init_breed_anim_db(unit, breed, breed.name)
 			end
 
 			-- collect ALL horde units BEFORE culling
@@ -1190,12 +1287,20 @@ end
 -----------------------------------------------------------------------
 
 mod.get_time = function()
-	local tm = Managers.time
+	local tm = Managers and Managers.time
+	local fallback = os.clock() or 0
 	if tm then
-		return tm:time("gameplay")
+		if tm:has_timer("gameplay") then
+			return tm:time("gameplay") or fallback
+		end
+		if tm:has_timer("ui") then
+			return tm:time("ui") or fallback
+		end
+		if tm:has_timer("main") then
+			return tm:time("main") or fallback
+		end
 	end
-
-	return 0
+	return fallback
 end
 
 mod.ts = function()
@@ -1383,8 +1488,8 @@ mod.clear_caches = function()
 	table_clear(mod.enemy_cache)
 	table_clear(mod.marked_dead)
 
-	table_clear(mod.latest_damaged_enemies)
-	table_clear(mod.latest_damaged_enemies_set)
+	--table_clear(mod.latest_damaged_enemies)
+	--table_clear(mod.latest_damaged_enemies_set)
 	table_clear(mod.aimed_unit)
 	table_clear(mod.tagged_units)
 

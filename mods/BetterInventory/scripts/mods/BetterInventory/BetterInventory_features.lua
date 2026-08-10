@@ -1,9 +1,15 @@
 local Items = require("scripts/utilities/items")
 local ProfileUtils = require("scripts/utilities/profile_utils")
 local RaritySettings = require("scripts/settings/item/rarity_settings")
-local UIWidget = require("scripts/managers/ui/ui_widget")
-local UISoundEvents = require("scripts/settings/ui/ui_sound_events")
+local PanelDefinitions = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_panel_definitions")
+local PanelRuntime = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_panel_runtime")
+local ArmouryPanel = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_armoury_panel")
 local CurioValues = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_curio_values")
+local DiscardPolicy = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_discard_policy")
+local Lantern = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_feature_lantern")
+local SortOptions = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_feature_sort_options")
+local PanelState = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_feature_panel_state")
+local DiscardSummary = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_feature_discard_summary")
 
 if type(CurioValues) ~= "table" then
 	CurioValues = {
@@ -14,148 +20,293 @@ if type(CurioValues) ~= "table" then
 end
 
 local Features = {}
+local armoury_panel
+local scenegraph_rect
+local panel_entry = PanelRuntime.panel_entry
+local panel_lantern_entry = PanelRuntime.panel_lantern_entry
+local controller_element_state = PanelRuntime.controller_element_state
+local clear_controller_element_selection = PanelRuntime.clear_controller_element_selection
+local restore_controller_element = PanelRuntime.restore_controller_element
+local set_inventory_options_panel_controller_focus = PanelRuntime.set_inventory_options_panel_controller_focus
+local update_inventory_options_panel_controller_selection = PanelRuntime.update_inventory_options_panel_controller_selection
+local INVENTORY_SORT_TOGGLE_ID = PanelDefinitions.INVENTORY_SORT_TOGGLE_ID
+local INVENTORY_PERFECT_SORT_TOGGLE_ID = PanelDefinitions.INVENTORY_PERFECT_SORT_TOGGLE_ID
+local INVENTORY_SORT_LABEL_ID = PanelDefinitions.INVENTORY_SORT_LABEL_ID
+local INVENTORY_DISCARD_LABEL_ID = PanelDefinitions.INVENTORY_DISCARD_LABEL_ID
+local INVENTORY_DISCARD_MODE_ID = PanelDefinitions.INVENTORY_DISCARD_MODE_ID
+local INVENTORY_DISCARD_SKIP_CONFIRMATION_ID = PanelDefinitions.INVENTORY_DISCARD_SKIP_CONFIRMATION_ID
+local INVENTORY_QUICK_DISCARD_ID = PanelDefinitions.INVENTORY_QUICK_DISCARD_ID
+local INVENTORY_DISCARD_MAX_LEVEL_ID = PanelDefinitions.INVENTORY_DISCARD_MAX_LEVEL_ID
+local INVENTORY_DISCARD_EQUIPPED_LEVEL_PROTECTION_ID = PanelDefinitions.INVENTORY_DISCARD_EQUIPPED_LEVEL_PROTECTION_ID
+local INVENTORY_DISCARD_MELEE_ID = PanelDefinitions.INVENTORY_DISCARD_MELEE_ID
+local INVENTORY_DISCARD_RANGED_ID = PanelDefinitions.INVENTORY_DISCARD_RANGED_ID
+local INVENTORY_DISCARD_CURIO_ID = PanelDefinitions.INVENTORY_DISCARD_CURIO_ID
+local INVENTORY_DISCARD_PROTECTION_ID = PanelDefinitions.INVENTORY_DISCARD_PROTECTION_ID
+local INVENTORY_DISCARD_CURIO_PROTECTION_ID = PanelDefinitions.INVENTORY_DISCARD_CURIO_PROTECTION_ID
+local INVENTORY_DISCARD_CURIO_LEVEL_ID = PanelDefinitions.INVENTORY_DISCARD_CURIO_LEVEL_ID
+local INVENTORY_CURIO_BUYER_ENABLE_ID = PanelDefinitions.INVENTORY_CURIO_BUYER_ENABLE_ID
+local INVENTORY_CURIO_BUYER_OPERATIVE_SELECTION_ID = PanelDefinitions.INVENTORY_CURIO_BUYER_OPERATIVE_SELECTION_ID
+local INVENTORY_CURIO_BUYER_ROTATION_ID = PanelDefinitions.INVENTORY_CURIO_BUYER_ROTATION_ID
+local INVENTORY_CURIO_BUYER_REFRESH_ID = PanelDefinitions.INVENTORY_CURIO_BUYER_REFRESH_ID
+local INVENTORY_CURIO_BUYER_TARGET_MODE_ID = PanelDefinitions.INVENTORY_CURIO_BUYER_TARGET_MODE_ID
+local INVENTORY_CURIO_BUYER_MIN_LEVEL_ID = PanelDefinitions.INVENTORY_CURIO_BUYER_MIN_LEVEL_ID
+local INVENTORY_CURIO_BUYER_MIN_HEALTH_ID = PanelDefinitions.INVENTORY_CURIO_BUYER_MIN_HEALTH_ID
+local INVENTORY_CURIO_BUYER_MIN_TOUGHNESS_ID = PanelDefinitions.INVENTORY_CURIO_BUYER_MIN_TOUGHNESS_ID
+local INVENTORY_OPTIONS_PANEL_REFERENCE = PanelDefinitions.INVENTORY_OPTIONS_PANEL_REFERENCE
+local INVENTORY_OPTIONS_PANEL_MIN_HEIGHT = PanelDefinitions.INVENTORY_OPTIONS_PANEL_MIN_HEIGHT
+local INVENTORY_OPTIONS_PANEL_DEFAULT_WIDTH = PanelDefinitions.INVENTORY_OPTIONS_PANEL_DEFAULT_WIDTH
+local INVENTORY_OPTIONS_PANEL_DEFAULT_MAX_HEIGHT = PanelDefinitions.INVENTORY_OPTIONS_PANEL_DEFAULT_MAX_HEIGHT
+local INVENTORY_OPTIONS_PANEL_DEFAULT_ROW_SPACING = PanelDefinitions.INVENTORY_OPTIONS_PANEL_DEFAULT_ROW_SPACING
+local INVENTORY_OPTIONS_PANEL_DEFAULT_VERTICAL_PADDING = PanelDefinitions.INVENTORY_OPTIONS_PANEL_DEFAULT_VERTICAL_PADDING
+local INVENTORY_OPTIONS_PANEL_DEFAULT_HORIZONTAL_PADDING = PanelDefinitions.INVENTORY_OPTIONS_PANEL_DEFAULT_HORIZONTAL_PADDING
+local INVENTORY_OPTIONS_PANEL_WEAPON_GAP = PanelDefinitions.INVENTORY_OPTIONS_PANEL_WEAPON_GAP
+local INVENTORY_OPTIONS_PANEL_BUTTON_GAP = PanelDefinitions.INVENTORY_OPTIONS_PANEL_BUTTON_GAP
+local ARMOURY_NATIVE_SORT_PANEL_REFERENCE = PanelDefinitions.ARMOURY_NATIVE_SORT_PANEL_REFERENCE
+local ARMOURY_NATIVE_SORT_PANEL_WIDTH = PanelDefinitions.ARMOURY_NATIVE_SORT_PANEL_WIDTH
+local ARMOURY_NATIVE_SORT_PANEL_HEIGHT = PanelDefinitions.ARMOURY_NATIVE_SORT_PANEL_HEIGHT
+local ARMOURY_NATIVE_SORT_PANEL_MIN_HEIGHT = PanelDefinitions.ARMOURY_NATIVE_SORT_PANEL_MIN_HEIGHT
+local ARMOURY_NATIVE_SORT_PANEL_TOP = PanelDefinitions.ARMOURY_NATIVE_SORT_PANEL_TOP
+local ARMOURY_NATIVE_SORT_PANEL_RIGHT_MARGIN = PanelDefinitions.ARMOURY_NATIVE_SORT_PANEL_RIGHT_MARGIN
+local ARMOURY_NATIVE_SORT_PANEL_WEAPON_GAP = PanelDefinitions.ARMOURY_NATIVE_SORT_PANEL_WEAPON_GAP
+local ARMOURY_NATIVE_SORT_PANEL_WALLET_GAP = PanelDefinitions.ARMOURY_NATIVE_SORT_PANEL_WALLET_GAP
+local ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT = PanelDefinitions.ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT
+local ARMOURY_NATIVE_SORT_PANEL_ROW_SPACING = PanelDefinitions.ARMOURY_NATIVE_SORT_PANEL_ROW_SPACING
+local ARMOURY_NATIVE_SORT_PANEL_PADDING = PanelDefinitions.ARMOURY_NATIVE_SORT_PANEL_PADDING
+local ARMOURY_NATIVE_SORT_CHECKBOX_LEFT_PADDING = PanelDefinitions.ARMOURY_NATIVE_SORT_CHECKBOX_LEFT_PADDING
+local GLOBAL_STORE_SERVICE = PanelDefinitions.GLOBAL_STORE_SERVICE
+local INVENTORY_CURIO_NATIVE_WIDTH = PanelDefinitions.INVENTORY_CURIO_NATIVE_WIDTH
+local INVENTORY_CURIO_NATIVE_GRID_WIDTH = PanelDefinitions.INVENTORY_CURIO_NATIVE_GRID_WIDTH
+local INVENTORY_CURIO_NATIVE_HEADER_HEIGHT = PanelDefinitions.INVENTORY_CURIO_NATIVE_HEADER_HEIGHT
+local INVENTORY_CURIO_NATIVE_ICON_HEIGHT = PanelDefinitions.INVENTORY_CURIO_NATIVE_ICON_HEIGHT
+local INVENTORY_VIRTUAL_CANVAS_WIDTH = PanelDefinitions.INVENTORY_VIRTUAL_CANVAS_WIDTH
+local INVENTORY_VIRTUAL_EDGE_MARGIN = PanelDefinitions.INVENTORY_VIRTUAL_EDGE_MARGIN
+local INVENTORY_DISCARD_WIDGET_IDS = PanelDefinitions.INVENTORY_DISCARD_WIDGET_IDS
+local INVENTORY_OPTIONS_PANEL_BLUEPRINTS = PanelDefinitions.INVENTORY_OPTIONS_PANEL_BLUEPRINTS
+local ARMOURY_NATIVE_SORT_BLUEPRINTS = PanelDefinitions.ARMOURY_NATIVE_SORT_BLUEPRINTS
+local numeric_setting = PanelDefinitions.numeric_setting
+local inventory_options_panel_geometry = PanelDefinitions.inventory_options_panel_geometry
+local inventory_sort_toggle_passes = PanelDefinitions.inventory_sort_toggle_passes
+local quick_discard_passes = PanelDefinitions.quick_discard_passes
+local section_label_passes = PanelDefinitions.section_label_passes
+local compact_selector_passes = PanelDefinitions.compact_selector_passes
+local compact_checkbox_passes = PanelDefinitions.compact_checkbox_passes
+local compact_stepper_passes = PanelDefinitions.compact_stepper_passes
+local panel_sub_label_passes = PanelDefinitions.panel_sub_label_passes
+local panel_section_header_passes = PanelDefinitions.panel_section_header_passes
+local armoury_native_sort_option_passes = PanelDefinitions.armoury_native_sort_option_passes
+local append_panel_checkbox_passes = PanelDefinitions.append_panel_checkbox_passes
+local panel_type_checkbox_passes = PanelDefinitions.panel_type_checkbox_passes
+Features._diagnostics = nil
+Features._discard_policy = DiscardPolicy
+Features._domains = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_feature_domains")
 
-local function shallow_copy(source)
-	local copy = {}
-
-	for key, value in pairs(source or {}) do
-		copy[key] = value
-	end
-
-	return copy
-end
-local INVENTORY_SORT_TOGGLE_ID = "better_inventory_sort_priority"
-local INVENTORY_PERFECT_SORT_TOGGLE_ID = "better_inventory_perfect_sort_priority"
-local INVENTORY_SORT_LABEL_ID = "better_inventory_sort_label"
-local INVENTORY_DISCARD_LABEL_ID = "better_inventory_discard_label"
-local INVENTORY_DISCARD_MODE_ID = "better_inventory_discard_mode"
-local INVENTORY_DISCARD_SKIP_CONFIRMATION_ID = "better_inventory_discard_skip_confirmation"
-local INVENTORY_QUICK_DISCARD_ID = "better_inventory_quick_discard"
-local INVENTORY_DISCARD_MAX_LEVEL_ID = "better_inventory_discard_max_level"
-local INVENTORY_DISCARD_EQUIPPED_LEVEL_PROTECTION_ID = "better_inventory_discard_equipped_level_protection"
-local INVENTORY_DISCARD_MELEE_ID = "better_inventory_discard_melee"
-local INVENTORY_DISCARD_RANGED_ID = "better_inventory_discard_ranged"
-local INVENTORY_DISCARD_CURIO_ID = "better_inventory_discard_curio"
-local INVENTORY_DISCARD_PROTECTION_ID = "better_inventory_discard_protection"
-local INVENTORY_DISCARD_CURIO_PROTECTION_ID = "better_inventory_discard_curio_protection"
-local INVENTORY_DISCARD_CURIO_LEVEL_ID = "better_inventory_discard_curio_level"
-local INVENTORY_CURIO_BUYER_ENABLE_ID = "better_inventory_curio_buyer_enable"
-local INVENTORY_CURIO_BUYER_OPERATIVE_SELECTION_ID = "better_inventory_curio_buyer_operative_selection"
-local INVENTORY_CURIO_BUYER_ROTATION_ID = "better_inventory_curio_buyer_rotation"
-local INVENTORY_CURIO_BUYER_REFRESH_ID = "better_inventory_curio_buyer_refresh"
-local INVENTORY_CURIO_BUYER_TARGET_MODE_ID = "better_inventory_curio_buyer_target_mode"
-local INVENTORY_CURIO_BUYER_MIN_LEVEL_ID = "better_inventory_curio_buyer_min_level"
-local INVENTORY_CURIO_BUYER_MIN_HEALTH_ID = "better_inventory_curio_buyer_min_health"
-local INVENTORY_CURIO_BUYER_MIN_TOUGHNESS_ID = "better_inventory_curio_buyer_min_toughness"
-local INVENTORY_OPTIONS_PANEL_REFERENCE = "better_inventory_options_panel"
-local INVENTORY_OPTIONS_PANEL_MIN_HEIGHT = 120
-local INVENTORY_OPTIONS_PANEL_DEFAULT_WIDTH = 445
-local INVENTORY_OPTIONS_PANEL_DEFAULT_MAX_HEIGHT = 360
-local INVENTORY_OPTIONS_PANEL_DEFAULT_ROW_SPACING = 8
-local INVENTORY_OPTIONS_PANEL_DEFAULT_VERTICAL_PADDING = 10
-local INVENTORY_OPTIONS_PANEL_DEFAULT_HORIZONTAL_PADDING = 12
-local INVENTORY_OPTIONS_PANEL_WEAPON_GAP = 20
-local INVENTORY_OPTIONS_PANEL_BUTTON_GAP = 15
-local ARMOURY_NATIVE_SORT_PANEL_REFERENCE = "better_inventory_armoury_native_sort_panel"
-local ARMOURY_NATIVE_SORT_PANEL_WIDTH = 350
-local ARMOURY_NATIVE_SORT_PANEL_HEIGHT = 520
-local ARMOURY_NATIVE_SORT_PANEL_MIN_HEIGHT = 140
-local ARMOURY_NATIVE_SORT_PANEL_TOP = 100
-local ARMOURY_NATIVE_SORT_PANEL_RIGHT_MARGIN = 120
-local ARMOURY_NATIVE_SORT_PANEL_WEAPON_GAP = 24
-local ARMOURY_NATIVE_SORT_PANEL_WALLET_GAP = 16
-local ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT = 32
-local ARMOURY_NATIVE_SORT_PANEL_ROW_SPACING = 4
-local ARMOURY_NATIVE_SORT_PANEL_PADDING = 10
-local ARMOURY_NATIVE_SORT_CHECKBOX_LEFT_PADDING = 8
-local GLOBAL_STORE_SERVICE = "get_all_characters_store_custom"
-local INVENTORY_CURIO_NATIVE_WIDTH = 530
-local INVENTORY_CURIO_NATIVE_GRID_WIDTH = 518
-local INVENTORY_CURIO_NATIVE_HEADER_HEIGHT = 250
-local INVENTORY_CURIO_NATIVE_ICON_HEIGHT = 180
-local INVENTORY_VIRTUAL_CANVAS_WIDTH = 1920
-local INVENTORY_VIRTUAL_EDGE_MARGIN = 16
-
-local function numeric_setting(mod, setting_id, default_value, minimum, maximum)
-	local value = tonumber(mod:get(setting_id)) or default_value
-
-	return math.clamp(math.floor(value + 0.5), minimum, maximum)
-end
-
-local function inventory_options_panel_geometry(mod)
-	local width = numeric_setting(mod, "inventory_options_panel_width", INVENTORY_OPTIONS_PANEL_DEFAULT_WIDTH, 360, 560)
-	local left = numeric_setting(mod, "inventory_options_panel_padding_left", INVENTORY_OPTIONS_PANEL_DEFAULT_HORIZONTAL_PADDING, 0, 24)
-	local right = numeric_setting(mod, "inventory_options_panel_padding_right", INVENTORY_OPTIONS_PANEL_DEFAULT_HORIZONTAL_PADDING, 0, 24)
-
-	return {
-		bottom = numeric_setting(mod, "inventory_options_panel_padding_bottom", INVENTORY_OPTIONS_PANEL_DEFAULT_VERTICAL_PADDING, 0, 24),
-		content_width = math.max(width - left - right, 280),
-		left = left,
-		max_height = numeric_setting(mod, "inventory_options_panel_max_height", INVENTORY_OPTIONS_PANEL_DEFAULT_MAX_HEIGHT, 220, 500),
-		right = right,
-		row_spacing = numeric_setting(mod, "inventory_options_panel_row_spacing", INVENTORY_OPTIONS_PANEL_DEFAULT_ROW_SPACING, 0, 16),
-		top = numeric_setting(mod, "inventory_options_panel_padding_top", INVENTORY_OPTIONS_PANEL_DEFAULT_VERTICAL_PADDING, 0, 24),
-		width = width,
+if type(Features._domains) ~= "table" or type(Features._domains.sorting) ~= "table" or type(Features._domains.sorting.signature) ~= "function" then
+	Features._domains = {
+		markers = {
+			invalidate_grid = function()
+				return false
+			end,
+		},
+		sorting = {
+			signature = function(parts)
+				return table.concat(parts or {}, "|")
+			end,
+		},
+		panels = {
+			composite_key = function(structure_key, lantern_signature, sorting_signature)
+				return tostring(structure_key or 0) .. ":" .. tostring(lantern_signature or "") .. ":" .. tostring(sorting_signature or "")
+			end,
+		},
 	}
 end
-local INVENTORY_DISCARD_WIDGET_IDS = {
-	INVENTORY_DISCARD_LABEL_ID,
-	INVENTORY_DISCARD_MODE_ID,
-	INVENTORY_DISCARD_SKIP_CONFIRMATION_ID,
-	INVENTORY_QUICK_DISCARD_ID,
-	INVENTORY_DISCARD_MAX_LEVEL_ID,
-	INVENTORY_DISCARD_MELEE_ID,
-	INVENTORY_DISCARD_RANGED_ID,
-	INVENTORY_DISCARD_CURIO_ID,
-	INVENTORY_DISCARD_PROTECTION_ID,
-	INVENTORY_DISCARD_CURIO_PROTECTION_ID,
-	INVENTORY_DISCARD_CURIO_LEVEL_ID,
-}
+
+Features._composition = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_feature_composition")
+
+if type(Features._composition) ~= "table" or type(Features._composition.invalidate_view) ~= "function" or type(Features._composition.inputs_changed) ~= "function" then
+	Features._composition = {
+		invalidate_view = function()
+			return false
+		end,
+		inputs_changed = function()
+			return false
+		end,
+	}
+end
+
+Features._sorting = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_feature_sorting")
+
+if type(Features._sorting) ~= "table" or type(Features._sorting.is_enabled) ~= "function" or type(Features._sorting.set_integration) ~= "function" then
+	Features._sorting = {
+		is_enabled = function()
+			return false
+		end,
+		mod = function()
+			return nil
+		end,
+		definitions = function()
+			return nil
+		end,
+		set_invalidation = function()
+		end,
+		native_option_start = function(view)
+			return #(view and view._sort_options or {}) + 1
+		end,
+		set_integration = function()
+			return false
+		end,
+		preserve_native_options = function()
+			return false
+		end,
+		new_comparator_manager = function()
+			local registered_views = setmetatable({}, {
+				__mode = "k",
+			})
+
+			return {
+				registered_views = registered_views,
+				configure = function()
+				end,
+				configure_inventory = function()
+				end,
+				configure_armoury = function()
+				end,
+				configure_global_store = function()
+				end,
+				rebind = function()
+				end,
+				restore = function()
+				end,
+				resort = function()
+				end,
+			}
+		end,
+	}
+end
+
+Features.set_diagnostics_provider = function(provider)
+	Features._diagnostics = provider
+end
+
+Features.count_diagnostic = function(name, amount)
+	local diagnostics = Features._diagnostics
+
+	if diagnostics and type(diagnostics.count) == "function" then
+		diagnostics.count(name, amount)
+	end
+end
+
+Features.invalidate_view_composition = function(view)
+	return Features._composition.invalidate_view(view)
+end
+
+Lantern.configure(function(view)
+	return Features.invalidate_view_composition(view)
+end)
+
+local function restore_lantern_weapon_panel(view)
+	return Lantern.release_lantern_inventory_section(view)
+end
+
+
+Features._sorting.set_invalidation(Features.invalidate_view_composition)
+
+Features.composition_inputs_changed = function(view, slot_kind)
+	return Features._composition.inputs_changed(view, slot_kind, Features._sorting.mod())
+end
+
+Features._contracts = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_contracts")
+
+if type(Features._contracts) ~= "table" or type(Features._contracts.safe_call) ~= "function" or type(Features._contracts.safe_method) ~= "function" then
+	Features._contracts = {
+			 safe_call = function(method, ...)
+			if type(method) ~= "function" then
+				return false, "method unavailable"
+			end
+
+			return pcall(method, ...)
+		end,
+		safe_method = function(object, method_name, ...)
+			local object_type = type(object)
+			if (object_type ~= "table" and object_type ~= "userdata") or type(method_name) ~= "string" then
+				return false, "method unavailable"
+			end
+
+			local lookup_ok, method = pcall(function()
+				return object[method_name]
+			end)
+
+			if not lookup_ok or type(method) ~= "function" then
+				return false, lookup_ok and "method unavailable" or method
+			end
+
+			return pcall(method, object, ...)
+		end,
+	}
+end
+
+Features._view_session = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_view_session")
+
+Features._operation_arbiter = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_operation_arbiter")
+
+Features.begin_view_session = function(view, kind)
+	local sessions = Features._view_session
+
+	if sessions and type(sessions.begin) == "function" then
+		return sessions.begin(view, kind)
+	end
+end
+
+Features.end_view_session = function(view, reason)
+	local sessions = Features._view_session
+
+	if sessions and type(sessions.close) == "function" then
+		return sessions.close(view, reason)
+	end
+
+	return false
+end
+
+Features.register_view_session_cleanup = function(view, cleanup_id, callback)
+	local sessions = Features._view_session
+
+	if sessions and type(sessions.register_cleanup) == "function" then
+		return sessions.register_cleanup(view, cleanup_id, callback)
+	end
+
+	return false
+end
+
+-- Keep sort ownership independent from the optional settings panels. A vendor
+-- can have a wrapped native comparator even when BetterInventory did not create
+-- a visible sorting panel for it.
+Features._registered_sort_views = setmetatable({}, {
+	__mode = "k",
+})
+
 local registered_inventory_views = setmetatable({}, {
 	__mode = "k",
 })
 local registered_armoury_views = setmetatable({}, {
 	__mode = "k",
 })
+
+Features.invalidate_all_view_composition = function()
+	for view in pairs(registered_inventory_views) do
+		Features.invalidate_view_composition(view)
+	end
+
+	for view in pairs(registered_armoury_views) do
+		Features.invalidate_view_composition(view)
+	end
+end
+
 local perfect_roll_cache = setmetatable({}, {
 	__mode = "k",
 })
 local curio_acquisition_provider
-local lantern_mod
-local lantern_overlay
-local item_sorting_mod
-local item_sorting_definitions
-local ITEM_SORTING_INVENTORY_VANILLA_SETTINGS = {
-	"enable_vanilla_level_desc",
-	"enable_vanilla_level_asc",
-	"enable_vanilla_rarity_desc",
-	"enable_vanilla_rarity_asc",
-	"enable_vanilla_name_asc",
-	"enable_vanilla_name_desc",
-}
-local ITEM_SORTING_STORE_VANILLA_SETTINGS = {
-	"enable_vanilla_level_desc",
-	"enable_vanilla_level_asc",
-	"enable_vanilla_rarity_desc",
-	"enable_vanilla_rarity_asc",
-	"enable_vanilla_price_asc",
-	"enable_vanilla_price_desc",
-	"enable_vanilla_name_asc",
-	"enable_vanilla_name_desc",
-}
 
 local function item_sorting_is_enabled()
-	if not item_sorting_mod then
-		return false
-	end
-
-	if type(item_sorting_mod.is_enabled) ~= "function" then
-		return true
-	end
-
-	local success, enabled = pcall(item_sorting_mod.is_enabled, item_sorting_mod)
-
-	return success and enabled == true
+	return Features._sorting.is_enabled()
 end
 
 Features.set_curio_acquisition_provider = function(provider)
@@ -287,1713 +438,9 @@ local function is_sortable_view(layout, view)
 	return is_inventory_view(layout, view) or is_armoury_sort_view(view)
 end
 
-local function inventory_sort_toggle_passes()
-	return {
-		{
-			content_id = "hotspot",
-			pass_type = "hotspot",
-			content = {
-				on_hover_sound = UISoundEvents.default_mouse_hover,
-				on_pressed_sound = UISoundEvents.default_click,
-			},
-		},
-		{
-			pass_type = "rect",
-			style_id = "checkbox_background",
-			style = {
-				horizontal_alignment = "left",
-				vertical_alignment = "center",
-				color = Color.terminal_background(220, true),
-				size = {
-					26,
-					26,
-				},
-				offset = {
-					0,
-					0,
-					1,
-				},
-			},
-		},
-		{
-			pass_type = "texture",
-			style_id = "checkbox_frame",
-			value = "content/ui/materials/frames/frame_tile_2px",
-			style = {
-				horizontal_alignment = "left",
-				vertical_alignment = "center",
-				color = Color.terminal_frame(255, true),
-				size = {
-					26,
-					26,
-				},
-				offset = {
-					0,
-					0,
-					2,
-				},
-			},
-		},
-		{
-			pass_type = "text",
-			style_id = "checkmark",
-			value = "",
-			style = {
-				font_size = 20,
-				font_type = "proxima_nova_bold",
-				horizontal_alignment = "left",
-				text_horizontal_alignment = "center",
-				text_vertical_alignment = "center",
-				vertical_alignment = "center",
-				text_color = Color.terminal_corner_selected(255, true),
-				size = {
-					26,
-					26,
-				},
-				offset = {
-					0,
-					0,
-					3,
-				},
-			},
-			visibility_function = function(content)
-				return content.checked
-			end,
-		},
-		{
-			pass_type = "text",
-			style_id = "label",
-			value_id = "label",
-			style = {
-				font_size = 18,
-				font_type = "proxima_nova_bold",
-				horizontal_alignment = "left",
-				text_horizontal_alignment = "left",
-				text_vertical_alignment = "center",
-				vertical_alignment = "center",
-				text_color = Color.terminal_text_body(255, true),
-				offset = {
-					36,
-					0,
-					3,
-				},
-				size_addition = {
-					-36,
-					0,
-				},
-			},
-		},
-	}
-end
-
-local function quick_discard_passes()
-	local function visible(content)
-		return content.visible or content.parent and content.parent.visible
-	end
-
-	return {
-		{
-			pass_type = "text",
-			style_id = "prefix",
-			value_id = "prefix",
-			style = {
-				font_size = 16,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "left",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_body(255, true),
-				offset = {
-					0,
-					0,
-					3,
-				},
-				size = {
-					70,
-					32,
-				},
-			},
-			visibility_function = visible,
-		},
-		{
-			content_id = "rarity_hotspot",
-			pass_type = "hotspot",
-			content = {
-				on_hover_sound = UISoundEvents.default_mouse_hover,
-				on_pressed_sound = UISoundEvents.default_click,
-			},
-			style = {
-				offset = {
-					70,
-					0,
-					5,
-				},
-				size = {
-					110,
-					32,
-				},
-			},
-			visibility_function = visible,
-		},
-		{
-			pass_type = "rect",
-			style_id = "rarity_background",
-			style = {
-				color = Color.terminal_background(220, true),
-				offset = {
-					70,
-					0,
-					1,
-				},
-				size = {
-					110,
-					32,
-				},
-			},
-			visibility_function = visible,
-		},
-		{
-			pass_type = "texture",
-			style_id = "rarity_frame",
-			value = "content/ui/materials/frames/frame_tile_2px",
-			style = {
-				color = Color.terminal_frame(255, true),
-				offset = {
-					70,
-					0,
-					2,
-				},
-				size = {
-					110,
-					32,
-				},
-			},
-			visibility_function = visible,
-		},
-		{
-			pass_type = "text",
-			style_id = "rarity_label",
-			value_id = "rarity_label",
-			style = {
-				font_size = 15,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "center",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_body(255, true),
-				offset = {
-					70,
-					0,
-					3,
-				},
-				size = {
-					110,
-					32,
-				},
-			},
-			visibility_function = visible,
-		},
-		{
-			pass_type = "text",
-			style_id = "suffix",
-			value_id = "suffix",
-			style = {
-				font_size = 14,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "center",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_body(255, true),
-				offset = {
-					184,
-					0,
-					3,
-				},
-				size = {
-					70,
-					32,
-				},
-			},
-			visibility_function = visible,
-		},
-		{
-			content_id = "discard_hotspot",
-			pass_type = "hotspot",
-			content = {
-				on_hover_sound = UISoundEvents.default_mouse_hover,
-				on_pressed_sound = UISoundEvents.default_click,
-			},
-			style = {
-				horizontal_alignment = "right",
-				offset = {
-					0,
-					0,
-					5,
-				},
-				size = {
-					140,
-					32,
-				},
-			},
-			visibility_function = visible,
-		},
-		{
-			pass_type = "rect",
-			style_id = "discard_background",
-			style = {
-				horizontal_alignment = "right",
-				color = Color.terminal_background_selected(230, true),
-				offset = {
-					0,
-					0,
-					1,
-				},
-				size = {
-					140,
-					32,
-				},
-			},
-			visibility_function = visible,
-		},
-		{
-			pass_type = "texture",
-			style_id = "discard_frame",
-			value = "content/ui/materials/frames/frame_tile_2px",
-			style = {
-				horizontal_alignment = "right",
-				color = Color.terminal_frame_selected(255, true),
-				offset = {
-					0,
-					0,
-					2,
-				},
-				size = {
-					140,
-					32,
-				},
-			},
-			visibility_function = visible,
-		},
-		{
-			pass_type = "text",
-			style_id = "discard_label",
-			value_id = "discard_label",
-			style = {
-				horizontal_alignment = "right",
-				font_size = 16,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "center",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_header(255, true),
-				offset = {
-					0,
-					0,
-					3,
-				},
-				size = {
-					140,
-					32,
-				},
-			},
-			visibility_function = visible,
-		},
-	}
-end
-
-local function section_label_passes()
-	return {
-		{
-			pass_type = "text",
-			style_id = "label",
-			value_id = "label",
-			style = {
-				font_size = 19,
-				font_type = "proxima_nova_bold",
-				horizontal_alignment = "left",
-				text_horizontal_alignment = "left",
-				text_vertical_alignment = "center",
-				vertical_alignment = "center",
-				text_color = Color.terminal_text_header(255, true),
-				offset = {
-					0,
-					0,
-					3,
-				},
-			},
-		},
-	}
-end
-
-local function compact_selector_passes(width, fixed_selector_width, inline_label)
-	local selector_x = inline_label and 0 or 64
-	local maximum_selector_width = inline_label and math.max(1, width - 100) or width - selector_x
-	local selector_width = math.min(fixed_selector_width or maximum_selector_width, maximum_selector_width)
-	local label_x = inline_label and selector_width + 8 or 0
-	local label_width = inline_label and math.max(1, width - label_x) or selector_x - 6
-
-	return {
-		{
-			pass_type = "text",
-			style_id = "label",
-			value_id = "label",
-			style = {
-				font_size = 15,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "left",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_body(255, true),
-				offset = inline_label and {
-					label_x,
-					0,
-					3,
-				} or nil,
-				size = {
-					label_width,
-					26,
-				},
-			},
-		},
-		{
-			content_id = "hotspot",
-			pass_type = "hotspot",
-			content = {
-				on_hover_sound = UISoundEvents.default_mouse_hover,
-				on_pressed_sound = UISoundEvents.default_click,
-			},
-			style = {
-				offset = {
-					selector_x,
-					0,
-					5,
-				},
-				size = {
-					selector_width,
-					26,
-				},
-			},
-		},
-		{
-			pass_type = "rect",
-			style_id = "background",
-			style = {
-				color = Color.terminal_background(220, true),
-				offset = {
-					selector_x,
-					0,
-					1,
-				},
-				size = {
-					selector_width,
-					26,
-				},
-			},
-		},
-		{
-			pass_type = "texture",
-			style_id = "frame",
-			value = "content/ui/materials/frames/frame_tile_2px",
-			style = {
-				color = Color.terminal_frame(255, true),
-				offset = {
-					selector_x,
-					0,
-					2,
-				},
-				size = {
-					selector_width,
-					26,
-				},
-			},
-		},
-		{
-			pass_type = "text",
-			style_id = "value",
-			value_id = "value",
-			style = {
-				font_size = 15,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "center",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_body(255, true),
-				offset = {
-					selector_x,
-					0,
-					3,
-				},
-				size = {
-					selector_width,
-					26,
-				},
-			},
-		},
-	}
-end
-
-local function compact_checkbox_passes()
-	return {
-		{
-			content_id = "hotspot",
-			pass_type = "hotspot",
-			content = {
-				on_hover_sound = UISoundEvents.default_mouse_hover,
-				on_pressed_sound = UISoundEvents.default_click,
-			},
-		},
-		{
-			pass_type = "rect",
-			style_id = "checkbox_background",
-			style = {
-				color = Color.terminal_background(220, true),
-				offset = {
-					0,
-					2,
-					1,
-				},
-				size = {
-					22,
-					22,
-				},
-			},
-		},
-		{
-			pass_type = "texture",
-			style_id = "checkbox_frame",
-			value = "content/ui/materials/frames/frame_tile_2px",
-			style = {
-				color = Color.terminal_frame(255, true),
-				offset = {
-					0,
-					2,
-					2,
-				},
-				size = {
-					22,
-					22,
-				},
-			},
-		},
-		{
-			pass_type = "text",
-			style_id = "checkmark",
-			value = "",
-			style = {
-				font_size = 17,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "center",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_corner_selected(255, true),
-				offset = {
-					0,
-					2,
-					3,
-				},
-				size = {
-					22,
-					22,
-				},
-			},
-			visibility_function = function(content)
-				return content.checked
-			end,
-		},
-		{
-			pass_type = "text",
-			style_id = "label",
-			value_id = "label",
-			style = {
-				font_size = 15,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "left",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_body(255, true),
-				offset = {
-					28,
-					0,
-					3,
-				},
-				size_addition = {
-					-28,
-					0,
-				},
-			},
-		},
-	}
-end
-
-local function compact_stepper_passes(width)
-	local controls_x = width - 138
-
-	return {
-		{
-			pass_type = "text",
-			style_id = "label",
-			value_id = "label",
-			style = {
-				font_size = 15,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "left",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_body(255, true),
-				size = {
-					controls_x - 8,
-					26,
-				},
-			},
-		},
-		{
-			content_id = "decrease_hotspot",
-			pass_type = "hotspot",
-			content = {
-				on_hover_sound = UISoundEvents.default_mouse_hover,
-				on_pressed_sound = UISoundEvents.default_click,
-			},
-			style = {
-				offset = {
-					controls_x,
-					0,
-					5,
-				},
-				size = {
-					32,
-					26,
-				},
-			},
-		},
-		{
-			pass_type = "text",
-			style_id = "decrease_label",
-			value = "<",
-			style = {
-				font_size = 16,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "center",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_header(255, true),
-				offset = {
-					controls_x,
-					0,
-					3,
-				},
-				size = {
-					32,
-					26,
-				},
-			},
-		},
-		{
-			pass_type = "rect",
-			style_id = "value_background",
-			style = {
-				color = Color.terminal_background(220, true),
-				offset = {
-					controls_x + 34,
-					0,
-					1,
-				},
-				size = {
-					70,
-					26,
-				},
-			},
-		},
-		{
-			pass_type = "text",
-			style_id = "value",
-			value_id = "value",
-			style = {
-				font_size = 15,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "center",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_body(255, true),
-				offset = {
-					controls_x + 34,
-					0,
-					3,
-				},
-				size = {
-					70,
-					26,
-				},
-			},
-		},
-		{
-			content_id = "increase_hotspot",
-			pass_type = "hotspot",
-			content = {
-				on_hover_sound = UISoundEvents.default_mouse_hover,
-				on_pressed_sound = UISoundEvents.default_click,
-			},
-			style = {
-				offset = {
-					controls_x + 106,
-					0,
-					5,
-				},
-				size = {
-					32,
-					26,
-				},
-			},
-		},
-		{
-			pass_type = "text",
-			style_id = "increase_label",
-			value = ">",
-			style = {
-				font_size = 16,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "center",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_header(255, true),
-				offset = {
-					controls_x + 106,
-					0,
-					3,
-				},
-				size = {
-					32,
-					26,
-				},
-			},
-		},
-	}
-end
-
-local function panel_sub_label_passes(width)
-	return {
-		{
-			pass_type = "text",
-			style_id = "label",
-			value_id = "label",
-			style = {
-				font_size = 15,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "left",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_body(255, true),
-				size = {
-					width,
-					26,
-				},
-			},
-		},
-	}
-end
-
-local function panel_section_header_passes(width)
-	local height = 40
-
-	return {
-		{
-			content_id = "hotspot",
-			pass_type = "hotspot",
-			content = {
-				on_hover_sound = UISoundEvents.default_mouse_hover,
-				on_pressed_sound = UISoundEvents.default_click,
-			},
-		},
-		{
-			pass_type = "rect",
-			style_id = "background",
-			style = {
-				color = Color.terminal_background(210, true),
-				offset = {
-					0,
-					0,
-					1,
-				},
-				size = {
-					width,
-					height,
-				},
-			},
-		},
-		{
-			pass_type = "texture",
-			style_id = "frame",
-			value = "content/ui/materials/frames/frame_tile_2px",
-			style = {
-				color = Color.terminal_frame(255, true),
-				offset = {
-					0,
-					0,
-					2,
-				},
-				size = {
-					width,
-					height,
-				},
-			},
-		},
-		{
-			pass_type = "text",
-			style_id = "label",
-			value_id = "label",
-			style = {
-				font_size = 18,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "left",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_header(255, true),
-				offset = {
-					10,
-					0,
-					3,
-				},
-				size = {
-					width - 50,
-					height,
-				},
-			},
-		},
-		{
-			pass_type = "text",
-			style_id = "chevron",
-			value_id = "chevron",
-			style = {
-				font_size = 18,
-				font_type = "proxima_nova_bold",
-				horizontal_alignment = "right",
-				text_horizontal_alignment = "center",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_header(255, true),
-				offset = {
-					0,
-					0,
-					3,
-				},
-				size = {
-					40,
-					height,
-				},
-			},
-		},
-	}
-end
-
-local function armoury_native_sort_option_passes(width)
-	local function selected(content)
-		return content.selected == true
-	end
-
-	local function not_selected(content)
-		return not selected(content)
-	end
-
-	return {
-		{
-			content_id = "hotspot",
-			pass_type = "hotspot",
-			content = {
-				on_hover_sound = UISoundEvents.default_mouse_hover,
-				on_pressed_sound = UISoundEvents.default_click,
-			},
-		},
-		{
-			pass_type = "rect",
-			style_id = "background",
-			style = {
-				color = Color.terminal_background(220, true),
-				offset = {
-					0,
-					0,
-					1,
-				},
-				size = {
-					width,
-					ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT,
-				},
-			},
-		},
-		{
-			pass_type = "rect",
-			style_id = "selected_background",
-			style = {
-				color = Color.terminal_corner_selected(90, true),
-				offset = {
-					0,
-					0,
-					2,
-				},
-				size = {
-					width,
-					ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT,
-				},
-			},
-			visibility_function = selected,
-		},
-		{
-			pass_type = "texture",
-			style_id = "frame",
-			value = "content/ui/materials/frames/frame_tile_2px",
-			style = {
-				color = Color.terminal_frame(255, true),
-				offset = {
-					0,
-					0,
-					3,
-				},
-				size = {
-					width,
-					ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT,
-				},
-			},
-		},
-		{
-			pass_type = "text",
-			style_id = "label",
-			value_id = "label",
-			style = {
-				font_size = 15,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "left",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_text_body(255, true),
-				offset = {
-					12,
-					0,
-					4,
-				},
-				size = {
-					width - 24,
-					ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT,
-				},
-			},
-			visibility_function = not_selected,
-		},
-		{
-			pass_type = "text",
-			style_id = "selected_label",
-			value_id = "label",
-			style = {
-				font_size = 15,
-				font_type = "proxima_nova_bold",
-				text_horizontal_alignment = "left",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_corner_selected(255, true),
-				offset = {
-					12,
-					0,
-					4,
-				},
-				size = {
-					width - 24,
-					ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT,
-				},
-			},
-			visibility_function = selected,
-		},
-		{
-			pass_type = "text",
-			style_id = "selected_mark",
-			value = "✓",
-			style = {
-				font_size = 16,
-				font_type = "proxima_nova_bold",
-				horizontal_alignment = "right",
-				text_horizontal_alignment = "center",
-				text_vertical_alignment = "center",
-				text_color = Color.terminal_corner_selected(255, true),
-				offset = {
-					-4,
-					0,
-					5,
-				},
-				size = {
-					28,
-					ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT,
-				},
-			},
-			visibility_function = selected,
-		},
-	}
-end
-
-local function append_panel_checkbox_passes(target, prefix, x, width, checked_id, label_id, optional_visibility_id)
-	local source = compact_checkbox_passes()
-
-	for index = 1, #source do
-		local pass = table.clone(source[index])
-		local original_style_id = pass.style_id
-
-		if pass.content_id == "hotspot" then
-			pass.content_id = prefix .. "_hotspot"
-		end
-
-		if original_style_id then
-			pass.style_id = prefix .. "_" .. original_style_id
-		end
-
-		if pass.value_id == "label" then
-			pass.value_id = label_id
-		end
-
-		local style = pass.style or {}
-		local offset = style.offset or {
-			0,
-			0,
-			0,
-		}
-
-		offset[1] = (offset[1] or 0) + x
-		-- Embedded controls share a widget with the selector to their left. Keep
-		-- their input and draw passes above that selector instead of relying on
-		-- equal-z pass ordering, which made this checkbox intermittently inert.
-		offset[3] = (offset[3] or 0) + 10
-		style.offset = offset
-
-		if pass.content_id == prefix .. "_hotspot" then
-			style.size = {
-				width,
-				26,
-			}
-		elseif original_style_id == "label" then
-			style.size_addition = nil
-			style.size = {
-				math.max(width - 28, 0),
-				26,
-			}
-		end
-
-		pass.style = style
-
-		if original_style_id == "checkmark" then
-			pass.visibility_function = function(content)
-				return (not optional_visibility_id or content[optional_visibility_id]) and content[checked_id]
-			end
-		elseif optional_visibility_id then
-			pass.visibility_function = function(content)
-				return content[optional_visibility_id]
-			end
-		end
-
-		target[#target + 1] = pass
-	end
-end
-
-local function panel_type_checkbox_passes(content_width)
-	local passes = {}
-	local gap = 8
-	local width = math.floor((content_width - gap * 2) / 3)
-
-	append_panel_checkbox_passes(passes, "melee", 0, width, "melee_checked", "melee_label")
-	append_panel_checkbox_passes(passes, "ranged", width + gap, width, "ranged_checked", "ranged_label")
-	append_panel_checkbox_passes(passes, "curio", (width + gap) * 2, width, "curio_checked", "curio_label")
-
-	return passes
-end
-
 Features.add_inventory_sort_toggle_definition = function(mod, layout, definitions, view)
-	local slot_kind = inventory_slot_kind(layout, view)
-
-	if not slot_kind or not definitions then
-		return definitions
-	end
-
-	local adjusted_definitions = table.clone(definitions)
-	local scenegraph = adjusted_definitions.scenegraph_definition
-	local widget_definitions = adjusted_definitions.widget_definitions
-	local focus_action = mod:get("inventory_options_controller_focus_keybind")
-
-	if focus_action and focus_action ~= "off" and type(adjusted_definitions.legend_inputs) == "table" then
-		adjusted_definitions.legend_inputs[#adjusted_definitions.legend_inputs + 1] = {
-			alignment = "right_alignment",
-			display_name = "better_inventory_toggle_panel_focus",
-			input_action = focus_action,
-			visibility_function = function(parent)
-				return parent._using_cursor_navigation == false and parent._better_inventory_options_panel_visible == true
-			end,
-		}
-	end
-
-	if not scenegraph or not widget_definitions then
-		return adjusted_definitions
-	end
-
-	local is_curio = slot_kind == "curio"
-
-	if is_curio and mod:get("enable_inventory_options_panel_prototype") == true then
-		local width_percent = numeric_setting(mod, "curio_information_width_percent", 90, 75, 100)
-		local target_width = math.floor(INVENTORY_CURIO_NATIVE_WIDTH * width_percent / 100 + 0.5)
-		local source_settings = adjusted_definitions.weapon_stats_grid_settings
-
-		if type(source_settings) == "table" then
-			local stats_settings = table.clone(source_settings)
-			local edge_padding = tonumber(stats_settings.edge_padding) or 12
-
-			stats_settings.grid_size = table.clone(stats_settings.grid_size or {})
-			stats_settings.mask_size = table.clone(stats_settings.mask_size or {})
-			stats_settings.grid_size[1] = math.max(target_width - edge_padding, 1)
-			stats_settings.mask_size[1] = target_width + 40
-			adjusted_definitions.weapon_stats_grid_settings = stats_settings
-		end
-	end
-
-	local parent = is_curio and "weapon_stats_pivot" or "weapon_compare_stats_pivot"
-	local width = is_curio and 530 or 420
-	local initial_x = is_curio and 0 or 20
-	local initial_y = is_curio and 500 or 320
-
-	scenegraph[INVENTORY_SORT_LABEL_ID] = {
-		horizontal_alignment = "left",
-		parent = parent,
-		vertical_alignment = "top",
-		size = {
-			width,
-			26,
-		},
-		position = {
-			initial_x,
-			initial_y,
-			20,
-		},
-	}
-	widget_definitions[INVENTORY_SORT_LABEL_ID] = UIWidget.create_definition(section_label_passes(), INVENTORY_SORT_LABEL_ID, {
-		label = mod:localize("inventory_sorting_inventory_label"),
-	})
-
-	scenegraph[INVENTORY_SORT_TOGGLE_ID] = {
-		horizontal_alignment = "left",
-		parent = parent,
-		vertical_alignment = "top",
-		size = {
-			width - 15,
-			32,
-		},
-		position = {
-			initial_x + 15,
-			initial_y + 28,
-			20,
-		},
-	}
-	widget_definitions[INVENTORY_SORT_TOGGLE_ID] = UIWidget.create_definition(inventory_sort_toggle_passes(), INVENTORY_SORT_TOGGLE_ID, {
-		checked = mod:get("prioritize_equipped_favorites") ~= false,
-		label = mod:localize("prioritize_equipped_favorites_inventory_label"),
-	})
-
-	if mod:get("enable_experimental_quick_discard") == true then
-		local compact_x = initial_x + 15
-		-- Curio details use a wider panel than weapons, but stretching the controls
-		-- across all 530 pixels leaves the action and steppers visually detached.
-		-- Keep the already-good weapon geometry and give Curios the same footprint.
-		local control_width = is_curio and 420 or width
-		local compact_width = control_width - 15
-		local type_gap = 8
-		local type_width = math.floor((compact_width - type_gap * 2) / 3)
-		local mode_width = 190
-		local function add_compact_checkbox(scenegraph_id, x, y, checkbox_width, label, checked)
-			scenegraph[scenegraph_id] = {
-				horizontal_alignment = "left",
-				parent = parent,
-				vertical_alignment = "top",
-				size = {
-					checkbox_width,
-					26,
-				},
-				position = {
-					x,
-					y,
-					20,
-				},
-			}
-			widget_definitions[scenegraph_id] = UIWidget.create_definition(compact_checkbox_passes(), scenegraph_id, {
-				checked = checked,
-				hotspot = {},
-				label = label,
-			})
-		end
-		local function add_compact_stepper(scenegraph_id, y, label, value)
-			scenegraph[scenegraph_id] = {
-				horizontal_alignment = "left",
-				parent = parent,
-				vertical_alignment = "top",
-				size = {
-					compact_width,
-					26,
-				},
-				position = {
-					compact_x,
-					y,
-					20,
-				},
-			}
-			widget_definitions[scenegraph_id] = UIWidget.create_definition(compact_stepper_passes(compact_width), scenegraph_id, {
-				decrease_hotspot = {},
-				increase_hotspot = {},
-				label = label,
-				value = tostring(value),
-			})
-		end
-
-		scenegraph[INVENTORY_DISCARD_LABEL_ID] = {
-			horizontal_alignment = "left",
-			parent = parent,
-			vertical_alignment = "top",
-			size = {
-				width,
-				26,
-			},
-			position = {
-				initial_x,
-				initial_y + 70,
-				20,
-			},
-		}
-		local discard_mode = mod:get("quick_discard_mode") == "automatic" and "automated" or "manual"
-
-		widget_definitions[INVENTORY_DISCARD_LABEL_ID] = UIWidget.create_definition(section_label_passes(), INVENTORY_DISCARD_LABEL_ID, {
-			label = mod:localize("inventory_" .. discard_mode .. "_discard_management_inventory_label"),
-		})
-
-		scenegraph[INVENTORY_DISCARD_MODE_ID] = {
-			horizontal_alignment = "left",
-			parent = parent,
-			vertical_alignment = "top",
-			size = {
-				mode_width,
-				26,
-			},
-			position = {
-				compact_x,
-				initial_y + 100,
-				20,
-			},
-		}
-		widget_definitions[INVENTORY_DISCARD_MODE_ID] = UIWidget.create_definition(compact_selector_passes(mode_width), INVENTORY_DISCARD_MODE_ID, {
-			hotspot = {},
-			label = mod:localize("quick_discard_inventory_mode"),
-			value = mod:localize("quick_discard_mode_" .. (mod:get("quick_discard_mode") or "manual")) .. "  ›",
-		})
-
-		add_compact_checkbox(INVENTORY_DISCARD_SKIP_CONFIRMATION_ID, compact_x + mode_width + 10, initial_y + 100, compact_width - mode_width - 10, mod:localize("quick_discard_skip_automatic_confirmation"), mod:get("quick_discard_skip_automatic_confirmation") == true)
-
-		scenegraph[INVENTORY_QUICK_DISCARD_ID] = {
-			horizontal_alignment = "left",
-			parent = parent,
-			vertical_alignment = "top",
-			size = {
-				compact_width,
-				32,
-			},
-			position = {
-				compact_x,
-				initial_y + 136,
-				20,
-			},
-		}
-		widget_definitions[INVENTORY_QUICK_DISCARD_ID] = UIWidget.create_definition(quick_discard_passes(), INVENTORY_QUICK_DISCARD_ID, {
-			discard_label = mod:localize("quick_discard_inventory_action"),
-			prefix = mod:localize("quick_discard_inventory_prefix"),
-			rarity_hotspot = {},
-			discard_hotspot = {},
-			rarity_label = mod:localize("quick_discard_rarity_1") .. "  ›",
-			suffix = mod:localize("quick_discard_inventory_suffix"),
-			visible = true,
-		})
-
-		add_compact_stepper(INVENTORY_DISCARD_MAX_LEVEL_ID, initial_y + 172, mod:localize("quick_discard_inventory_max_level"), math.floor(tonumber(mod:get("quick_discard_max_item_level")) or 490))
-		add_compact_checkbox(INVENTORY_DISCARD_MELEE_ID, compact_x, initial_y + 206, type_width, mod:localize("quick_discard_inventory_melee"), mod:get("quick_discard_include_melee") ~= false)
-		add_compact_checkbox(INVENTORY_DISCARD_RANGED_ID, compact_x + type_width + type_gap, initial_y + 206, type_width, mod:localize("quick_discard_inventory_ranged"), mod:get("quick_discard_include_ranged") ~= false)
-		add_compact_checkbox(INVENTORY_DISCARD_CURIO_ID, compact_x + (type_width + type_gap) * 2, initial_y + 206, type_width, mod:localize("quick_discard_inventory_curios"), mod:get("quick_discard_include_curios") ~= false)
-
-		add_compact_checkbox(INVENTORY_DISCARD_PROTECTION_ID, compact_x, initial_y + 240, compact_width, mod:localize("quick_discard_inventory_protect_weapons"), mod:get("quick_discard_protect_perfect_weapons") ~= false)
-		add_compact_checkbox(INVENTORY_DISCARD_CURIO_PROTECTION_ID, compact_x, initial_y + 274, compact_width, mod:localize("quick_discard_inventory_protect_curios"), mod:get("quick_discard_protect_high_level_curios") ~= false)
-		add_compact_stepper(INVENTORY_DISCARD_CURIO_LEVEL_ID, initial_y + 308, mod:localize("quick_discard_inventory_curio_level"), math.floor(tonumber(mod:get("quick_discard_curio_protection_level")) or 410))
-	end
-
-	return adjusted_definitions
+	return PanelDefinitions.add_inventory_sort_toggle_definition(mod, layout, definitions, view, inventory_slot_kind)
 end
-
-local rebuild_inventory_options_panel
-
-local INVENTORY_OPTIONS_PANEL_BLUEPRINTS = {
-	better_inventory_control = {
-		size_function = function(_, entry)
-			return entry.size
-		end,
-		pass_template_function = function(_, entry)
-			return entry.pass_template
-		end,
-		init = function(_, widget, entry)
-			local content = widget.content
-
-			for key, value in pairs(entry.initial_content or {}) do
-				content[key] = value
-			end
-
-			content.entry = entry
-
-			local view = entry.view
-
-			if view then
-				view._better_inventory_options_panel_widgets = view._better_inventory_options_panel_widgets or {}
-				view._better_inventory_options_panel_widgets[entry.control_id] = widget
-			end
-
-			if entry.bind then
-				entry.bind(widget)
-			end
-
-			if entry.refresh then
-				entry.refresh(widget)
-			end
-		end,
-		update = function(_, widget)
-			local entry = widget.content.entry
-
-			if entry and entry.refresh then
-				entry.refresh(widget)
-			end
-		end,
-	},
-	better_inventory_lantern_section = {
-		size_function = function(_, entry)
-			return entry.size
-		end,
-		pass_template_function = function(_, entry)
-			return entry.pass_template
-		end,
-		init = function(_, widget, entry)
-			for key, value in pairs(entry.initial_content or {}) do
-				widget.content[key] = type(value) == "table" and table.clone(value) or value
-			end
-
-			widget.content.entry = entry
-
-			local view = entry.view
-
-			if view then
-				view._better_inventory_lantern_section_widget = widget
-			end
-
-			if entry.refresh then
-				entry.refresh(widget)
-			end
-		end,
-		update = function(_, widget)
-			local entry = widget.content.entry
-
-			if entry and entry.refresh then
-				entry.refresh(widget)
-			end
-		end,
-	},
-}
-
-local ARMOURY_NATIVE_SORT_BLUEPRINTS = {
-	better_inventory_armoury_native_sort = {
-		size_function = function(_, entry)
-			return entry.size
-		end,
-		pass_template_function = function(_, entry)
-			return entry.pass_template
-		end,
-		init = function(_, widget, entry)
-			local content = widget.content
-
-			for key, value in pairs(entry.initial_content or {}) do
-				content[key] = value
-			end
-
-			content.entry = entry
-
-			local view = entry.view
-
-			if view then
-				view._better_inventory_armoury_native_sort_widgets = view._better_inventory_armoury_native_sort_widgets or {}
-				view._better_inventory_armoury_native_sort_widgets[entry.option_index] = widget
-			end
-
-			if entry.bind then
-				entry.bind(widget)
-			end
-
-			if entry.refresh then
-				entry.refresh(widget)
-			end
-		end,
-		update = function(_, widget)
-			local entry = widget.content.entry
-
-			if entry and entry.refresh then
-				entry.refresh(widget)
-			end
-		end,
-	},
-}
-
-local function armoury_controller_focus_passes(pass_template, height)
-	pass_template[#pass_template + 1] = {
-		pass_type = "rect",
-		style_id = "better_inventory_armoury_controller_focus",
-		style = {
-			color = Color.terminal_corner_selected(55, true),
-			offset = {
-				0,
-				0,
-				2,
-			},
-			size = {
-				ARMOURY_NATIVE_SORT_PANEL_WIDTH,
-				height,
-			},
-		},
-		visibility_function = function(content)
-			local hotspot = content.hotspot
-
-			return hotspot and (hotspot.is_selected or hotspot.is_focused) or false
-		end,
-	}
-
-	return pass_template
-end
-
-local function armoury_native_sort_entry(view, option, option_index)
-	local selected_sort_index = view._selected_sort_option_index or 1
-
-	return {
-		initial_content = {
-			hotspot = {},
-			label = option.display_name or tostring(option_index),
-			selected = selected_sort_index == option_index,
-		},
-		option_index = option_index,
-		option = option,
-		pass_template = armoury_controller_focus_passes(armoury_native_sort_option_passes(ARMOURY_NATIVE_SORT_PANEL_WIDTH), ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT),
-		size = {
-			ARMOURY_NATIVE_SORT_PANEL_WIDTH,
-			ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT,
-		},
-		view = view,
-		widget_type = "better_inventory_armoury_native_sort",
-		bind = function(widget)
-			widget.content.hotspot.pressed_callback = function()
-				local item_grid = view._item_grid
-
-				if item_grid and type(item_grid.trigger_sort_index) == "function" then
-					item_grid:trigger_sort_index(option_index)
-				elseif type(view.cb_on_sort_button_pressed) == "function" then
-					view:cb_on_sort_button_pressed(option)
-				end
-			end
-		end,
-		refresh = function(widget)
-			widget.content.selected = (view._selected_sort_option_index or 1) == option_index
-		end,
-	}
-end
-
-local function armoury_native_sort_toggle_passes()
-	local passes = inventory_sort_toggle_passes()
-	local checkbox_style_ids = {
-		checkbox_background = true,
-		checkbox_frame = true,
-		checkmark = true,
-	}
-
-	for index = 1, #passes do
-		local pass = passes[index]
-
-		if checkbox_style_ids[pass.style_id] then
-			local style = pass.style or {}
-			local offset = style.offset or {
-				0,
-				0,
-				0,
-			}
-
-			offset[1] = (offset[1] or 0) + ARMOURY_NATIVE_SORT_CHECKBOX_LEFT_PADDING
-			style.offset = offset
-			pass.style = style
-		end
-	end
-
-	return passes
-end
-
-local function armoury_native_sort_header_entry(mod, layout, view, section_id, label)
-	return {
-		initial_content = {
-			chevron = view._better_inventory_armoury_native_sort_collapsed[section_id] and ">" or "v",
-			hotspot = {},
-			label = label,
-		},
-		option_index = "header_" .. section_id,
-		pass_template = armoury_controller_focus_passes(panel_section_header_passes(ARMOURY_NATIVE_SORT_PANEL_WIDTH), 40),
-		size = {
-			ARMOURY_NATIVE_SORT_PANEL_WIDTH,
-			40,
-		},
-		view = view,
-		widget_type = "better_inventory_armoury_native_sort",
-		bind = function(widget)
-			widget.content.hotspot.pressed_callback = function()
-				local collapsed = view._better_inventory_armoury_native_sort_collapsed
-
-				collapsed[section_id] = not collapsed[section_id]
-				view._better_inventory_armoury_native_sort_rebuild_pending = true
-			end
-		end,
-		refresh = function(widget)
-			widget.content.chevron = view._better_inventory_armoury_native_sort_collapsed[section_id] and ">" or "v"
-		end,
-	}
-end
-
-local function armoury_native_sort_priority_entry(mod, layout, view, setting_id, label)
-	return {
-		initial_content = {
-			checked = setting_id == "prioritize_equipped_favorites" and mod:get(setting_id) ~= false or mod:get(setting_id) == true,
-			hotspot = {},
-			label = label,
-		},
-		option_index = "priority_" .. setting_id,
-		pass_template = armoury_controller_focus_passes(armoury_native_sort_toggle_passes(), 38),
-		size = {
-			ARMOURY_NATIVE_SORT_PANEL_WIDTH,
-			38,
-		},
-		view = view,
-		widget_type = "better_inventory_armoury_native_sort",
-		bind = function(widget)
-			widget.content.hotspot.pressed_callback = function()
-				mod:set(setting_id, not widget.content.checked, false)
-				Features.sync_inventory_sort_setting(mod, layout)
-			end
-		end,
-		refresh = function(widget)
-			widget.content.checked = setting_id == "prioritize_equipped_favorites" and mod:get(setting_id) ~= false or mod:get(setting_id) == true
-		end,
-	}
-end
-
-local function panel_entry(view, control_id, height, pass_template, initial_content, bind, refresh, controller_targets)
-	local geometry = view._better_inventory_options_panel_geometry
-
-	if type(controller_targets) == "table" and #controller_targets > 0 then
-		initial_content = initial_content or {}
-		initial_content.hotspot = initial_content.hotspot or {}
-
-		if #controller_targets == 1 then
-			pass_template[#pass_template + 1] = {
-				pass_type = "rect",
-				style_id = "better_inventory_controller_focus",
-				style = {
-					color = Color.terminal_corner_selected(55, true),
-					offset = {
-						0,
-						0,
-						2,
-					},
-					size = {
-						geometry.content_width,
-						height,
-					},
-				},
-				visibility_function = function(content)
-					local hotspot = content.hotspot
-
-					return hotspot and (hotspot.is_selected or hotspot.is_focused) or false
-				end,
-			}
-		else
-			-- The grid selects a full-row proxy hotspot so vertical navigation and
-			-- scrolling continue to work. Multi-control rows must visualize only
-			-- the embedded hotspot selected with left/right, not that proxy row.
-			for target_index = 1, #controller_targets do
-				local target_id = controller_targets[target_index]
-				local target_style
-
-				for pass_index = 1, #pass_template do
-					local pass = pass_template[pass_index]
-
-					if pass.content_id == target_id then
-						target_style = pass.style
-						break
-					end
-				end
-
-				if target_style then
-					local target_offset = table.clone(target_style.offset or { 0, 0, 0 })
-					local focus_style = table.clone(target_style)
-
-					target_offset[3] = math.max(2, (tonumber(target_offset[3]) or 0) - 3)
-					focus_style.color = Color.terminal_corner_selected(75, true)
-					focus_style.offset = target_offset
-					focus_style.size = table.clone(target_style.size or { geometry.content_width, height })
-					pass_template[#pass_template + 1] = {
-						pass_type = "rect",
-						style_id = "better_inventory_controller_focus_" .. tostring(target_index),
-						style = focus_style,
-						visibility_function = function(content)
-							local hotspot = content[target_id]
-
-							return hotspot and (hotspot.is_selected or hotspot.is_focused) or false
-						end,
-					}
-				end
-			end
-		end
-	end
-
-	return {
-		controller_targets = controller_targets,
-		control_id = control_id,
-		initial_content = initial_content,
-		pass_template = pass_template,
-		bind = bind,
-		refresh = refresh,
-		size = {
-			geometry.content_width,
-			height,
-		},
-		view = view,
-		widget_type = "better_inventory_control",
-	}
-end
-
-local function clone_lantern_value(value, seen, depth)
-	if type(value) ~= "table" then
-		return value
-	end
-
-	seen = seen or {}
-	depth = depth or 0
-
-	-- Initialized UI styles can contain engine-added parent/back references.
-	-- table.clone follows those references until DMF hits its duplicate-depth
-	-- guard. The hosted row needs only plain style/content data, so omit cycles
-	-- and unexpectedly deep runtime branches instead of cloning widget internals.
-	if seen[value] or depth >= 8 then
-		return
-	end
-
-	seen[value] = true
-
-	local copy = {}
-
-	for key, child in pairs(value) do
-		if type(key) ~= "table" then
-			local cloned_child = clone_lantern_value(child, seen, depth + 1)
-
-			if cloned_child ~= nil then
-				copy[key] = cloned_child
-			end
-		end
-	end
-
-	seen[value] = nil
-
-	return copy
-end
-
-local function lantern_proxy_definition(view)
-	local state = view._lantern_weapon_panel
-	local source_widget = state and state.widget
-	local source_passes = source_widget and source_widget.passes
-	local source_content = source_widget and source_widget.content
-	local source_styles = source_widget and source_widget.style
-	local geometry = view._better_inventory_options_panel_geometry
-	local background_style = source_styles and source_styles.background
-	local source_width = background_style and background_style.size and tonumber(background_style.size[1])
-
-	if type(source_passes) ~= "table" or type(source_content) ~= "table" or type(source_styles) ~= "table" or not geometry or not source_width then
-		return
-	end
-
-	local background_offset = background_style.offset or {}
-	local base_z = tonumber(background_offset[3]) or 0
-	local center_x = math.max(0, (geometry.content_width - source_width) * 0.5)
-	local pass_template = {}
-	local initial_content = {}
-	local value_ids = {}
-
-	for index = 1, #source_passes do
-		local source_pass = source_passes[index]
-		local style_id = source_pass and source_pass.style_id
-		local source_style = style_id and source_styles[style_id]
-
-		if source_pass and source_pass.pass_type and style_id and type(source_style) == "table" then
-			local style = clone_lantern_value(source_style)
-			local offset = style.offset or {
-				0,
-				0,
-				base_z,
-			}
-
-			style.offset = offset
-			offset[1] = (tonumber(offset[1]) or 0) + center_x
-			offset[3] = (tonumber(offset[3]) or base_z) - base_z
-
-			local pass = {
-				pass_type = source_pass.pass_type,
-				style_id = style_id,
-				style = style,
-			}
-			local value_id = source_pass.value_id
-
-			if value_id then
-				local value = clone_lantern_value(source_content[value_id])
-
-				pass.value_id = value_id
-				pass.value = clone_lantern_value(value)
-				initial_content[value_id] = value
-				value_ids[#value_ids + 1] = value_id
-			end
-
-			local content_id = source_pass.content_id
-
-			if content_id then
-				pass.content_id = content_id
-				pass.content = clone_lantern_value(source_content[content_id] or {})
-				initial_content[content_id] = clone_lantern_value(source_content[content_id] or {})
-			end
-
-			pass_template[#pass_template + 1] = pass
-		end
-	end
-
-	if #pass_template == 0 then
-		return
-	end
-
-	return pass_template, initial_content, value_ids
-end
-
-local function panel_lantern_entry(view)
-	local geometry = view._better_inventory_options_panel_geometry
-	local height = math.max(120, tonumber(view._better_inventory_lantern_panel_height) or 120)
-	local pass_template, initial_content, value_ids = lantern_proxy_definition(view)
-
-	if not pass_template then
-		return
-	end
-
-	return {
-		control_id = "better_inventory_lantern_section",
-		initial_content = initial_content,
-		pass_template = pass_template,
-		refresh = function(widget)
-			local state = view._lantern_weapon_panel
-			local source_content = state and state.widget and state.widget.content
-
-			if not source_content then
-				return
-			end
-
-			for index = 1, #value_ids do
-				local value_id = value_ids[index]
-
-				widget.content[value_id] = clone_lantern_value(source_content[value_id])
-			end
-		end,
-		size = {
-			geometry.content_width,
-			height,
-		},
-		view = view,
-		widget_type = "better_inventory_lantern_section",
-	}
-end
-
 local function panel_header_entry(mod, layout, view, control_id, section_id, label_function)
 	local geometry = view._better_inventory_options_panel_geometry
 
@@ -2005,6 +452,7 @@ local function panel_header_entry(mod, layout, view, control_id, section_id, lab
 			local collapsed = view._better_inventory_options_panel_collapsed
 
 			collapsed[section_id] = not collapsed[section_id]
+			Features.invalidate_view_composition(view)
 			-- Hotspot callbacks execute while ViewElementGrid is drawing. Rebuilding
 			-- here clears the widget array underneath Darktide's active draw loop.
 			-- The changed structure key is detected and rebuilt safely on the next
@@ -2016,6 +464,7 @@ local function panel_header_entry(mod, layout, view, control_id, section_id, lab
 		widget.content.chevron = is_collapsed and ">" or "v"
 	end, { "hotspot" })
 end
+
 
 local function panel_sort_entry(mod, layout, view)
 	return panel_entry(view, INVENTORY_SORT_TOGGLE_ID, 38, inventory_sort_toggle_passes(), {
@@ -2213,52 +662,55 @@ local function panel_checkbox_entry(mod, layout, view, control_id, setting_id, l
 	end, { "hotspot" })
 end
 
+SortOptions.configure({
+	count_diagnostic = Features.count_diagnostic,
+	is_armoury_sort_view = is_armoury_sort_view,
+	item_sorting_is_enabled = item_sorting_is_enabled,
+	signature = Features._domains.sorting.signature,
+	sorting = Features._sorting,
+})
+
 local function item_sorting_custom_option_start(view)
-	local sort_options = view and view._sort_options or {}
-
-	if not item_sorting_is_enabled() or type(item_sorting_mod.get) ~= "function" then
-		return #sort_options + 1
-	end
-
-	local view_type = is_armoury_sort_view(view) and "store" or "inventory"
-	local definition_group = item_sorting_definitions and item_sorting_definitions.customized_vanilla_methods
-	local vanilla_definitions = definition_group and definition_group[view_type]
-
-	if type(vanilla_definitions) == "table" then
-		return math.min(#vanilla_definitions + 1, #sort_options + 1)
-	end
-
-	local setting_ids = view_type == "store" and ITEM_SORTING_STORE_VANILLA_SETTINGS or ITEM_SORTING_INVENTORY_VANILLA_SETTINGS
-	local native_count = 0
-
-	for index = 1, #setting_ids do
-		local success, enabled = pcall(item_sorting_mod.get, item_sorting_mod, setting_ids[index])
-
-		if success and enabled == true then
-			native_count = native_count + 1
-		end
-	end
-
-	return math.min(native_count + 1, #sort_options + 1)
+	return SortOptions.item_sorting_custom_option_start(view)
 end
 
 local function item_sorting_options_signature(view)
-	if not item_sorting_is_enabled() then
-		return ""
-	end
-
-	local sort_options = view and view._sort_options or {}
-	local parts = {
-		tostring(item_sorting_custom_option_start(view)),
-		tostring(#sort_options),
-	}
-
-	for index = 1, #sort_options do
-		parts[#parts + 1] = tostring(sort_options[index].display_name or index)
-	end
-
-	return table.concat(parts, "|")
+	return SortOptions.item_sorting_options_signature(view)
 end
+
+armoury_panel = ArmouryPanel.new({
+	ARMOURY_NATIVE_SORT_BLUEPRINTS = ARMOURY_NATIVE_SORT_BLUEPRINTS,
+	ARMOURY_NATIVE_SORT_CHECKBOX_LEFT_PADDING = ARMOURY_NATIVE_SORT_CHECKBOX_LEFT_PADDING,
+	ARMOURY_NATIVE_SORT_PANEL_HEIGHT = ARMOURY_NATIVE_SORT_PANEL_HEIGHT,
+	ARMOURY_NATIVE_SORT_PANEL_MIN_HEIGHT = ARMOURY_NATIVE_SORT_PANEL_MIN_HEIGHT,
+	ARMOURY_NATIVE_SORT_PANEL_PADDING = ARMOURY_NATIVE_SORT_PANEL_PADDING,
+	ARMOURY_NATIVE_SORT_PANEL_REFERENCE = ARMOURY_NATIVE_SORT_PANEL_REFERENCE,
+	ARMOURY_NATIVE_SORT_PANEL_RIGHT_MARGIN = ARMOURY_NATIVE_SORT_PANEL_RIGHT_MARGIN,
+	ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT = ARMOURY_NATIVE_SORT_PANEL_ROW_HEIGHT,
+	ARMOURY_NATIVE_SORT_PANEL_ROW_SPACING = ARMOURY_NATIVE_SORT_PANEL_ROW_SPACING,
+	ARMOURY_NATIVE_SORT_PANEL_TOP = ARMOURY_NATIVE_SORT_PANEL_TOP,
+	ARMOURY_NATIVE_SORT_PANEL_WALLET_GAP = ARMOURY_NATIVE_SORT_PANEL_WALLET_GAP,
+	ARMOURY_NATIVE_SORT_PANEL_WEAPON_GAP = ARMOURY_NATIVE_SORT_PANEL_WEAPON_GAP,
+	ARMOURY_NATIVE_SORT_PANEL_WIDTH = ARMOURY_NATIVE_SORT_PANEL_WIDTH,
+	INVENTORY_VIRTUAL_CANVAS_WIDTH = INVENTORY_VIRTUAL_CANVAS_WIDTH,
+	armoury_native_sort_option_passes = armoury_native_sort_option_passes,
+	begin_view_session = Features.begin_view_session,
+	clear_controller_element_selection = clear_controller_element_selection,
+	controller_element_state = controller_element_state,
+	features = Features,
+	inventory_sort_toggle_passes = inventory_sort_toggle_passes,
+	is_armoury_sort_view = is_armoury_sort_view,
+	item_sorting_custom_option_start = item_sorting_custom_option_start,
+	item_sorting_is_enabled = item_sorting_is_enabled,
+	item_sorting_options_signature = item_sorting_options_signature,
+	panel_section_header_passes = panel_section_header_passes,
+	registered_views = registered_armoury_views,
+	restore_controller_element = restore_controller_element,
+	sync_inventory_sort_setting = function(mod, layout)
+		return Features.sync_inventory_sort_setting(mod, layout)
+	end,
+})
+scenegraph_rect = armoury_panel.scenegraph_rect
 
 local function panel_item_sorting_option_entry(view, option, option_index)
 	local geometry = view._better_inventory_options_panel_geometry
@@ -2581,230 +1033,39 @@ local function panel_curio_buyer_character_entry(mod, layout, view, profiles, fi
 	end, controller_targets)
 end
 
-local function panel_structure_key(mod, view)
-	local collapsed = view._better_inventory_options_panel_collapsed or {}
-	local key = 0
+PanelState.configure({
+	composite_key = Features._domains.panels.composite_key,
+	curio_buyer_profile_revision = curio_buyer_profile_revision,
+	item_sorting_is_enabled = item_sorting_is_enabled,
+	item_sorting_options_signature = item_sorting_options_signature,
+})
 
-	key = key + (view._discard_items_element and 1 or 0)
-	key = key + (mod:get("enable_experimental_quick_discard") == true and 2 or 0)
-	key = key + (mod:get("quick_discard_mode") == "automatic" and 4 or 0)
-	key = key + (mod:get("quick_discard_protect_high_level_curios") ~= false and 8 or 0)
-	key = key + (collapsed.sorting and 16 or 0)
-	key = key + (collapsed.discard and 32 or 0)
-	key = key + (mod:get("enable_automatic_curio_acquisition") == true and 64 or 0)
-	key = key + (collapsed.curio_buyer and 128 or 0)
-	key = key + (mod:get("automatic_curio_scan_operative_selection") == true and 256 or 0)
-	key = key + (mod:get("automatic_curio_once_per_store_rotation") ~= false and 512 or 0)
-	key = key + (mod:get("automatic_curio_rescan_on_store_refresh") == true and 1024 or 0)
-	key = key + (mod:get("automatic_curio_buy_health") ~= false and 2048 or 0)
-	key = key + (mod:get("automatic_curio_buy_toughness") ~= false and 4096 or 0)
-	key = key + (mod:get("automatic_curio_target_mode") == "characters" and 8192 or 0)
-	key = key + curio_buyer_profile_revision() * 16384
-	key = key + (item_sorting_is_enabled() and 4194304 or 0)
-	key = key + (collapsed.item_sorting and 8388608 or 0)
-	key = key + (collapsed.native_sorting and 16777216 or 0)
-
-	return tostring(key) .. ":" .. tostring(view._better_inventory_lantern_panel_signature or "") .. ":" .. item_sorting_options_signature(view)
-end
-
-local function lantern_is_enabled()
-	if not lantern_mod then
-		return false
-	end
-
-	if type(lantern_mod.is_enabled) ~= "function" then
-		return true
-	end
-
-	local success, enabled = pcall(lantern_mod.is_enabled, lantern_mod)
-
-	return success and enabled == true
-end
-
-local function lantern_recommendations_enabled()
-	if not lantern_is_enabled() or type(lantern_mod.get) ~= "function" then
-		return false
-	end
-
-	local success, enabled = pcall(lantern_mod.get, lantern_mod, "show_recommendations")
-
-	return success and enabled == true
-end
-
-Features.lantern_recommendations_active = lantern_recommendations_enabled
-
-local function lantern_weapon_signature(view)
-	local slot = view and view._selected_slot
-
-	if not slot or not slot.name or type(ProfileUtils.get_active_profile_preset_id) ~= "function" then
-		return
-	end
-
-	local success, active_id = pcall(ProfileUtils.get_active_profile_preset_id)
-
-	if not success then
-		return
-	end
-
-	return tostring(active_id) .. "|" .. tostring(slot.name)
-end
-
-local function lantern_preview_is_active(view)
-	if not view or type(view.is_previewing_item) ~= "function" then
-		return false
-	end
-
-	local success, is_previewing = pcall(view.is_previewing_item, view)
-
-	return success and is_previewing == true
-end
-
-local function restore_lantern_weapon_panel(view)
-	if view then
-		view._better_inventory_lantern_panel_available = false
-		view._better_inventory_lantern_panel_height = nil
-		view._better_inventory_lantern_panel_signature = nil
-		view._better_inventory_lantern_panel_hosted = false
-	end
+Features.lantern_recommendations_active = function()
+	return Lantern.lantern_recommendations_active()
 end
 
 Features.should_host_lantern_panel = function(view)
-	return view and view._better_inventory_lantern_panel_hosted == true
+	return Lantern.should_host_lantern_panel(view)
 end
 
 Features.set_lantern_integration = function(_, integration_mod)
-	lantern_mod = type(integration_mod) == "table" and integration_mod or nil
-	lantern_overlay = lantern_mod and lantern_mod._modules and lantern_mod._modules.equipment_overlay or nil
-
-	if not lantern_overlay or type(lantern_overlay.draw_weapon_select) ~= "function" then
-		return false
-	end
-
-	if type(lantern_overlay._better_inventory_original_draw_weapon_select) ~= "function" then
-		lantern_overlay._better_inventory_original_draw_weapon_select = lantern_overlay.draw_weapon_select
-		lantern_overlay.draw_weapon_select = function(view, ...)
-			local should_host = lantern_overlay._better_inventory_should_host_panel
-
-			if type(should_host) == "function" and should_host(view) then
-				return
-			end
-
-			return lantern_overlay._better_inventory_original_draw_weapon_select(view, ...)
-		end
-	end
-
-	lantern_overlay._better_inventory_should_host_panel = Features.should_host_lantern_panel
-
-	return true
+	return Lantern.set_lantern_integration(_, integration_mod)
 end
 
 Features.set_item_sorting_integration = function(integration_mod)
-	item_sorting_mod = type(integration_mod) == "table" and integration_mod or nil
-	item_sorting_definitions = nil
-
-	if item_sorting_mod and type(item_sorting_mod.io_dofile) == "function" then
-		local success, definitions = pcall(item_sorting_mod.io_dofile, item_sorting_mod, "ItemSorting/scripts/mods/ItemSorting/ItemSorting_definitions")
-
-		if success and type(definitions) == "table" then
-			item_sorting_definitions = definitions
-		end
-	end
-
-	return item_sorting_is_enabled()
+	return Features._sorting.set_integration(integration_mod, Features.invalidate_all_view_composition)
 end
 
 Features.preserve_item_sorting_native_options = function(view, selected_display_name)
-	if not item_sorting_is_enabled() or type(item_sorting_definitions) ~= "table" or not view then
-		return false
-	end
-
-	local view_type = is_armoury_sort_view(view) and "store" or view.__class_name == "InventoryWeaponsView" and "inventory" or nil
-	local vanilla_group = item_sorting_definitions.customized_vanilla_methods
-	local custom_group = item_sorting_definitions.modded_methods
-	local vanilla_definitions = view_type and vanilla_group and vanilla_group[view_type]
-	local custom_definitions = view_type and custom_group and custom_group[view_type]
-
-	if type(vanilla_definitions) ~= "table" or type(custom_definitions) ~= "table" then
-		return false
-	end
-
-	local options = {}
-	local function append_option(definition)
-		if type(definition) == "table" and type(definition.sort_function) == "function" then
-			options[#options + 1] = {
-				display_name = definition.display_name,
-				sort_function = definition.sort_function,
-			}
-		end
-	end
-
-	for index = 1, #vanilla_definitions do
-		append_option(vanilla_definitions[index])
-	end
-
-	for index = 1, #custom_definitions do
-		append_option(custom_definitions[index])
-	end
-
-	view._sort_options = options
-	local selected_index = 1
-
-	if selected_display_name ~= nil then
-		for index = 1, #options do
-			if options[index].display_name == selected_display_name then
-				selected_index = index
-				break
-			end
-		end
-	end
-
-	view._selected_sort_option_index = selected_index
-	view._selected_sort_option = options[selected_index]
-
-	local item_grid = view._item_grid
-
-	if item_grid and type(item_grid.setup_sort_button) == "function" and type(view.cb_on_sort_button_pressed) == "function" then
-		item_grid:setup_sort_button(options, function(...)
-			return view:cb_on_sort_button_pressed(...)
-		end)
-	end
-
-	return true
+	return Features._sorting.preserve_native_options(view, selected_display_name, is_armoury_sort_view, Features.invalidate_view_composition)
 end
 
 Features.release_lantern_inventory_section = function(view)
-	restore_lantern_weapon_panel(view)
+	return Lantern.release_lantern_inventory_section(view)
 end
 
 Features.update_lantern_inventory_section = function(mod, view)
-	local selected_slot_name = view and view._selected_slot and view._selected_slot.name
-	local separate_curio_panel = mod:get("keep_lantern_curio_panel_separate") ~= false and type(selected_slot_name) == "string" and string.match(selected_slot_name, "^slot_attachment_") ~= nil
-	local blocked_by_native_view_state = view and (view._discard_items_element ~= nil or view._item_compare_toggled == true)
-
-	if not lantern_mod or not lantern_overlay or separate_curio_panel or blocked_by_native_view_state or mod:get("enable_lantern_inventory_section") ~= true or mod:get("enable_inventory_options_panel_prototype") ~= true or mod:get("show_inventory_options_widget") == false or not view or not view._better_inventory_options_panel or view._better_inventory_options_panel_visible ~= true or view._better_inventory_options_panel._visible == false or view._filter_panel_element and view._show_filter_panel == true or not lantern_recommendations_enabled() or not lantern_preview_is_active(view) then
-		restore_lantern_weapon_panel(view)
-
-		return false
-	end
-
-	local state = view._lantern_weapon_panel
-	local widget = state and state.widget
-	local expected_signature = lantern_weapon_signature(view)
-	local background_style = widget and widget.style and widget.style.background
-	local panel_height = background_style and tonumber(background_style.size and background_style.size[2])
-
-	if not state or not widget or not state.entry or not expected_signature or state.sig ~= expected_signature or not panel_height or panel_height <= 0 then
-		restore_lantern_weapon_panel(view)
-
-		return false
-	end
-
-	view._better_inventory_lantern_panel_available = true
-	view._better_inventory_lantern_panel_height = math.max(120, panel_height)
-	view._better_inventory_lantern_panel_signature = tostring(state.sig) .. "|" .. tostring(view._better_inventory_lantern_panel_height)
-	view._better_inventory_lantern_panel_hosted = view._better_inventory_lantern_section_widget ~= nil
-
-	return view._better_inventory_lantern_panel_hosted
+	return Lantern.update_lantern_inventory_section(mod, view)
 end
 
 rebuild_inventory_options_panel = function(mod, layout, view)
@@ -2813,6 +1074,8 @@ rebuild_inventory_options_panel = function(mod, layout, view)
 	if not panel or view._destroyed then
 		return
 	end
+
+	Features.count_diagnostic("panel_rebuilds")
 
 	local collapsed = view._better_inventory_options_panel_collapsed
 	local native_discard_active = view._discard_items_element ~= nil
@@ -2898,7 +1161,6 @@ rebuild_inventory_options_panel = function(mod, layout, view)
 			entries[#entries + 1] = panel_curio_protection_type_entry(mod, layout, view)
 		end
 	end
-
 	if not native_discard_active then
 		entries[#entries + 1] = panel_header_entry(mod, layout, view, "better_inventory_curio_buyer_header", "curio_buyer", function()
 			return mod:localize("automatic_curio_buyer_inventory_label")
@@ -2960,7 +1222,7 @@ rebuild_inventory_options_panel = function(mod, layout, view)
 	view._better_inventory_options_panel_widgets = {}
 	view._better_inventory_lantern_section_widget = nil
 	view._better_inventory_lantern_panel_hosted = false
-	view._better_inventory_options_panel_structure_key = panel_structure_key(mod, view)
+	view._better_inventory_options_panel_structure_key = PanelState.panel_structure_key(mod, view)
 	view._better_inventory_options_panel_height = panel_height
 	panel:update_grid_height(panel_height, panel_height)
 	panel:present_grid_layout(entries, INVENTORY_OPTIONS_PANEL_BLUEPRINTS)
@@ -2984,7 +1246,7 @@ Features.compact_inventory_curio_stats_blueprints = function(mod, item_grid, con
 		return content_blueprints
 	end
 
-	local adjusted_blueprints = shallow_copy(content_blueprints)
+	local adjusted_blueprints = PanelState.shallow_copy(content_blueprints)
 	local adjusted_header = table.clone(gadget_header)
 
 	adjusted_blueprints.gadget_header = adjusted_header
@@ -3111,98 +1373,6 @@ Features.setup_inventory_options_panel = function(mod, layout, view, ViewElement
 	return true
 end
 
-local function controller_element_state(element)
-	if not element then
-		return
-	end
-
-	local state = {}
-
-	if type(element.input_disabled) == "function" then
-		state.input_disabled = element:input_disabled()
-	end
-
-	if type(element.selected_grid_index) == "function" then
-		state.selected_index = element:selected_grid_index()
-	end
-
-	return state
-end
-
-local function clear_controller_element_selection(element)
-	if element and type(element.select_grid_index) == "function" then
-		element:select_grid_index()
-	end
-end
-
-local function restore_controller_element(element, state)
-	if not element or not state then
-		return
-	end
-
-	if type(element.disable_input) == "function" and state.input_disabled ~= nil then
-		element:disable_input(state.input_disabled)
-	end
-
-	if type(element.select_grid_index) == "function" then
-		element:select_grid_index(state.selected_index)
-	end
-end
-
-local function set_inventory_options_panel_controller_focus(view, focused)
-	local panel = view and view._better_inventory_options_panel
-	local item_grid = view and view._item_grid
-
-	if not panel or not item_grid then
-		return false
-	end
-
-	if focused then
-		if view._better_inventory_options_panel_controller_focused == true then
-			return true
-		end
-
-		view._better_inventory_options_panel_controller_restore = {
-			discard = controller_element_state(view._discard_items_element),
-			item_grid = controller_element_state(item_grid),
-			weapon_options = controller_element_state(view._weapon_options_element),
-		}
-		view._better_inventory_options_panel_controller_focused = true
-
-		for _, element in pairs({ item_grid, view._weapon_options_element, view._discard_items_element }) do
-			if element then
-				if type(element.disable_input) == "function" then
-					element:disable_input(true)
-				end
-
-				clear_controller_element_selection(element)
-			end
-		end
-
-		if type(panel.disable_input) == "function" then
-			panel:disable_input(false)
-		end
-
-		if type(panel.select_first_index) == "function" then
-			panel:select_first_index()
-		end
-
-		return true
-	end
-
-	local restore = view._better_inventory_options_panel_controller_restore or {}
-
-	view._better_inventory_options_panel_controller_focused = false
-	view._better_inventory_options_panel_controller_restore = nil
-	view._better_inventory_options_panel_controller_target = nil
-	clear_controller_element_selection(panel)
-	restore_controller_element(item_grid, restore.item_grid)
-	restore_controller_element(view._weapon_options_element, restore.weapon_options)
-	restore_controller_element(view._discard_items_element, restore.discard)
-
-	return false
-end
-
 Features.capture_inventory_options_panel_controller_focus = function(mod, layout, view, input_service)
 	if not view or not is_inventory_view(layout, view) then
 		return false
@@ -3304,943 +1474,82 @@ Features.inventory_options_panel_controller_focused = function(view)
 	return view and view._better_inventory_options_panel_controller_focused == true
 end
 
-local function scenegraph_rect(owner, scenegraph_id)
-	if type(owner) ~= "table" or type(owner._scenegraph_size) ~= "function" then
-		return nil
+local set_armoury_controller_focus = function(view, focused)
+	if armoury_panel then
+		return armoury_panel.set_focus(view, focused)
 	end
-
-	local world_position = owner.scenegraph_world_position or owner._scenegraph_world_position
-
-	if type(world_position) ~= "function" then
-		return nil
-	end
-
-	if type(owner._force_update_scenegraph) == "function" then
-		pcall(owner._force_update_scenegraph, owner)
-	end
-
-	local position_success, position = pcall(world_position, owner, scenegraph_id)
-	local size_success, width, height = pcall(owner._scenegraph_size, owner, scenegraph_id)
-
-	if not position_success or not size_success or type(position) ~= "table" or type(position[1]) ~= "number" or type(position[2]) ~= "number" or type(width) ~= "number" or type(height) ~= "number" then
-		return nil
-	end
-
-	return {
-		x = position[1],
-		y = position[2],
-		width = width,
-		height = height,
-	}
-end
-
-local function armoury_native_sort_panel_position(view)
-	local canvas_width = INVENTORY_VIRTUAL_CANVAS_WIDTH
-	local canvas_position = {
-		0,
-		0,
-	}
-	local scenegraph = view and view._ui_scenegraph
-	local canvas = scenegraph and scenegraph.canvas
-
-	if canvas and type(canvas.size) == "table" and type(canvas.size[1]) == "number" then
-		canvas_width = canvas.size[1]
-	end
-
-	if view and type(view._scenegraph_world_position) == "function" then
-		local success, position = pcall(view._scenegraph_world_position, view, "canvas")
-
-		if success and type(position) == "table" then
-			canvas_position = position
-		end
-	end
-
-	local fallback_x = canvas_position[1] + canvas_width - ARMOURY_NATIVE_SORT_PANEL_RIGHT_MARGIN - ARMOURY_NATIVE_SORT_PANEL_WIDTH
-	local fallback_y = canvas_position[2] + ARMOURY_NATIVE_SORT_PANEL_TOP
-	local weapon_rect = scenegraph_rect(view and view._weapon_stats, "grid_background")
-
-	if not weapon_rect then
-		return fallback_x, fallback_y
-	end
-
-	local x = weapon_rect.x + weapon_rect.width + ARMOURY_NATIVE_SORT_PANEL_WEAPON_GAP
-	local y = weapon_rect.y
-	local parent = view and view._context and view._context.parent
-	local wallet_frame = scenegraph_rect(parent, "corner_top_right")
-
-	if wallet_frame then
-		y = math.max(y, wallet_frame.y + wallet_frame.height + ARMOURY_NATIVE_SORT_PANEL_WALLET_GAP)
-	end
-
-	return x, y
-end
-
-local function armoury_native_sort_entries(mod, layout, view)
-	local collapsed = view._better_inventory_armoury_native_sort_collapsed
-	local sort_options = view._sort_options or {}
-	local first_item_sorting_option = item_sorting_custom_option_start(view)
-	local entries = {
-		armoury_native_sort_header_entry(mod, layout, view, "sorting", mod:localize("inventory_sorting_inventory_label")),
-	}
-
-	if not collapsed.sorting then
-		entries[#entries + 1] = armoury_native_sort_priority_entry(mod, layout, view, "prioritize_equipped_favorites", mod:localize("prioritize_equipped_favorites_inventory_label"))
-		entries[#entries + 1] = armoury_native_sort_priority_entry(mod, layout, view, "prioritize_perfect_roll_weapons", mod:localize("prioritize_perfect_roll_weapons_inventory_label"))
-	end
-
-	if item_sorting_is_enabled() then
-		entries[#entries + 1] = armoury_native_sort_header_entry(mod, layout, view, "item_sorting", mod:localize("item_sorting_mod_header"))
-
-		if not collapsed.item_sorting then
-			for option_index = first_item_sorting_option, #sort_options do
-				entries[#entries + 1] = armoury_native_sort_entry(view, sort_options[option_index], option_index)
-			end
-		end
-	end
-
-	-- Native sorting is a sibling section, not part of the custom-priority
-	-- section. Keep its header (and its own collapsed state) visible when the
-	-- Sorting section is collapsed.
-	entries[#entries + 1] = armoury_native_sort_header_entry(mod, layout, view, "native_sorting", mod:localize("armoury_native_sorting_header"))
-
-	if not collapsed.native_sorting then
-		for option_index = 1, first_item_sorting_option - 1 do
-			entries[#entries + 1] = armoury_native_sort_entry(view, sort_options[option_index], option_index)
-		end
-	end
-
-	return entries
-end
-
-local function armoury_native_sort_panel_height(entries)
-	local content_height = 0
-
-	for index = 1, #entries do
-		content_height = content_height + entries[index].size[2]
-	end
-
-	content_height = content_height + math.max(#entries - 1, 0) * ARMOURY_NATIVE_SORT_PANEL_ROW_SPACING
-
-	return math.max(ARMOURY_NATIVE_SORT_PANEL_MIN_HEIGHT, content_height + ARMOURY_NATIVE_SORT_PANEL_PADDING * 2 + 31)
-end
-
-local function rebuild_armoury_native_sort_panel(view)
-	local panel = view and view._better_inventory_armoury_native_sort_panel
-
-	if not panel or view._destroyed then
-		return false
-	end
-
-	local entries = armoury_native_sort_entries(view._better_inventory_armoury_sort_mod, view._better_inventory_armoury_sort_layout, view)
-	local panel_height = math.min(ARMOURY_NATIVE_SORT_PANEL_HEIGHT, armoury_native_sort_panel_height(entries))
-
-	panel:update_grid_height(panel_height, panel_height)
-	panel:present_grid_layout(entries, ARMOURY_NATIVE_SORT_BLUEPRINTS)
-
-	return true
-end
-
-local function armoury_input_legend(view)
-	local parent = view and (view._parent or view._context and view._context.parent)
-
-	if not parent then
-		return nil
-	end
-
-	if parent._input_legend_element then
-		return parent._input_legend_element
-	end
-
-	if type(parent._element) == "function" then
-		local success, legend = pcall(parent._element, parent, "input_legend")
-
-		if success then
-			return legend
-		end
-	end
-end
-
-local function setup_armoury_controller_focus_legend(mod, view)
-	local focus_action = mod:get("inventory_options_controller_focus_keybind")
-
-	if view._better_inventory_armoury_controller_legend_id and view._better_inventory_armoury_controller_legend_action == focus_action then
-		return true
-	end
-
-	local previous_legend = view._better_inventory_armoury_controller_legend
-	local previous_id = view._better_inventory_armoury_controller_legend_id
-
-	if previous_legend and previous_id and type(previous_legend.remove_entry) == "function" then
-		pcall(previous_legend.remove_entry, previous_legend, previous_id)
-	end
-
-	view._better_inventory_armoury_controller_legend = nil
-	view._better_inventory_armoury_controller_legend_id = nil
-	view._better_inventory_armoury_controller_legend_action = nil
-
-	local legend = focus_action and focus_action ~= "off" and armoury_input_legend(view)
-
-	if not legend or type(legend.add_entry) ~= "function" then
-		return false
-	end
-
-	local success, legend_id = pcall(legend.add_entry, legend, "better_inventory_toggle_panel_focus", focus_action, function()
-		return view._using_cursor_navigation == false and view._better_inventory_armoury_native_sort_panel ~= nil
-	end, nil, "right_alignment")
-
-	if not success or not legend_id then
-		return false
-	end
-
-	view._better_inventory_armoury_controller_legend = legend
-	view._better_inventory_armoury_controller_legend_id = legend_id
-	view._better_inventory_armoury_controller_legend_action = focus_action
-
-	return true
-end
-
-local function set_armoury_controller_focus(view, focused)
-	local panel = view and view._better_inventory_armoury_native_sort_panel
-	local item_grid = view and view._item_grid
-
-	if not panel or not item_grid then
-		return false
-	end
-
-	if focused then
-		if view._better_inventory_armoury_controller_focused == true then
-			return true
-		end
-
-		view._better_inventory_armoury_controller_restore = controller_element_state(item_grid)
-		view._better_inventory_armoury_controller_focused = true
-
-		if type(item_grid.disable_input) == "function" then
-			item_grid:disable_input(true)
-		end
-
-		clear_controller_element_selection(item_grid)
-
-		if type(panel.disable_input) == "function" then
-			panel:disable_input(false)
-		end
-
-		if type(panel.select_first_index) == "function" then
-			panel:select_first_index()
-		end
-
-		return true
-	end
-
-	view._better_inventory_armoury_controller_focused = false
-	clear_controller_element_selection(panel)
-	restore_controller_element(item_grid, view._better_inventory_armoury_controller_restore)
-	view._better_inventory_armoury_controller_restore = nil
 
 	return false
 end
 
 Features.capture_armoury_sort_panel_controller_focus = function(mod, view, input_service)
-	if not is_armoury_sort_view(view) then
-		return false
-	end
-
-	local panel = view._better_inventory_armoury_native_sort_panel
-	local focused = view._better_inventory_armoury_controller_focused == true
-
-	if view._using_cursor_navigation ~= false or not panel or panel._visible == false then
-		if focused then
-			set_armoury_controller_focus(view, false)
-		end
-
-		return false
-	end
-
-	local focus_action = mod:get("inventory_options_controller_focus_keybind")
-
-	if focus_action and focus_action ~= "off" and input_service and type(input_service.get) == "function" and input_service:get(focus_action) then
-		focused = set_armoury_controller_focus(view, not focused)
-	end
-
-	if focused then
-		local item_grid = view._item_grid
-
-		if item_grid and type(item_grid.disable_input) == "function" then
-			item_grid:disable_input(true)
-		end
-
-		if type(panel.selected_grid_index) == "function" and not panel:selected_grid_index() and type(panel.select_first_index) == "function" then
-			panel:select_first_index()
-		end
-	end
-
-	return focused
-end
-
-Features.armoury_sort_panel_controller_focused = function(view)
-	return view and view._better_inventory_armoury_controller_focused == true
-end
-
-Features.update_armoury_native_sort_panel = function(view)
-	local panel = view and view._better_inventory_armoury_native_sort_panel
-
-	if not panel or view._destroyed then
-		return false
-	end
-
-	setup_armoury_controller_focus_legend(view._better_inventory_armoury_sort_mod, view)
-
-	local item_sorting_active = item_sorting_is_enabled()
-	local item_sorting_signature = item_sorting_options_signature(view)
-
-	if view._better_inventory_item_sorting_active ~= item_sorting_active or view._better_inventory_item_sorting_signature ~= item_sorting_signature then
-		view._better_inventory_item_sorting_active = item_sorting_active
-		view._better_inventory_item_sorting_signature = item_sorting_signature
-		view._better_inventory_armoury_native_sort_rebuild_pending = true
-	end
-
-	if view._better_inventory_armoury_native_sort_rebuild_pending then
-		view._better_inventory_armoury_native_sort_rebuild_pending = false
-		rebuild_armoury_native_sort_panel(view)
-	end
-
-	local x, y = armoury_native_sort_panel_position(view)
-
-	if type(panel.set_pivot_offset) == "function" then
-		panel:set_pivot_offset(x, y)
-	end
-
-	return true
-end
-
-Features.setup_armoury_native_sort_panel = function(mod, layout, view, ViewElementGrid)
-	if not is_armoury_sort_view(view) or view._better_inventory_armoury_native_sort_panel then
-		return false
-	end
-
-	local sort_options = view._sort_options
-
-	if type(sort_options) ~= "table" or (#sort_options == 0 and not item_sorting_is_enabled()) or type(ViewElementGrid) ~= "table" or type(view._add_element) ~= "function" then
-		return false
-	end
-
-	local menu_settings = {
-		bottom_chin = ARMOURY_NATIVE_SORT_PANEL_PADDING,
-		edge_padding = 0,
-		enable_gamepad_scrolling = true,
-		grid_size = {
-			ARMOURY_NATIVE_SORT_PANEL_WIDTH,
-			ARMOURY_NATIVE_SORT_PANEL_HEIGHT,
-		},
-		grid_spacing = {
-			0,
-			ARMOURY_NATIVE_SORT_PANEL_ROW_SPACING,
-		},
-		ignore_blur = true,
-		mask_size = {
-			ARMOURY_NATIVE_SORT_PANEL_WIDTH,
-			ARMOURY_NATIVE_SORT_PANEL_HEIGHT,
-		},
-		reset_selection_on_navigation_change = false,
-		scrollbar_width = 7,
-		title_height = 0,
-		top_padding = ARMOURY_NATIVE_SORT_PANEL_PADDING,
-		use_is_focused_for_navigation = false,
-		use_select_on_focused = true,
-		use_terminal_background = true,
-	}
-	local success, panel = pcall(view._add_element, view, ViewElementGrid, ARMOURY_NATIVE_SORT_PANEL_REFERENCE, 25, menu_settings)
-
-	if not success or not panel then
-		if type(mod.error) == "function" then
-			mod:error("BetterInventory Armoury native-sort panel could not initialize: " .. tostring(panel))
-		end
-
-		if type(view._remove_element) == "function" then
-			pcall(view._remove_element, view, ARMOURY_NATIVE_SORT_PANEL_REFERENCE)
-		end
-
-		return false
-	end
-
-	view._better_inventory_armoury_native_sort_panel = panel
-	view._better_inventory_armoury_native_sort_widgets = {}
-	view._better_inventory_armoury_native_sort_collapsed = {
-		item_sorting = false,
-		native_sorting = false,
-		sorting = false,
-	}
-	view._better_inventory_item_sorting_active = item_sorting_is_enabled()
-	view._better_inventory_item_sorting_signature = item_sorting_options_signature(view)
-	view._better_inventory_armoury_native_sort_rebuild_pending = false
-	view._better_inventory_armoury_sort_layout = layout
-	view._better_inventory_armoury_sort_mod = mod
-	registered_armoury_views[view] = true
-	if type(panel.disable_input) == "function" then
-		panel:disable_input(false)
-	end
-
-	if type(panel.set_visibility) == "function" then
-		panel:set_visibility(true)
-	end
-
-	local entries = armoury_native_sort_entries(mod, layout, view)
-
-	panel:update_grid_height(ARMOURY_NATIVE_SORT_PANEL_HEIGHT, ARMOURY_NATIVE_SORT_PANEL_HEIGHT)
-	panel:present_grid_layout(entries, ARMOURY_NATIVE_SORT_BLUEPRINTS)
-	Features.update_armoury_native_sort_panel(view)
-
-	return true
-end
-
-local function item_priority(view, layout_entry)
-	local item = layout_entry and (layout_entry.real_item or layout_entry.item)
-
-	if not item then
-		return 0
-	end
-
-	local slots = item.slots
-	local equipped = slots and type(view.is_item_equipped_in_any_slot) == "function" and view:is_item_equipped_in_any_slot(item, slots)
-
-	if equipped then
-		return 2
-	end
-
-	if item.gear_id and Items.is_item_id_favorited(item.gear_id) then
-		return 1
-	end
-
-	return 0
-end
-
-local function inventory_sort_priority(mod, view, layout_entry)
-	local item = layout_entry and (layout_entry.real_item or layout_entry.item)
-
-	if not item then
-		return 0
-	end
-
-	if mod:get("prioritize_equipped_favorites") ~= false then
-		local equipped_favorite_priority = item_priority(view, layout_entry)
-
-		if equipped_favorite_priority > 0 then
-			return equipped_favorite_priority + 2
-		end
-	end
-
-	if mod:get("prioritize_perfect_roll_weapons") == true and Features.is_perfect_roll_weapon(item) then
-		return 1
-	end
-
-	return 0
-end
-
-local function configure_sort_options(mod, view)
-	local sort_options = view._sort_options
-
-	if type(sort_options) ~= "table" then
-		return
-	end
-
-	for index = 1, #sort_options do
-		local option = sort_options[index]
-		local original_sort = option and option.sort_function
-
-		if type(original_sort) == "function" and not option._better_inventory_original_sort then
-			option._better_inventory_original_sort = original_sort
-			option.sort_function = function(left, right)
-				local left_priority = inventory_sort_priority(mod, view, left)
-				local right_priority = inventory_sort_priority(mod, view, right)
-
-				if left_priority ~= right_priority then
-					return left_priority > right_priority
-				end
-
-				return original_sort(left, right)
-			end
-		end
-	end
-end
-
-Features.configure_inventory_sort_options = function(mod, layout, view)
-	if not is_inventory_view(layout, view) then
-		return
-	end
-
-	configure_sort_options(mod, view)
-end
-
-Features.configure_armoury_sort_options = function(mod, view)
-	if not is_armoury_requisition_view(view) then
-		return
-	end
-
-	configure_sort_options(mod, view)
-end
-
-Features.configure_global_store_sort_options = function(mod, view)
-	if not is_global_store_view(view) then
-		return
-	end
-
-	configure_sort_options(mod, view)
-end
-
-Features.resort_inventory = function(mod, layout, view)
-	if not is_sortable_view(layout, view) or view._destroyed or type(view._sort_grid_layout) ~= "function" then
-		return
-	end
-
-	-- The native discard view temporarily presents a filtered copy of the inventory.
-	-- Re-presenting that copy here can leave stale layout/spacing entries when ESC
-	-- restores the full inventory. Darktide sorts the full offer layout itself while
-	-- closing discard mode, using the current wrapped comparator.
-	if view._discard_items_element then
-		return
-	end
-
-	local sort_options = view._sort_options
-	local option = sort_options and (view._selected_sort_option or sort_options[view._selected_sort_option_index or 1])
-	local sort_function = option and option.sort_function
-
-	if sort_function then
-		view:_sort_grid_layout(sort_function)
-	end
-end
-
-local function item_level(item)
-	local expertise = Items.expertise_level(item, true)
-
-	return tonumber(expertise)
-end
-
-local function item_type_is_enabled(mod, item_type)
-	if item_type == "WEAPON_MELEE" then
-		return mod:get("quick_discard_include_melee") ~= false
-	elseif item_type == "WEAPON_RANGED" then
-		return mod:get("quick_discard_include_ranged") ~= false
-	elseif item_type == "GADGET" then
-		return mod:get("quick_discard_include_curios") ~= false
+	if armoury_panel then
+		return armoury_panel.capture(mod, view, input_service)
 	end
 
 	return false
 end
 
-local function displayed_base_stat_values(item)
-	local base_stats = item and item.base_stats
-
-	if type(base_stats) ~= "table" or #base_stats ~= 5 then
-		return
-	end
-
-	local values = {}
-
-	for index = 1, #base_stats do
-		local stat = base_stats[index]
-		local raw_value = type(stat) == "table" and tonumber(stat.value)
-
-		if not raw_value then
-			return
-		end
-
-		values[index] = math.floor(raw_value * 100 + 0.5)
-	end
-
-	return values
+Features.armoury_sort_panel_controller_focused = function(view)
+	return armoury_panel and armoury_panel.focused(view) or false
 end
 
-local function projected_max_base_stat_values(item)
-	local base_stats = item and item.base_stats
-
-	if type(base_stats) ~= "table" or #base_stats ~= 5 or type(Items.preview_stats_change) ~= "function" or type(Items.max_expertise_level) ~= "function" then
-		return
+Features.update_armoury_native_sort_panel = function(view)
+	if armoury_panel then
+		return armoury_panel.update(view)
 	end
 
-	-- expertise_level also returns a boolean indicating whether baseItemLevel was
-	-- present. Passing the call directly to tonumber forwards that boolean as
-	-- tonumber's optional numeric base and raises for virtually every weapon.
-	local current_expertise = Items.expertise_level(item, true)
-
-	current_expertise = tonumber(current_expertise)
-	local maximum_expertise = tonumber(Items.max_expertise_level())
-
-	if not current_expertise or not maximum_expertise or current_expertise >= maximum_expertise then
-		return
-	end
-
-	local preview_stats = {}
-	local preview_keys = {}
-
-	for index = 1, #base_stats do
-		local stat = base_stats[index]
-		local raw_value = type(stat) == "table" and tonumber(stat.value)
-
-		if not raw_value then
-			return
-		end
-
-		local preview_key = "better_inventory_stat_" .. index
-
-		preview_keys[index] = preview_key
-		preview_stats[index] = {
-			display_name = preview_key,
-			fraction = raw_value,
-			name = stat.name or preview_key,
-		}
-	end
-
-	local projected_stats = Items.preview_stats_change(item, maximum_expertise - current_expertise, preview_stats)
-
-	if type(projected_stats) ~= "table" then
-		return
-	end
-
-	local values = {}
-
-	for index = 1, #preview_keys do
-		local projected_stat = projected_stats[preview_keys[index]]
-		local projected_value = tonumber(projected_stat and projected_stat.value)
-
-		if not projected_value then
-			return
-		end
-
-		values[index] = math.floor(projected_value + 0.5)
-	end
-
-	return values
+	return false
 end
 
-local function values_are_perfect_roll(values)
-	if type(values) ~= "table" or #values ~= 5 then
-		return false
+Features.setup_armoury_native_sort_panel = function(mod, layout, view, ViewElementGrid)
+	if armoury_panel then
+		return armoury_panel.setup(mod, layout, view, ViewElementGrid)
 	end
 
-	local maximum_stats = 0
-	local remaining_stats = 0
-
-	for index = 1, #values do
-		local displayed_value = values[index]
-
-		if displayed_value == 80 then
-			maximum_stats = maximum_stats + 1
-		elseif displayed_value >= 60 then
-			remaining_stats = remaining_stats + 1
-		else
-			return false
-		end
-	end
-
-	return maximum_stats == 4 and remaining_stats == 1
+	return false
 end
 
-local function calculate_is_perfect_roll_weapon(item)
-	if not item or not Items.is_weapon(item.item_type) then
-		return false
-	end
 
-	local total = Items.total_stats_value(item)
+local sort_comparator_manager
 
-	if not total or total > 380 then
-		return false
-	end
-
-	local base_stats = item.base_stats
-	local current_expertise
-
-	if total ~= 380 then
-		local expertise = Items.expertise_level(item, true)
-
-		current_expertise = tonumber(expertise)
-	end
-	local cached = perfect_roll_cache[item]
-	local cache_matches = cached and cached.total == total and cached.current_expertise == current_expertise and type(base_stats) == "table" and #base_stats == 5
-
-	if cache_matches then
-		for index = 1, 5 do
-			local raw_value = type(base_stats[index]) == "table" and tonumber(base_stats[index].value)
-
-			if raw_value ~= cached.raw_values[index] then
-				cache_matches = false
-				break
-			end
-		end
-	end
-
-	if cache_matches then
-		return cached.result
-	end
-
-	-- Total power is calculated from unrounded backend values, while each visible
-	-- attribute is rounded independently. Consequently the fifth visible stat can
-	-- legitimately show 61 or 62 on an otherwise perfect 380 roll.
-	local result = total == 380 and values_are_perfect_roll(displayed_base_stat_values(item)) or values_are_perfect_roll(projected_max_base_stat_values(item))
-
-	if type(base_stats) == "table" and #base_stats == 5 then
-		local raw_values = {}
-
-		for index = 1, 5 do
-			raw_values[index] = type(base_stats[index]) == "table" and tonumber(base_stats[index].value) or false
-		end
-
-		perfect_roll_cache[item] = {
-			current_expertise = current_expertise,
-			raw_values = raw_values,
-			result = result,
-			total = total,
-		}
-	end
-
-	-- Rarity upgrades do not change base attributes, but expertise upgrades do.
-	-- Protect an underpowered weapon when Darktide's own maximum-expertise preview
-	-- resolves to the same four-at-80, fifth-at-least-60 distribution.
-	return result
-end
-
-Features.is_perfect_roll_weapon = function(item)
-	-- Sorting invokes this from a native comparator. A legacy or partially
-	-- materialized item must sort as ordinary instead of taking down the view.
-	local success, result = pcall(calculate_is_perfect_roll_weapon, item)
-
-	return success and result == true
-end
-
-local CURIO_PRIMARY_TRAIT_SETTINGS = {
-	gadget_innate_health_increase = "quick_discard_keep_health_curios",
-	gadget_innate_toughness_increase = "quick_discard_keep_toughness_curios",
-	gadget_innate_max_wounds_increase = "quick_discard_keep_wound_curios",
-	gadget_stamina_increase = "quick_discard_keep_stamina_curios",
-}
-local CURIO_BUYER_PRIMARY_TRAIT_SETTINGS = {
-	gadget_innate_health_increase = "automatic_curio_buy_health",
-	gadget_innate_toughness_increase = "automatic_curio_buy_toughness",
-	gadget_innate_max_wounds_increase = "automatic_curio_buy_wounds",
-	gadget_stamina_increase = "automatic_curio_buy_stamina",
-}
-local CURIO_BUYER_PRIMARY_ROLL_SETTINGS = {
-	gadget_innate_health_increase = {
-		default = 21,
-		setting_id = "automatic_curio_min_health",
-	},
-	gadget_innate_toughness_increase = {
-		default = 17,
-		setting_id = "automatic_curio_min_toughness",
-	},
-}
-
-local function curio_primary_trait_name(item)
-	local primary_trait = item and item.traits and item.traits[1]
-	local trait_name, value = CurioValues.resolve(primary_trait)
-
-	if type(trait_name) ~= "string" then
-		return
-	end
-
-	for known_trait_name in pairs(CURIO_PRIMARY_TRAIT_SETTINGS) do
-		if trait_name == known_trait_name or string.find(trait_name, known_trait_name, 1, true) then
-			return known_trait_name, value
-		end
+Features.restore_sort_options = function(view)
+	if sort_comparator_manager then
+		return sort_comparator_manager.restore(view)
 	end
 end
 
-local function high_level_curio_is_protected(mod, item, level, protected_level)
-	if level < protected_level then
-		return false
-	end
-
-	local primary_trait_name = curio_primary_trait_name(item)
-	local setting_id = primary_trait_name and CURIO_PRIMARY_TRAIT_SETTINGS[primary_trait_name]
-
-	-- Unknown or future primary blessings fail closed. A game update must not turn
-	-- an unrecognized high-level Curio into an automatic-discard candidate.
-	return not setting_id or mod:get(setting_id) ~= false
-end
-
-local function automatic_curio_acquisition_protects(mod, item, level)
-	if mod:get("enable_automatic_curio_acquisition") ~= true then
-		return false
-	end
-
-	local minimum_level = math.clamp(math.floor(tonumber(mod:get("automatic_curio_min_item_level")) or 410), 0, 500)
-
-	if level < minimum_level then
-		return false
-	end
-
-	local primary_trait_name, primary_value = curio_primary_trait_name(item)
-	local setting_id = primary_trait_name and CURIO_BUYER_PRIMARY_TRAIT_SETTINGS[primary_trait_name]
-
-	if not setting_id or mod:get(setting_id) == false then
-		return false
-	end
-
-	local roll_config = CURIO_BUYER_PRIMARY_ROLL_SETTINGS[primary_trait_name]
-
-	if roll_config then
-		-- Missing inventory roll data fails safe. It must never make an acquired or
-		-- partially materialized Curio eligible for destructive automatic discard.
-		if primary_value then
-			local minimum_roll = math.clamp(tonumber(mod:get(roll_config.setting_id)) or roll_config.default, 0, 100)
-
-			if primary_value + 0.0001 < minimum_roll then
-				return false
-			end
-		end
-	end
-
-	return true
-end
-
-local function eligible_for_quick_discard(mod, item, is_equipped, maximum_equipped_levels, favorite_gear_ids)
-	if not item or not item.gear_id or not item_type_is_enabled(mod, item.item_type) then
-		return false
-	end
-
-	local rarity = tonumber(item.rarity)
-	local rarity_threshold = math.clamp(math.floor(tonumber(mod:get("quick_discard_rarity")) or 1), 1, 5)
-
-	if not rarity or rarity < 1 or rarity > rarity_threshold then
-		return false
-	end
-
-	local favorited = favorite_gear_ids and favorite_gear_ids[item.gear_id] or not favorite_gear_ids and Items.is_item_id_favorited(item.gear_id)
-
-	if favorited then
-		return false
-	end
-
-	if is_equipped and is_equipped(item) then
-		return false
-	end
-
-	local level = item_level(item)
-	local maximum_level = math.clamp(math.floor(tonumber(mod:get("quick_discard_max_item_level")) or 490), 0, 500)
-
-	if not level or level > maximum_level then
-		return false
-	end
-
-	if mod:get("quick_discard_protect_above_equipped_level") ~= false then
-		local maximum_equipped_level = maximum_equipped_levels and maximum_equipped_levels[item.item_type]
-
-		if maximum_equipped_level and level > maximum_equipped_level then
-			return false
-		end
-	end
-
-	if Items.is_weapon(item.item_type) and mod:get("quick_discard_protect_perfect_weapons") ~= false and Features.is_perfect_roll_weapon(item) then
-		return false
-	end
-
-	-- Buying and automatically discarding the same Curio on a later hub entry is
-	-- incoherent and wastes currency. Acquisition-filter matches remain protected
-	-- even when the general high-level Curio protection is configured differently.
-	if item.item_type == "GADGET" and automatic_curio_acquisition_protects(mod, item, level) then
-		return false
-	end
-
-	if item.item_type == "GADGET" and mod:get("quick_discard_protect_high_level_curios") ~= false then
-		local protected_level = math.clamp(math.floor(tonumber(mod:get("quick_discard_curio_protection_level")) or 410), 0, 500)
-
-		if high_level_curio_is_protected(mod, item, level, protected_level) then
-			return false
-		end
-	end
-
-	return true
-end
-
-local function collect_quick_discard_candidates(mod, source_items, is_equipped, allowed_gear_ids, maximum_equipped_levels, favorite_gear_ids)
-	local candidates = {}
-	local excluded_errors = 0
-	local first_error
-	local seen = {}
-
-	for _, entry in pairs(source_items or {}) do
-		local item = entry and (entry.real_item or entry.item or entry)
-		local gear_id = item and item.gear_id
-
-		if gear_id and not seen[gear_id] and (not allowed_gear_ids or allowed_gear_ids[gear_id]) then
-			local success, eligible = pcall(eligible_for_quick_discard, mod, item, is_equipped, maximum_equipped_levels, favorite_gear_ids)
-
-			if success and eligible then
-				seen[gear_id] = true
-				candidates[#candidates + 1] = item
-			elseif not success then
-				-- Account inventories can contain legacy or partially materialized gear
-				-- that current item utilities cannot evaluate. Automatic discard must
-				-- fail closed for those entries instead of aborting the entire scan.
-				excluded_errors = excluded_errors + 1
-				first_error = first_error or eligible
-			end
-		end
-	end
-
-	return candidates, excluded_errors, first_error
-end
-
-local function add_loadout_gear_ids(target, loadout)
-	for _, item in pairs(loadout or {}) do
-		local gear_id = type(item) == "table" and item.gear_id or type(item) == "string" and item or nil
-
-		if gear_id then
-			target[gear_id] = true
-		end
+Features.configure_inventory_sort_options = function(mod, layout, view)
+	if sort_comparator_manager then
+		return sort_comparator_manager.configure_inventory(mod, layout, view)
 	end
 end
 
-local function equipped_gear_ids(profile, profile_presets)
-	local equipped = {}
-
-	add_loadout_gear_ids(equipped, profile and profile.loadout)
-	add_loadout_gear_ids(equipped, profile and profile.loadout_item_ids)
-
-	-- Profile presets are saved independently from the currently active profile.
-	-- Treat every item referenced by every preset as equipped: an unfavorited item
-	-- used only by an inactive loadout must never enter any discard candidate set.
-	if type(profile_presets) == "table" then
-		for _, preset in pairs(profile_presets) do
-			if type(preset) == "table" then
-				add_loadout_gear_ids(equipped, preset.loadout)
-				add_loadout_gear_ids(equipped, preset.loadout_item_ids)
-			end
-		end
+Features.configure_armoury_sort_options = function(mod, view)
+	if sort_comparator_manager then
+		return sort_comparator_manager.configure_armoury(mod, view)
 	end
-
-	return equipped
 end
 
-local function maximum_equipped_levels(source_items, protected_gear_ids)
-	local maximums = {}
-	local unreadable_level = -1
-
-	for _, entry in pairs(source_items or {}) do
-		local item = entry and (entry.real_item or entry.item or entry)
-		local gear_id = item and item.gear_id
-		local item_type = item and item.item_type
-
-		-- Item level 500 is the absolute ceiling. Once a category reaches it,
-		-- subsequent equipped items of that category cannot improve its maximum.
-		-- An unreadable equipped/loadout item is more important than any readable
-		-- maximum: use a sentinel below every valid level so the later
-		-- `level > maximum` check protects the entire category. This keeps both
-		-- manual and automatic discard fail-closed for legacy account gear.
-		if gear_id and protected_gear_ids[gear_id] and item_type and maximums[item_type] ~= 500 and maximums[item_type] ~= unreadable_level then
-			local level_ok, level = pcall(item_level, item)
-
-			if level_ok and level then
-				maximums[item_type] = math.min(math.max(maximums[item_type] or 0, level), 500)
-			else
-				maximums[item_type] = unreadable_level
-			end
-		end
+Features.configure_global_store_sort_options = function(mod, view)
+	if sort_comparator_manager then
+		return sort_comparator_manager.configure_global_store(mod, view)
 	end
-
-	return maximums
 end
 
-local function preview_profile(view)
+Features.rebind_sort_options = function(mod, layout)
+	if sort_comparator_manager then
+		return sort_comparator_manager.rebind(mod, layout)
+	end
+end
+
+Features.resort_inventory = function(mod, layout, view)
+	if sort_comparator_manager then
+		return sort_comparator_manager.resort(mod, layout, view)
+	end
+end
+
+local function preview_profile_for_discard(view)
 	local player = view and view._preview_player
 
 	if player and not player.__deleted and type(player.profile) == "function" then
@@ -4252,6 +1561,25 @@ local function preview_profile(view)
 	end
 end
 
+Features.is_perfect_roll_weapon = DiscardPolicy.is_perfect_roll_weapon
+sort_comparator_manager = Features._sorting.new_comparator_manager({
+	begin_view_session = Features.begin_view_session,
+	contracts = Features._contracts,
+	is_armoury_requisition_view = is_armoury_requisition_view,
+	is_armoury_sort_view = is_armoury_sort_view,
+	is_global_store_view = is_global_store_view,
+	is_inventory_view = is_inventory_view,
+	is_perfect_roll_weapon = function(item)
+		return Features.is_perfect_roll_weapon(item)
+	end,
+	is_sortable_view = is_sortable_view,
+	register_view_session_cleanup = Features.register_view_session_cleanup,
+})
+Features._registered_sort_views = sort_comparator_manager.registered_views
+Features.automatic_curio_acquisition_protects = DiscardPolicy.automatic_curio_acquisition_protects
+Features.quick_discard_candidates_from_items = DiscardPolicy.quick_discard_candidates_from_items
+local quick_discard_candidates_from_items_detailed = DiscardPolicy.quick_discard_candidates_from_items_detailed
+
 Features.quick_discard_candidates = function(mod, layout, view, allowed_gear_ids)
 	if not is_inventory_view(layout, view) or view._destroyed then
 		return {}
@@ -4260,8 +1588,7 @@ Features.quick_discard_candidates = function(mod, layout, view, allowed_gear_ids
 	local parent_inventory = view._parent and view._parent._inventory_items
 	local source_items = type(parent_inventory) == "table" and next(parent_inventory) and parent_inventory or view._offer_items_layout or {}
 	local presets_ok, profile_presets = pcall(ProfileUtils.get_profile_presets)
-	local protected_gear_ids = equipped_gear_ids(preview_profile(view), presets_ok and profile_presets or nil)
-	local equipped_levels = maximum_equipped_levels(source_items, protected_gear_ids)
+	local protected_gear_ids = DiscardPolicy.equipped_gear_ids(preview_profile_for_discard(view), presets_ok and profile_presets or nil)
 	local function is_equipped(item)
 		if item.gear_id and protected_gear_ids[item.gear_id] then
 			return true
@@ -4272,78 +1599,17 @@ Features.quick_discard_candidates = function(mod, layout, view, allowed_gear_ids
 		return slots and type(view.is_item_equipped_in_any_slot) == "function" and view:is_item_equipped_in_any_slot(item, slots) or false
 	end
 
-	local candidates = collect_quick_discard_candidates(mod, source_items, is_equipped, allowed_gear_ids, equipped_levels)
-
-	return candidates
-end
-
-local function quick_discard_candidates_from_items_detailed(mod, source_items, equipped_gear_ids, allowed_gear_ids, favorite_gear_ids)
-	local equipped_levels = maximum_equipped_levels(source_items, equipped_gear_ids or {})
-	local function is_equipped(item)
-		return equipped_gear_ids and equipped_gear_ids[item.gear_id] == true
-	end
-
-	return collect_quick_discard_candidates(mod, source_items, is_equipped, allowed_gear_ids, equipped_levels, favorite_gear_ids)
-end
-
-Features.quick_discard_candidates_from_items = function(mod, source_items, equipped_gear_ids, allowed_gear_ids, favorite_gear_ids)
-	local candidates = quick_discard_candidates_from_items_detailed(mod, source_items, equipped_gear_ids, allowed_gear_ids, favorite_gear_ids)
+	local candidates = DiscardPolicy.quick_discard_candidates_from_source(mod, source_items, is_equipped, protected_gear_ids, allowed_gear_ids)
 
 	return candidates
 end
 
 local function summary_type_name(mod, count, singular_id, plural_id)
-	return mod:localize(count == 1 and singular_id or plural_id)
+	return DiscardSummary.summary_type_name(mod, count, singular_id, plural_id)
 end
 
 local function rarity_summary(mod, candidates)
-	local counts = {}
-	local lines = {}
-
-	for index = 1, #candidates do
-		local item = candidates[index]
-		local rarity = tonumber(item.rarity)
-
-		if rarity then
-			local rarity_counts = counts[rarity] or {
-				curios = 0,
-				melee = 0,
-				ranged = 0,
-				total = 0,
-			}
-
-			rarity_counts.total = rarity_counts.total + 1
-
-			if item.item_type == "WEAPON_MELEE" then
-				rarity_counts.melee = rarity_counts.melee + 1
-			elseif item.item_type == "WEAPON_RANGED" then
-				rarity_counts.ranged = rarity_counts.ranged + 1
-			elseif item.item_type == "GADGET" then
-				rarity_counts.curios = rarity_counts.curios + 1
-			end
-
-			counts[rarity] = rarity_counts
-		end
-	end
-
-	for rarity = 1, 5 do
-		local rarity_counts = counts[rarity]
-
-		if rarity_counts then
-			local settings = RaritySettings[rarity]
-			local color = settings and settings.color or Color.white(255, true)
-			local name = settings and Localize(settings.display_name) or tostring(rarity)
-			local breakdown = ""
-
-			if mod:get("quick_discard_show_type_breakdown") ~= false then
-				breakdown = string.format(" (%d %s, %d %s %s %d %s)", rarity_counts.melee, summary_type_name(mod, rarity_counts.melee, "quick_discard_summary_melee_singular", "quick_discard_summary_melee_plural"), rarity_counts.ranged, summary_type_name(mod, rarity_counts.ranged, "quick_discard_summary_ranged_singular", "quick_discard_summary_ranged_plural"), mod:localize("quick_discard_summary_and"), rarity_counts.curios, summary_type_name(mod, rarity_counts.curios, "quick_discard_summary_curio_singular", "quick_discard_summary_curio_plural"))
-			end
-
-			lines[#lines + 1] = string.format("{#color(%d,%d,%d)}%d %s%s{#reset()}", color[2], color[3], color[4], rarity_counts.total, name, breakdown)
-		end
-	end
-
-	return table.concat(lines, "\n")
+	return DiscardSummary.rarity_summary(mod, candidates)
 end
 
 local function discarded_rarity_summary(mod, candidates)
@@ -4413,666 +1679,144 @@ local function show_automatic_no_candidates_notification(mod)
 	return true
 end
 
-local function show_popup(context)
+local function show_popup(context, callback)
 	local event_manager = Managers and Managers.event
 
 	if not event_manager or type(event_manager.trigger) ~= "function" then
 		return false
 	end
 
-	return pcall(event_manager.trigger, event_manager, "event_show_ui_popup", context)
+	return pcall(event_manager.trigger, event_manager, "event_show_ui_popup", context, callback)
 end
 
-local discard_transaction = {
-	owner = nil,
-	view = nil,
-}
+local DiscardTransaction = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_discard_transaction")
+local discard_transaction = DiscardTransaction.new(Features._operation_arbiter, {
+	collect_candidates = function(mod, layout, view, allowed_gear_ids)
+		return Features.quick_discard_candidates(mod, layout, view, allowed_gear_ids)
+	end,
+	rarity_summary = rarity_summary,
+})
+
+Features.discard_owner = function()
+	return discard_transaction:active_owner()
+end
+
+Features.discard_view = function()
+	return discard_transaction:active_view()
+end
+
+Features.discard_token = function()
+	return discard_transaction:active_token()
+end
 
 local function acquire_discard_transaction(owner, view)
-	if discard_transaction.owner then
-		return false
-	end
-
-	discard_transaction.owner = owner
-	discard_transaction.view = view
-
-	if view then
-		view._better_inventory_discard_pending = true
-	end
-
-	return true
+	return discard_transaction:acquire(owner, view)
 end
 
-local function release_discard_transaction(owner)
-	if discard_transaction.owner ~= owner then
-		return false
-	end
-
-	local view = discard_transaction.view
-
-	discard_transaction.owner = nil
-	discard_transaction.view = nil
-
-	if view then
-		view._better_inventory_discard_pending = false
-	end
-
-	return true
+Features.remove_discard_popup = function(popup_id)
+	return discard_transaction:remove_popup(popup_id)
 end
 
+Features.set_discard_popup_id = function(owner, token, popup_id)
+	return discard_transaction:set_popup(owner, token, popup_id)
+end
+
+Features.clear_discard_popup = function(owner, token)
+	return discard_transaction:clear_popup(owner, token)
+end
+
+local function release_discard_transaction(owner, token)
+	local released = discard_transaction:release(owner, token)
+
+	return released == true
+end
+
+-- GearService settlement is observed by the main-module bridge. This module
+-- only owns the promise callback and releases the matching transaction token.
+Features.observe_manual_discard_settlement = function(promise)
+	return discard_transaction:observe_manual_settlement(promise)
+end
+
+Features.manual_discard_settlement_active = function()
+	return discard_transaction:manual_settlement_active()
+end
+
+local function discard_transaction_is_current(owner, token)
+	return discard_transaction:is_current(owner, token)
+end
+
+Features.discard_popup_is_active = function(popup_id)
+	return discard_transaction:popup_is_active(popup_id)
+end
+
+Features.reconcile_discard_transaction = function()
+	return discard_transaction:reconcile()
+end
 Features.request_quick_discard = function(mod, layout, view)
-	if view._better_inventory_discard_pending or discard_transaction.owner then
-		return
-	end
-
-	local candidates = Features.quick_discard_candidates(mod, layout, view)
-
-	if #candidates == 0 then
-		show_popup({
-			description_text_unlocalized = mod:localize("quick_discard_nothing_description"),
-			options = {
-				{
-					close_on_pressed = true,
-					no_localization = true,
-					text = mod:localize("quick_discard_close"),
-				},
-			},
-			title_text_unlocalized = mod:localize("quick_discard_nothing_title"),
-		})
-
-		return
-	end
-
-	local captured_ids = {}
-
-	for index = 1, #candidates do
-		captured_ids[candidates[index].gear_id] = true
-	end
-
-	if not acquire_discard_transaction("manual", view) then
-		return
-	end
-
-	local resolved = false
-
-	local function clear_pending()
-		if resolved then
-			return
-		end
-
-		resolved = true
-		release_discard_transaction("manual")
-	end
-
-	local function confirm_discard()
-		if resolved then
-			return
-		end
-
-		local revalidated = Features.quick_discard_candidates(mod, layout, view, captured_ids)
-		local gear_ids = {}
-
-		for index = 1, #revalidated do
-			gear_ids[#gear_ids + 1] = revalidated[index].gear_id
-		end
-
-		local event_manager = Managers and Managers.event
-
-		if #gear_ids > 0 and event_manager and type(event_manager.trigger) == "function" then
-			pcall(event_manager.trigger, event_manager, "event_discard_items", gear_ids)
-		end
-
-		-- The native event owns its asynchronous backend request and does not
-		-- expose a completion result. Do not claim success before it completes.
-		clear_pending()
-	end
-
-	local popup_shown = show_popup({
-		description_text_unlocalized = tostring(#candidates) .. " " .. mod:localize("quick_discard_confirmation_description") .. "\n\n" .. rarity_summary(mod, candidates) .. "\n\n" .. mod:localize("quick_discard_confirmation_warning"),
-		options = {
-			{
-				callback = confirm_discard,
-				close_on_pressed = true,
-				no_localization = true,
-				text = mod:localize("quick_discard_confirmation_yes"),
-			},
-			{
-				callback = clear_pending,
-				close_on_pressed = true,
-				hotkey = "back",
-				no_localization = true,
-				template_type = "terminal_button_small",
-				text = mod:localize("quick_discard_confirmation_no"),
-			},
-		},
-		title_text_unlocalized = mod:localize("quick_discard_confirmation_title"),
-	})
-
-	if not popup_shown then
-		clear_pending()
-	end
+	return discard_transaction:request_manual(mod, layout, view)
 end
 
-local AUTOMATIC_DISCARD_DELAY = 5
-local AUTOMATIC_DISCARD_MAX_FETCH_ATTEMPTS = 3
-local automatic_discard_state = {
-	elapsed = 0,
-	fetch_attempts = 0,
-	hub_character_id = nil,
-	scheduled = false,
-	started = false,
-	token = 0,
-}
+local AutomaticDiscard = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_discard_automatic")
+local automatic_discard = AutomaticDiscard.new(discard_transaction, {
+	candidates_from_items = function(mod, items, equipped_gear_ids, allowed_gear_ids, favorite_gear_ids)
+		return Features.quick_discard_candidates_from_items(mod, items, equipped_gear_ids, allowed_gear_ids, favorite_gear_ids)
+	end,
+	candidates_from_items_detailed = function(mod, items, equipped_gear_ids, allowed_gear_ids, favorite_gear_ids)
+		return quick_discard_candidates_from_items_detailed(mod, items, equipped_gear_ids, allowed_gear_ids, favorite_gear_ids)
+	end,
+	policy = DiscardPolicy,
+	rarity_summary = rarity_summary,
+	show_discard_summary_notification = show_discard_summary_notification,
+	show_no_candidates_notification = show_automatic_no_candidates_notification,
+	show_popup = show_popup,
+})
 
-local function automatic_discard_enabled(mod)
-	return mod:get("enable_experimental_quick_discard") == true and mod:get("quick_discard_mode") == "automatic"
+Features.clear_automatic_read_promise = function(promise)
+	return automatic_discard:clear_read_promise(promise)
+end
+
+Features.track_automatic_read_promise = function(promise)
+	return automatic_discard:track_read_promise(promise)
+end
+
+Features.cancel_automatic_read_promise = function()
+	return automatic_discard:cancel_read_promise()
 end
 
 Features.morningstar_auto_discard_is_busy = function(mod)
-	-- The scanner leaves `scheduled` set while its read-only fetch is in flight,
-	-- then the transaction owner remains authoritative through confirmation and
-	-- deletion. Once both clear, a Curio purchase can no longer enter this pass.
-	return automatic_discard_enabled(mod) and (automatic_discard_state.scheduled or discard_transaction.owner == "automatic")
+	return automatic_discard:morningstar_auto_discard_is_busy(mod)
 end
 
-local function current_game_mode_name()
-	local state = Managers and Managers.state
-	local game_mode = state and state.game_mode
-
-	if not game_mode or type(game_mode.game_mode_name) ~= "function" then
-		return
-	end
-
-	local success, name = pcall(game_mode.game_mode_name, game_mode)
-
-	return success and name or nil
-end
-
-local function is_morningstar()
-	local game_mode_name = current_game_mode_name()
-
-	return game_mode_name == "hub" or game_mode_name == "hub_singleplay"
-end
-
-local function automatic_discard_info(mod, message)
-	if mod and type(mod.info) == "function" then
-		mod:info("[Automatic discard] " .. message)
-	end
-end
-
-local function automatic_discard_error(error_value)
-	if type(error_value) == "table" then
-		local message = error_value.message or error_value.error or error_value[1]
-
-		if message then
-			return tostring(message)
-		elseif type(table.tostring) == "function" then
-			return table.tostring(error_value, 2)
-		end
-	end
-
-	return tostring(error_value)
-end
-
-local function current_player_and_character()
-	local player_manager = Managers and Managers.player
-	local player
-	local character_id
-
-	if player_manager and type(player_manager.local_player) == "function" then
-		local success, value = pcall(player_manager.local_player, player_manager, 1)
-
-		player = success and value or nil
-	end
-
-	if player and not player.__deleted and type(player.character_id) == "function" then
-		local success, value = pcall(player.character_id, player)
-
-		character_id = success and value or nil
-	end
-
-	return player, character_id
-end
-
-local function player_profile(player)
-	if not player or player.__deleted or type(player.profile) ~= "function" then
-		return
-	end
-
-	local success, profile = pcall(player.profile, player)
-
-	return success and profile or nil
-end
-
-local function automatic_protection_snapshot(character_id)
-	local player, current_character_id = current_player_and_character()
-
-	if not player or current_character_id ~= character_id then
-		return nil, "the current player or character changed"
-	end
-
-	local profile = player_profile(player)
-
-	if type(profile) ~= "table" then
-		return nil, "the current profile is unavailable"
-	end
-
-	local save_manager = Managers and Managers.save
-
-	if not save_manager or type(save_manager.character_data) ~= "function" then
-		return nil, "character save data is unavailable"
-	end
-
-	local save_ok, character_data = pcall(save_manager.character_data, save_manager, character_id)
-
-	if not save_ok or type(character_data) ~= "table" or type(character_data.favorite_items) ~= "table" then
-		return nil, "favorite-item save data is unavailable"
-	end
-
-	local presets_ok, profile_presets = pcall(ProfileUtils.get_profile_presets)
-
-	if not presets_ok or type(profile_presets) ~= "table" then
-		return nil, "saved loadout presets are unavailable"
-	end
-
-	return {
-		equipped_gear_ids = equipped_gear_ids(profile, profile_presets),
-		favorite_gear_ids = character_data.favorite_items,
-	}
-end
-
-local function fetch_inventory_promise(gear_service, character_id)
-	if not gear_service or type(gear_service.fetch_inventory) ~= "function" then
-		return nil, "GearService.fetch_inventory is unavailable"
-	end
-
-	local success, promise = pcall(gear_service.fetch_inventory, gear_service, character_id)
-
-	if not success then
-		return nil, promise
-	end
-
-	if not promise or type(promise.next) ~= "function" or type(promise.catch) ~= "function" then
-		return nil, "GearService.fetch_inventory returned no compatible promise"
-	end
-
-	return promise
-end
-
-local function automatic_context_is_current(mod, token, character_id)
-	if automatic_discard_state.token ~= token or not automatic_discard_enabled(mod) or not is_morningstar() then
-		return false
-	end
-
-	local _, current_character_id = current_player_and_character()
-
-	return current_character_id == character_id
-end
-
-local function notify_discard_result(mod, candidates, result)
-	local total_rewards = {}
-	local deleted_ids = {}
-
-	for index = 1, #(result or {}) do
-		local operation = result[index]
-		local gear_id = operation and operation.gearId
-
-		if gear_id then
-			deleted_ids[gear_id] = true
-		end
-
-		for reward_index = 1, #(operation and operation.rewards or {}) do
-			local reward = operation.rewards[reward_index]
-			local reward_type = reward and reward.type
-			local amount = tonumber(reward and reward.amount)
-
-			if reward_type and amount then
-				total_rewards[reward_type] = (total_rewards[reward_type] or 0) + amount
-			end
-		end
-	end
-
-	local event_manager = Managers and Managers.event
-
-	if event_manager and type(event_manager.trigger) == "function" then
-		pcall(event_manager.trigger, event_manager, "event_force_wallet_update")
-		pcall(event_manager.trigger, event_manager, "event_force_refresh_inventory")
-
-		for reward_type, reward_amount in pairs(total_rewards) do
-			pcall(event_manager.trigger, event_manager, "event_add_notification_message", "currency", {
-				amount = reward_amount,
-				currency = reward_type,
-			})
-		end
-	end
-
-	local discarded_candidates = {}
-
-	for index = 1, #(candidates or {}) do
-		local candidate = candidates[index]
-
-		if candidate and deleted_ids[candidate.gear_id] then
-			discarded_candidates[#discarded_candidates + 1] = candidate
-		end
-	end
-
-	show_discard_summary_notification(mod, discarded_candidates)
-end
-
-local function delete_automatic_candidates(mod, token, character_id, captured_ids)
-	if not automatic_context_is_current(mod, token, character_id) then
-		release_discard_transaction("automatic")
-		return
-	end
-
-	local gear_service = Managers and Managers.data_service and Managers.data_service.gear
-
-	if not gear_service or type(gear_service.fetch_inventory) ~= "function" or type(gear_service.delete_gear_batch) ~= "function" then
-		release_discard_transaction("automatic")
-		return
-	end
-
-	local fetch_promise, fetch_error = fetch_inventory_promise(gear_service, character_id)
-
-	if not fetch_promise then
-		automatic_discard_info(mod, "Final revalidation could not start: " .. automatic_discard_error(fetch_error))
-		release_discard_transaction("automatic")
-		return
-	end
-
-	fetch_promise:next(function(items)
-		if not automatic_context_is_current(mod, token, character_id) or type(items) ~= "table" then
-			release_discard_transaction("automatic")
-			return
-		end
-
-		local protection, protection_error = automatic_protection_snapshot(character_id)
-
-		if not protection then
-			automatic_discard_info(mod, "Final revalidation stopped safely because " .. automatic_discard_error(protection_error) .. ".")
-			release_discard_transaction("automatic")
-
-			return
-		end
-
-		local candidates = Features.quick_discard_candidates_from_items(mod, items, protection.equipped_gear_ids, captured_ids, protection.favorite_gear_ids)
-		local gear_ids = {}
-
-		for index = 1, #candidates do
-			gear_ids[index] = candidates[index].gear_id
-		end
-
-		automatic_discard_info(mod, string.format("Revalidated %d candidate(s) immediately before deletion.", #gear_ids))
-
-		if #gear_ids == 0 then
-			release_discard_transaction("automatic")
-			return
-		end
-
-		local delete_ok, delete_promise = pcall(gear_service.delete_gear_batch, gear_service, gear_ids)
-
-		if not delete_ok or not delete_promise or type(delete_promise.next) ~= "function" or type(delete_promise.catch) ~= "function" then
-			release_discard_transaction("automatic")
-			error(delete_ok and "GearService.delete_gear_batch returned no compatible promise" or delete_promise)
-		end
-
-		return delete_promise:next(function(result)
-			notify_discard_result(mod, candidates, result)
-			release_discard_transaction("automatic")
-
-			return result
-		end)
-	end):catch(function(error_value)
-		-- GearService already reports backend failures. Keep the one-shot
-		-- Morningstar pass from surfacing an unhandled promise rejection.
-		automatic_discard_info(mod, "Final revalidation failed: " .. automatic_discard_error(error_value))
-		release_discard_transaction("automatic")
-	end)
-end
-
-local function present_automatic_discard(mod, token, character_id, candidates)
-	if not acquire_discard_transaction("automatic") then
-		automatic_discard_info(mod, "Suppressed a duplicate automatic discard confirmation preview.")
-
-		return
-	end
-
-	local captured_ids = {}
-
-	for index = 1, #candidates do
-		captured_ids[candidates[index].gear_id] = true
-	end
-
-	if mod:get("quick_discard_skip_automatic_confirmation") == true then
-		automatic_discard_info(mod, "Confirmation skipping is enabled; starting final safety revalidation.")
-		delete_automatic_candidates(mod, token, character_id, captured_ids)
-
-		return
-	end
-
-	local confirmation_resolved = false
-
-	local function clear_confirmation()
-		if confirmation_resolved then
-			return
-		end
-
-		confirmation_resolved = true
-		release_discard_transaction("automatic")
-	end
-
-	local popup_shown = show_popup({
-		description_text_unlocalized = tostring(#candidates) .. " " .. mod:localize("quick_discard_confirmation_description") .. "\n\n" .. rarity_summary(mod, candidates) .. "\n\n" .. mod:localize("quick_discard_confirmation_warning"),
-		options = {
-			{
-				callback = function()
-					if not confirmation_resolved and discard_transaction.owner == "automatic" then
-						confirmation_resolved = true
-						delete_automatic_candidates(mod, token, character_id, captured_ids)
-					end
-				end,
-				close_on_pressed = true,
-				no_localization = true,
-				text = mod:localize("quick_discard_confirmation_yes"),
-			},
-			{
-				callback = clear_confirmation,
-				close_on_pressed = true,
-				hotkey = "back",
-				no_localization = true,
-				template_type = "terminal_button_small",
-				text = mod:localize("quick_discard_confirmation_no"),
-			},
-		},
-		title_text_unlocalized = mod:localize("quick_discard_automatic_confirmation_title"),
-	})
-
-	if not popup_shown then
-		clear_confirmation()
-	end
-
-	automatic_discard_info(mod, popup_shown and "Displayed the automatic discard confirmation preview." or "Could not display the automatic discard confirmation preview; no items were deleted.")
+Features.automatic_discard_read_request_count = function()
+	return automatic_discard:automatic_discard_read_request_count()
 end
 
 Features.begin_morningstar_auto_discard = function(mod)
-	-- Some startup/state-transition orders can report GameplayStateRun enter
-	-- again after the one-shot transaction has presented its confirmation or
-	-- started deletion. Keep that transaction authoritative until it finishes.
-	if discard_transaction.owner == "automatic" then
-		automatic_discard_info(mod, "Ignored a duplicate automatic discard re-arm while a transaction is active.")
-
-		return
-	end
-
-	automatic_discard_state.token = automatic_discard_state.token + 1
-	automatic_discard_state.elapsed = 0
-	automatic_discard_state.fetch_attempts = 0
-	automatic_discard_state.hub_character_id = nil
-	automatic_discard_state.scheduled = automatic_discard_enabled(mod)
-	automatic_discard_state.started = false
+	return automatic_discard:begin(mod)
 end
 
 Features.cancel_morningstar_auto_discard = function(preserve_transaction)
-	-- A momentary unavailable/non-hub game-mode observation must not unlock an
-	-- active transaction. A real GameplayStateRun exit or mod disable calls this
-	-- without preservation because its UI and backend context are going away.
-	if preserve_transaction and discard_transaction.owner == "automatic" then
-		automatic_discard_state.scheduled = false
-		automatic_discard_state.started = true
+	return automatic_discard:cancel(preserve_transaction)
+end
 
-		return
+Features.cancel_manual_discard = function()
+	if Features.discard_owner() == "manual" then
+		if Features.manual_discard_settlement_active() then
+			return false
+		end
+
+		release_discard_transaction("manual", Features.discard_token())
 	end
 
-	automatic_discard_state.token = automatic_discard_state.token + 1
-	release_discard_transaction("automatic")
-	automatic_discard_state.elapsed = 0
-	automatic_discard_state.fetch_attempts = 0
-	automatic_discard_state.hub_character_id = nil
-	automatic_discard_state.scheduled = false
-	automatic_discard_state.started = false
+	return true
 end
 
 Features.update_morningstar_auto_discard = function(mod, dt)
-	if not automatic_discard_enabled(mod) then
-		if automatic_discard_state.scheduled or automatic_discard_state.started or automatic_discard_state.hub_character_id or discard_transaction.owner == "automatic" then
-			Features.cancel_morningstar_auto_discard()
-		end
+	return automatic_discard:update(mod, dt)
+end
 
-		return
-	end
-
-	local game_mode_name = current_game_mode_name()
-
-	if not game_mode_name then
-		return
-	end
-
-	if not is_morningstar() then
-		if automatic_discard_state.scheduled or automatic_discard_state.started or automatic_discard_state.hub_character_id then
-			Features.cancel_morningstar_auto_discard(true)
-		end
-
-		return
-	end
-
-	local player, character_id = current_player_and_character()
-
-	if not player or not character_id then
-		return
-	end
-
-	-- DMF normally arms the pass through GameplayStateRun. Also observe the live
-	-- hub and character identity so hot reloads and unusual state transition
-	-- orders cannot silently leave Automatic mode dormant.
-	if automatic_discard_state.hub_character_id ~= character_id then
-		automatic_discard_state.token = automatic_discard_state.token + 1
-		automatic_discard_state.elapsed = 0
-		automatic_discard_state.fetch_attempts = 0
-		automatic_discard_state.hub_character_id = character_id
-		automatic_discard_state.scheduled = true
-		automatic_discard_state.started = false
-		automatic_discard_info(mod, "Scheduled one pass after detecting a ready Morningstar character.")
-	end
-
-	if not automatic_discard_state.scheduled or automatic_discard_state.started then
-		return
-	end
-
-	automatic_discard_state.elapsed = automatic_discard_state.elapsed + (tonumber(dt) or 0)
-
-	if automatic_discard_state.elapsed < AUTOMATIC_DISCARD_DELAY then
-		return
-	end
-
-	local progression_manager = Managers and Managers.progression
-
-	if progression_manager and type(progression_manager.is_fetching_session_report) == "function" and progression_manager:is_fetching_session_report() then
-		-- Mission rewards are added while Darktide parses the end-of-round report.
-		-- Do not take the one-shot inventory snapshot until that transaction has
-		-- completed and the game's reward path has invalidated its gear cache.
-		automatic_discard_state.elapsed = 0
-		automatic_discard_info(mod, "Waiting for the mission reward report before scanning inventory.")
-
-		return
-	end
-
-	local gear_service = Managers and Managers.data_service and Managers.data_service.gear
-
-	if not gear_service or type(gear_service.fetch_inventory) ~= "function" then
-		return
-	end
-
-	local token = automatic_discard_state.token
-
-	automatic_discard_state.started = true
-	automatic_discard_state.fetch_attempts = automatic_discard_state.fetch_attempts + 1
-
-	-- Force the first automatic scan to use the current backend gear list. This
-	-- includes an item awarded by the mission that just returned the player to
-	-- the Morningstar, even if another system populated the cache beforehand.
-	if type(gear_service.invalidate_gear_cache) == "function" then
-		gear_service:invalidate_gear_cache()
-	end
-
-	automatic_discard_info(mod, string.format("Starting inventory scan attempt %d.", automatic_discard_state.fetch_attempts))
-	local fetch_promise, fetch_error = fetch_inventory_promise(gear_service, character_id)
-
-	if not fetch_promise then
-		automatic_discard_state.started = false
-		automatic_discard_state.elapsed = 0
-		automatic_discard_state.scheduled = automatic_discard_state.fetch_attempts < AUTOMATIC_DISCARD_MAX_FETCH_ATTEMPTS
-		automatic_discard_info(mod, "Inventory scan could not start; scheduling a bounded retry. Reason: " .. automatic_discard_error(fetch_error))
-		return
-	end
-
-	fetch_promise:next(function(items)
-		if not automatic_context_is_current(mod, token, character_id) then
-			return
-		end
-
-		if type(items) ~= "table" then
-			automatic_discard_info(mod, "Inventory scan returned no item table; scheduling a bounded retry.")
-			automatic_discard_state.started = false
-			automatic_discard_state.elapsed = 0
-			automatic_discard_state.scheduled = automatic_discard_state.fetch_attempts < AUTOMATIC_DISCARD_MAX_FETCH_ATTEMPTS
-
-			return
-		end
-
-		automatic_discard_state.scheduled = false
-		local protection, protection_error = automatic_protection_snapshot(character_id)
-
-		if not protection then
-			automatic_discard_info(mod, "Inventory scan stopped safely because " .. automatic_discard_error(protection_error) .. "; scheduling a bounded retry.")
-			automatic_discard_state.started = false
-			automatic_discard_state.elapsed = 0
-			automatic_discard_state.scheduled = automatic_discard_state.fetch_attempts < AUTOMATIC_DISCARD_MAX_FETCH_ATTEMPTS
-
-			return
-		end
-
-		local candidates, excluded_errors, first_error = quick_discard_candidates_from_items_detailed(mod, items, protection.equipped_gear_ids, nil, protection.favorite_gear_ids)
-
-		if excluded_errors > 0 then
-			automatic_discard_info(mod, string.format("Safety-excluded %d unreadable item(s). First error: %s", excluded_errors, automatic_discard_error(first_error)))
-		end
-
-		automatic_discard_info(mod, string.format("Inventory scan found %d eligible candidate(s).", #candidates))
-
-		if #candidates > 0 then
-			present_automatic_discard(mod, token, character_id, candidates)
-		else
-			local displayed = show_automatic_no_candidates_notification(mod)
-			automatic_discard_info(mod, displayed and "Displayed the no-eligible-items notification." or "Suppressed the no-eligible-items notification.")
-		end
-	end):catch(function(error_value)
-		automatic_discard_info(mod, "Inventory scan failed; scheduling a bounded retry. Reason: " .. automatic_discard_error(error_value))
-		if automatic_discard_state.token == token then
-			automatic_discard_state.started = false
-			automatic_discard_state.elapsed = 0
-			automatic_discard_state.scheduled = automatic_discard_state.fetch_attempts < AUTOMATIC_DISCARD_MAX_FETCH_ATTEMPTS
-		end
-	end)
+Features.morningstar_auto_discard_needs_update = function(mod)
+	return automatic_discard:needs_update(mod)
 end
 
 local function rendered_weapon_stats_height(weapon_stats)
@@ -5202,6 +1946,8 @@ local function update_inventory_options_panel(mod, layout, view, slot_kind)
 	local panel = view._better_inventory_options_panel
 
 	if not panel or mod:get("enable_inventory_options_panel_prototype") ~= true then
+		Features.invalidate_view_composition(view)
+
 		if panel then
 			set_options_panel_visible(view, panel, false)
 		end
@@ -5221,10 +1967,22 @@ local function update_inventory_options_panel(mod, layout, view, slot_kind)
 		return true
 	end
 
+	local probe_count = (view._better_inventory_composition_probe_count or 0) + 1
+	local probe_due = probe_count >= 15
+	local input_changed = Features.composition_inputs_changed(view, slot_kind)
+
+	if not view._better_inventory_composition_dirty and not input_changed and not probe_due then
+		view._better_inventory_composition_probe_count = probe_count
+
+		return true
+	end
+
+	view._better_inventory_composition_probe_count = 0
+
 	set_legacy_inventory_options_visible(view, false)
 	set_options_panel_visible(view, panel, true)
 
-	if view._better_inventory_options_panel_structure_key ~= panel_structure_key(mod, view) then
+	if view._better_inventory_options_panel_structure_key ~= PanelState.panel_structure_key(mod, view) then
 		rebuild_inventory_options_panel(mod, layout, view)
 	end
 
@@ -5315,6 +2073,8 @@ local function update_inventory_options_panel(mod, layout, view, slot_kind)
 		return false
 	end
 
+	view._better_inventory_composition_dirty = false
+
 	return true
 end
 
@@ -5345,7 +2105,7 @@ local function update_quick_discard_content(mod, slot_kind, view, base_y)
 	end
 
 	if mode_changed and mode_widget then
-		mode_widget.content.value = mod:localize("quick_discard_mode_" .. discard_mode) .. "  ›"
+		mode_widget.content.value = mod:localize("quick_discard_mode_" .. discard_mode) .. "  ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Âº"
 	end
 
 	view._better_inventory_legacy_discard_mode = discard_mode
@@ -5363,7 +2123,7 @@ local function update_quick_discard_content(mod, slot_kind, view, base_y)
 		local rarity_color = rarity_settings and rarity_settings.color or Color.terminal_text_body(255, true)
 
 		discard_content.better_inventory_rarity = rarity
-		discard_content.rarity_label = mod:localize("quick_discard_rarity_" .. rarity) .. "  ›"
+		discard_content.rarity_label = mod:localize("quick_discard_rarity_" .. rarity) .. "  ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Âº"
 
 		if discard_widget.style and discard_widget.style.rarity_label then
 			discard_widget.style.rarity_label.text_color = table.clone(rarity_color)
@@ -5443,7 +2203,15 @@ Features.update_inventory_sort_toggle = function(mod, layout, view)
 		return
 	end
 
+	local sorting_mod = Features._sorting.mod()
+	local item_sorting_enabled_flag = sorting_mod and sorting_mod.enabled
+	if view._better_inventory_composition_item_sorting_enabled ~= item_sorting_enabled_flag then
+		Features.invalidate_view_composition(view)
+		view._better_inventory_composition_item_sorting_enabled = item_sorting_enabled_flag
+	end
+
 	if mod:get("show_inventory_options_widget") == false then
+		Features.invalidate_view_composition(view)
 		local panel = view._better_inventory_options_panel
 
 		set_legacy_inventory_options_visible(view, false)
@@ -5518,6 +2286,7 @@ Features.sync_inventory_sort_setting = function(mod, layout)
 	local perfect_rolls_enabled = mod:get("prioritize_perfect_roll_weapons") == true
 
 	for view in pairs(registered_inventory_views) do
+		Features.invalidate_view_composition(view)
 		local widget = view._widgets_by_name and view._widgets_by_name[INVENTORY_SORT_TOGGLE_ID]
 		local panel_widget = view._better_inventory_options_panel_widgets and view._better_inventory_options_panel_widgets[INVENTORY_SORT_TOGGLE_ID]
 		local perfect_panel_widget = view._better_inventory_options_panel_widgets and view._better_inventory_options_panel_widgets[INVENTORY_PERFECT_SORT_TOGGLE_ID]
@@ -5541,22 +2310,31 @@ Features.sync_inventory_sort_setting = function(mod, layout)
 	end
 
 	for view in pairs(registered_armoury_views) do
+		Features.invalidate_view_composition(view)
 		Features.resort_inventory(mod, layout, view)
 	end
 end
 
 Features.sync_quick_discard_settings = function(mod, layout, deferred_view)
 	for view in pairs(registered_inventory_views) do
-		if not view._destroyed and view ~= deferred_view then
-			Features.update_inventory_sort_toggle(mod, layout, view)
+		if not view._destroyed then
+			Features.invalidate_view_composition(view)
+
+			if view ~= deferred_view then
+				Features.update_inventory_sort_toggle(mod, layout, view)
+			end
 		end
 	end
 end
 
 Features.sync_curio_acquisition_settings = function(mod, layout, deferred_view)
 	for view in pairs(registered_inventory_views) do
-		if not view._destroyed and view ~= deferred_view then
-			Features.update_inventory_sort_toggle(mod, layout, view)
+		if not view._destroyed then
+			Features.invalidate_view_composition(view)
+
+			if view ~= deferred_view then
+				Features.update_inventory_sort_toggle(mod, layout, view)
+			end
 		end
 	end
 end
@@ -5575,6 +2353,7 @@ Features.bind_inventory_sort_toggle = function(mod, layout, view)
 	end
 
 	registered_inventory_views[view] = true
+	Features.invalidate_view_composition(view)
 	Features.update_inventory_sort_toggle(mod, layout, view)
 	hotspot.pressed_callback = function()
 		local enabled = not content.checked
@@ -5674,10 +2453,26 @@ Features.bind_inventory_sort_toggle = function(mod, layout, view)
 end
 
 Features.unregister_inventory_view = function(view)
+	local session_closed = Features.end_view_session(view, "view_exit")
+
+	if not session_closed then
+		Features.restore_sort_options(view)
+	end
+
+	if Features.discard_owner() == "manual" and Features.discard_view() == view then
+		Features.cancel_manual_discard()
+	end
+
+	Features._registered_sort_views[view] = nil
 	registered_inventory_views[view] = nil
 end
-
 Features.unregister_armoury_view = function(view)
+	local session_closed = Features.end_view_session(view, "view_exit")
+
+	if not session_closed then
+		Features.restore_sort_options(view)
+	end
+
 	if view and view._better_inventory_armoury_controller_focused == true then
 		set_armoury_controller_focus(view, false)
 	end
@@ -5695,12 +2490,30 @@ Features.unregister_armoury_view = function(view)
 		view._better_inventory_armoury_controller_legend_action = nil
 	end
 
+	Features._registered_sort_views[view] = nil
 	registered_armoury_views[view] = nil
 end
 
 Features.disable_inventory_views = function()
+	Features.cancel_manual_discard()
+
+	for view in pairs(Features._registered_sort_views) do
+		local session_closed = Features.end_view_session(view, "mod_disable")
+
+		if not session_closed then
+			Features.restore_sort_options(view)
+		else
+			view._better_inventory_session_disable_handled = true
+		end
+	end
+
 	for view in pairs(registered_inventory_views) do
 		restore_lantern_weapon_panel(view)
+
+		if view._better_inventory_options_panel_controller_focused == true then
+			set_inventory_options_panel_controller_focus(view, false)
+		end
+
 		local panel = view._better_inventory_options_panel
 
 		if panel then
@@ -5711,9 +2524,28 @@ Features.disable_inventory_views = function()
 	end
 
 	for view in pairs(registered_armoury_views) do
+		-- The shared session was closed by the registered-sort pass above. A
+		-- compatibility restore remains for views that could not open a session.
+		if view._better_inventory_session_disable_handled then
+			view._better_inventory_session_disable_handled = nil
+		else
+			Features.restore_sort_options(view)
+		end
+
 		if view._better_inventory_armoury_controller_focused == true then
 			set_armoury_controller_focus(view, false)
 		end
+
+		local legend = view._better_inventory_armoury_controller_legend
+		local legend_id = view._better_inventory_armoury_controller_legend_id
+
+		if legend and legend_id and type(legend.remove_entry) == "function" then
+			pcall(legend.remove_entry, legend, legend_id)
+		end
+
+		view._better_inventory_armoury_controller_legend = nil
+		view._better_inventory_armoury_controller_legend_id = nil
+		view._better_inventory_armoury_controller_legend_action = nil
 
 		local panel = view._better_inventory_armoury_native_sort_panel
 

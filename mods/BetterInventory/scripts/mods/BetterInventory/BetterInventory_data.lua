@@ -1,4 +1,4 @@
-local MOD_VERSION = "1.9.4"
+local MOD_VERSION = "2.0.1"
 local mod = get_mod("BetterInventory")
 local DEFAULT_OPERATIVE_SLOT_CAPACITY = 10
 local MAX_REASONABLE_OPERATIVE_SLOT_CAPACITY = 64
@@ -589,6 +589,167 @@ return {
 				},
 			},
 			{
+				setting_id = "auto_crafter_group",
+				type = "group",
+				sub_widgets = {
+					{
+						setting_id = "auto_crafter_enable",
+						tooltip = "auto_crafter_enable_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "auto_crafter_read_only_probe",
+						tooltip = "auto_crafter_read_only_probe_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "auto_crafter_show_probe_notifications",
+						tooltip = "auto_crafter_show_probe_notifications_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "auto_crafter_show_status_hud",
+						tooltip = "auto_crafter_show_status_hud_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "auto_crafter_target_dump_stat",
+						tooltip = "auto_crafter_target_dump_stat_tooltip",
+						type = "dropdown",
+						default_value = "damage",
+						options = {
+							{
+								text = "auto_crafter_dump_stat_damage",
+								value = "damage",
+							},
+							{
+								text = "auto_crafter_dump_stat_mobility",
+								value = "mobility",
+							},
+							{
+								text = "auto_crafter_dump_stat_finesse",
+								value = "finesse",
+							},
+							{
+								text = "auto_crafter_dump_stat_first_target",
+								value = "first_target",
+							},
+							{
+								text = "auto_crafter_dump_stat_penetration",
+								value = "penetration",
+							},
+							{
+								text = "auto_crafter_dump_stat_defenses",
+								value = "defenses",
+							},
+						},
+					},
+					{
+						setting_id = "auto_crafter_dump_stat_target",
+						tooltip = "auto_crafter_dump_stat_target_tooltip",
+						type = "numeric",
+						default_value = 60,
+						range = {
+							1,
+							100,
+						},
+					},
+					{
+						setting_id = "auto_crafter_cap_by_dockets",
+						tooltip = "auto_crafter_cap_by_dockets_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "auto_crafter_docket_cap",
+						tooltip = "auto_crafter_docket_cap_tooltip",
+						type = "numeric",
+						default_value = 500000,
+						range = {
+							0,
+							10000000,
+						},
+					},
+					{
+						setting_id = "auto_crafter_cap_by_max_purchases",
+						tooltip = "auto_crafter_cap_by_max_purchases_tooltip",
+						type = "checkbox",
+						default_value = false,
+					},
+					{
+						setting_id = "auto_crafter_max_purchases",
+						tooltip = "auto_crafter_max_purchases_tooltip",
+						type = "numeric",
+						default_value = 100,
+						range = {
+							1,
+							10000,
+						},
+					},
+					{
+						setting_id = "auto_crafter_best_candidate_fallback",
+						tooltip = "auto_crafter_best_candidate_fallback_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "auto_crafter_request_mode",
+						tooltip = "auto_crafter_request_mode_tooltip",
+						type = "dropdown",
+						default_value = "sequential",
+						options = {
+							{
+								text = "auto_crafter_request_mode_sequential",
+								value = "sequential",
+							},
+							{
+								text = "auto_crafter_request_mode_parallel_reads",
+								value = "parallel_reads",
+							},
+							{
+								text = "auto_crafter_request_mode_experimental",
+								value = "experimental_parallel_mutations",
+							},
+						},
+					},
+					{
+						setting_id = "auto_crafter_workflow_group",
+						type = "group",
+						sub_widgets = {
+							{ setting_id = "auto_crafter_favorite_result", tooltip = "auto_crafter_favorite_result_tooltip", type = "checkbox", default_value = true },
+							{ setting_id = "auto_crafter_buy_until_target", tooltip = "auto_crafter_buy_until_target_tooltip", type = "checkbox", default_value = true },
+							{ setting_id = "auto_crafter_defer_bad_weapon_processing", tooltip = "auto_crafter_defer_bad_weapon_processing_tooltip", type = "checkbox", default_value = true },
+							{ setting_id = "auto_crafter_level_mastery_20", tooltip = "auto_crafter_level_mastery_20_tooltip", type = "checkbox", default_value = true },
+							{ setting_id = "auto_crafter_allocate_mastery_points", tooltip = "auto_crafter_allocate_mastery_points_tooltip", type = "checkbox", default_value = true },
+							{ setting_id = "auto_crafter_consecrate_transcendent", tooltip = "auto_crafter_consecrate_transcendent_tooltip", type = "checkbox", default_value = true },
+							{ setting_id = "auto_crafter_upgrade_expertise_500", tooltip = "auto_crafter_upgrade_expertise_500_tooltip", type = "checkbox", default_value = true },
+							{ setting_id = "auto_crafter_change_perks", tooltip = "auto_crafter_change_perks_tooltip", type = "checkbox", default_value = true },
+							{ setting_id = "auto_crafter_change_blessings", tooltip = "auto_crafter_change_blessings_tooltip", type = "checkbox", default_value = true },
+						},
+					},
+					{
+						setting_id = "auto_crafter_resuming_group",
+						type = "group",
+						sub_widgets = {
+							{ setting_id = "auto_crafter_reuse_inventory_base", tooltip = "auto_crafter_reuse_inventory_base_tooltip", type = "checkbox", default_value = true },
+							{ setting_id = "auto_crafter_include_favorite_inventory_bases", tooltip = "auto_crafter_include_favorite_inventory_bases_tooltip", type = "checkbox", default_value = true },
+						},
+					},
+					{
+						setting_id = "auto_crafter_trait_targets_group",
+						type = "group",
+						sub_widgets = {
+							{ setting_id = "auto_crafter_show_perk_grid", tooltip = "auto_crafter_show_perk_grid_tooltip", type = "checkbox", default_value = true },
+							{ setting_id = "auto_crafter_show_blessing_grid", tooltip = "auto_crafter_show_blessing_grid_tooltip", type = "checkbox", default_value = true },
+						},
+					},
+				},
+			},
+			{
 				setting_id = "additional_views_group",
 				type = "group",
 				sub_widgets = {
@@ -664,10 +825,10 @@ return {
 									230,
 								},
 							},
-						},
-					},
-					{
-						setting_id = "global_store_integration_group",
+									},
+								},
+								{
+									setting_id = "global_store_integration_group",
 						type = "group",
 						sub_widgets = {
 							{
@@ -793,6 +954,66 @@ return {
 								tooltip = "character_overview_show_ranged_rarity_strip_tooltip",
 								type = "checkbox",
 								default_value = true,
+							},
+							{
+								setting_id = "character_overview_show_only_dump_stat",
+								tooltip = "character_overview_show_only_dump_stat_tooltip",
+								type = "checkbox",
+								default_value = false,
+							},
+							{
+								setting_id = "character_overview_dump_stat_horizontal_offset",
+								tooltip = "character_overview_dump_stat_horizontal_offset_tooltip",
+								type = "numeric",
+								default_value = -10,
+								range = {
+									-300,
+									300,
+								},
+							},
+							{
+								setting_id = "character_overview_dump_stat_font_scale_percent",
+								tooltip = "character_overview_dump_stat_font_scale_percent_tooltip",
+								type = "numeric",
+								default_value = 130,
+								range = {
+									50,
+									200,
+								},
+							},
+							{
+								setting_id = "character_overview_dump_stat_color_preset",
+								tooltip = "character_overview_dump_stat_color_preset_tooltip",
+								type = "dropdown",
+								default_value = "pink",
+								options = color_preset_options(),
+							},
+							{
+								setting_id = "character_overview_dump_stat_color_r",
+								type = "numeric",
+								default_value = 255,
+								range = {
+									0,
+									255,
+								},
+							},
+							{
+								setting_id = "character_overview_dump_stat_color_g",
+								type = "numeric",
+								default_value = 94,
+								range = {
+									0,
+									255,
+								},
+							},
+							{
+								setting_id = "character_overview_dump_stat_color_b",
+								type = "numeric",
+								default_value = 132,
+								range = {
+									0,
+									255,
+								},
 							},
 							{
 								setting_id = "enable_character_overview_curio_details",
@@ -1728,6 +1949,12 @@ return {
 				setting_id = "debug_group",
 				type = "group",
 				sub_widgets = {
+					{
+						setting_id = "debug_enable_hot_path_diagnostics",
+						tooltip = "debug_enable_hot_path_diagnostics_tooltip",
+						type = "checkbox",
+						default_value = false,
+					},
 					{
 						setting_id = "debug_expand_armoury_requisition_window_30_percent",
 						tooltip = "debug_expand_armoury_requisition_window_30_percent_tooltip",
