@@ -9,7 +9,7 @@ WeaponStats 999 0.2.9
 Alfs_DMF_Extensions 864 1.2.02
 AutoMark 736 2.3.0
 BetterNameplate 827 1.0.7
-BetterInventory 1144 2.0.2
+BetterInventory 1144 2.0.3
 ChatBlock 68 26.08.05
 ConstantFov 91 1.9
 crosshair_remap 253 3.9.0
