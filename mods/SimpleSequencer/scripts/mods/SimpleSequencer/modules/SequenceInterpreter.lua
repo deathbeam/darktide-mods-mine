@@ -28,7 +28,6 @@ local function _requirements(element, input_settings)
     if hold_input and (not requirement or requirement.value ~= false) then
         result[hold_input] = { value = true }
     end
-
     return result
 end
 
@@ -49,8 +48,11 @@ function SequenceInterpreter:reset()
     self.frame_t = nil
     self.duration_advanced_t = nil
     self.matched = false
+    self.matched_t = nil
     self.submitted = false
     self.submitted_t = nil
+    self.submitted_inputs = {}
+    self.started_input = nil
     self.restart_after = nil
 end
 
@@ -64,6 +66,7 @@ function SequenceInterpreter:_begin_input(input_name, t)
     self.frame_t = nil
     self.duration_advanced_t = nil
     self.matched = false
+    self.matched_t = nil
     self.submitted = false
 end
 
@@ -81,17 +84,39 @@ function SequenceInterpreter:_begin_next_followup(t)
     return true
 end
 
+function SequenceInterpreter:_record_submission()
+    if self.started_input == self.input_name then
+        self.started_input = nil
+    else
+        self.submitted_inputs[#self.submitted_inputs + 1] = self.input_name
+    end
+end
+
 function SequenceInterpreter:set_target(template, input_name, t, input_settings, sequence_start_t, followup_inputs)
-    if self.template == template and self.target_name == input_name then
+    -- The parser advances at match time, before the controller's next update.
+    if not template or not input_name then
+        self:reset()
+        return
+    end
+
+    local followup_name = self.followup_inputs and self.followup_inputs[self.followup_index]
+    local element = self.elements and self.elements[self.element_index]
+    if self.template == template and followup_name == input_name then
+        if self.matched and element and not element.duration then
+            self.followup_index = self.followup_index + 1
+            self:_begin_input(input_name, self.matched_t or t or 0)
+        end
+
+        self.input_settings = input_settings
+        return
+    end
+
+    if self.template == template and (self.target_name == input_name or self.input_name == input_name) then
         self.input_settings = input_settings
         return
     end
 
     self:reset()
-
-    if not template or not input_name then
-        return
-    end
 
     self.template = template
     self.target_name = input_name
@@ -109,23 +134,42 @@ function SequenceInterpreter:can_interpret()
     return self.input_name ~= nil and type(self.elements) == 'table' and #self.elements > 0
 end
 
+function SequenceInterpreter:is_missing_sequence()
+    return self.input_name ~= nil and not self:can_interpret()
+end
+
 function SequenceInterpreter:active_input_name()
     return self.input_name
 end
 
-function SequenceInterpreter:_advance_frame(t)
-    if self.frame_t == t then
+function SequenceInterpreter:action_input_name()
+    local submitted_inputs = self.submitted_inputs
+    local input_name = table.remove(submitted_inputs, 1)
+    if input_name then
+        return input_name
+    end
+
+    self.started_input = self.input_name
+    return self.input_name
+end
+
+function SequenceInterpreter:update(t, frame)
+    self:_advance_frame(t or 0, frame or t or 0)
+end
+
+function SequenceInterpreter:_advance_frame(t, frame)
+    if self.frame_t == frame then
         return
     end
 
-    self.frame_t = t
+    self.frame_t = frame
     self.duration_advanced_t = nil
 
     if self.submitted then
         if self.restart_after and self.submitted_t and t - self.submitted_t >= self.restart_after then
             self.followup_index = 1
             self:_begin_input(self.target_name, t)
-            self.frame_t = t
+            self.frame_t = frame
         end
 
         return
@@ -134,6 +178,7 @@ function SequenceInterpreter:_advance_frame(t)
     local element = self.elements and self.elements[self.element_index]
 
     if not element then
+        self:_record_submission()
         self.submitted = true
         self.submitted_t = t
         return
@@ -144,16 +189,19 @@ function SequenceInterpreter:_advance_frame(t)
     local complete = self.matched and (duration_complete or not element.duration)
 
     if complete then
+        local completion_t = element.duration and t or self.matched_t or t
         self.element_index = self.element_index + 1
         self.element_start_t = t
         self.matched = false
+        self.matched_t = nil
 
         if element.duration then
             self.duration_advanced_t = t
         end
 
         if not self.elements[self.element_index] then
-            if not self:_begin_next_followup(t) then
+            self:_record_submission()
+            if not self:_begin_next_followup(completion_t) then
                 self.submitted = true
                 self.submitted_t = t
             end
@@ -173,12 +221,12 @@ function SequenceInterpreter:controls(action_name)
     return self.input_name ~= nil and requirements and requirements[action_name] ~= nil
 end
 
-function SequenceInterpreter:value(action_name, raw_value, t)
+function SequenceInterpreter:value(action_name, raw_value, t, frame)
     if not self.input_name then
         return raw_value
     end
 
-    self:_advance_frame(t or 0)
+    self:update(t, frame)
     t = t or 0
 
     if self.duration_advanced_t == t then
@@ -202,6 +250,7 @@ function SequenceInterpreter:value(action_name, raw_value, t)
     end
 
     self.matched = true
+    self.matched_t = t
 
     return requirement.value
 end

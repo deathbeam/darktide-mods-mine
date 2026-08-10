@@ -2,6 +2,7 @@ local mod = get_mod('SimpleSequencer')
 
 local ModeManager = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/ModeManager')
 local SequenceController = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/SequenceController')
+local Input = mod:io_dofile('SimpleSequencer/scripts/mods/SimpleSequencer/modules/Input')
 
 local RESET_STATE_CLASSES = {
     CLASS.PlayerCharacterStateStunned,
@@ -26,6 +27,7 @@ local initialized = false
 local enabled = true
 
 mod.mode_manager = ModeManager:new(mod)
+mod.input = Input:new()
 mod.controller = SequenceController:new(mod, mod.mode_manager)
 
 local function _ui_using_input()
@@ -41,19 +43,35 @@ local function _is_local_player_unit(unit)
     return player and player.player_unit == unit or false
 end
 
-local function _input_hook(func, self, action_name, ...)
-    local value = func(self, action_name, ...)
+local function _is_local_input_extension(input_extension)
+    local player_manager = Managers and Managers.player
+    local player = player_manager and player_manager:local_player_safe(1)
 
-    if self.type ~= 'Ingame' or not initialized or not enabled or _ui_using_input() then
+    return player and input_extension._player == player or false
+end
+
+local function _raw_input_hook(func, self, action_name)
+    local value = func(self, action_name)
+
+    if not mod.ready() or _ui_using_input() or not _is_local_input_extension(self) then
         return value
     end
 
-    return mod.controller:handle_input(action_name, value)
+    local input = mod.input:snapshot(action_name, function(physical_action_name)
+        return physical_action_name == action_name and value or func(self, physical_action_name)
+    end, self)
+    if not input then
+        return value
+    end
+    local values = mod.controller:handle_frame(input)
+    local output = values[action_name]
+    return output == nil and value or output
 end
 
 local function _reset_for_disruptive_state(_, unit)
     if mod.ready() and _is_local_player_unit(unit) then
         mod.controller:reset()
+        mod.input:reset()
     end
 end
 
@@ -68,6 +86,7 @@ end
 function mod.on_disabled()
     enabled = false
     mod.controller:reset()
+    mod.input:reset()
 end
 
 function mod.on_all_mods_loaded()
@@ -84,6 +103,7 @@ end
 
 function mod.on_game_state_changed()
     mod.controller:reset()
+    mod.input:reset()
     mod.controller:invalidate()
 end
 
@@ -136,11 +156,12 @@ function mod.select_mode_toggle()
     end
 end
 
-mod:hook(CLASS.InputService, '_get', _input_hook)
+mod:hook(CLASS.PlayerUnitInputExtension, 'get', _raw_input_hook)
 
 mod:hook_safe(CLASS.PlayerUnitWeaponExtension, 'on_slot_wielded', function(self)
     if _is_local_player_unit(self._unit) then
         mod.controller:on_slot_wielded()
+        mod.input:reset()
     end
 end)
 
