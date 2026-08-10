@@ -16,24 +16,6 @@ local player_fade_profiles = {}
 local rescue_visibility_active = {}
 local fade_system_instance
 
-local function normalize_numeric_setting(setting_id)
-	local value = mod:get(setting_id)
-
-	if type(value) ~= "number" then
-		return
-	end
-
-	local normalized_value = math.max(0, math.min(30, math.floor(value + 0.5)))
-
-	if normalized_value ~= value then
-		mod:set(setting_id, normalized_value)
-	end
-end
-
-normalize_numeric_setting("min_distance")
-normalize_numeric_setting("max_distance")
-normalize_numeric_setting("max_height_difference")
-
 local function should_override_fade(owner, unit, breed_name)
 	if owner.player_unit == unit then
 		return owner.remote and (not mod:get("only_ogryn") or breed_name == "ogryn")
@@ -121,10 +103,11 @@ mod:hook(CLASS.FadeSystem, "on_add_extension", function(func, self, world, unit,
 	local override_fade = fade and should_override_fade(owner, unit, breed_name)
 	local registered_min_distance = override_fade and (mod:get("min_distance") or DEFAULT_MIN_DISTANCE)
 		or (fade and fade.min_distance or DEFAULT_MIN_DISTANCE)
-	local registered_max_distance = override_fade and (mod:get("max_distance") or DEFAULT_MAX_DISTANCE)
+	local registered_max_distance = override_fade
+			and math.max(registered_min_distance, mod:get("max_distance") or DEFAULT_MAX_DISTANCE)
 		or (fade and fade.max_distance or DEFAULT_MAX_DISTANCE)
 	local registered_max_height_difference = override_fade
-			and (mod:get("max_height_difference") or DEFAULT_MAX_HEIGHT_DIFFERENCE)
+			and math.max(registered_min_distance, mod:get("max_height_difference") or DEFAULT_MAX_HEIGHT_DIFFERENCE)
 		or (fade and fade.max_height_difference or DEFAULT_MAX_HEIGHT_DIFFERENCE)
 	local registered_node_name = fade and fade.node_name or DEFAULT_NODE_NAME
 	local official_profile = fade and {
