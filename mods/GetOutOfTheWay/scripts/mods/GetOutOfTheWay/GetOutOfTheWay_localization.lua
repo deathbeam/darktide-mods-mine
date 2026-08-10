@@ -59,4 +59,10 @@ return {
 	keep_rescue_targets_visible_description = {
 		["en"] = "Use Darktide's default fade distances for eligible allies who are knocked down, netted, hanging from a ledge, or hogtied",
 	},
+	keep_allies_visible_while_holding_support_items = {
+		["en"] = "Keep allies visible while holding support items",
+	},
+	keep_allies_visible_while_holding_support_items_description = {
+		["en"] = "Temporarily use Darktide's default fade distances for allied players while you are holding an ammo crate, medical crate, or stim. Your custom distances return when you switch away",
+	},
 }

@@ -9,21 +9,21 @@ return {
 			{
 				setting_id = "min_distance",
 				type = "numeric",
-				default_value = 1.5,
+				default_value = 1,
 				range = { 0, 20 },
 				decimals_number = 1,
 			},
 			{
 				setting_id = "max_distance",
 				type = "numeric",
-				default_value = 10,
+				default_value = 5,
 				range = { 0, 20 },
 				decimals_number = 1,
 			},
 			{
 				setting_id = "max_height_difference",
 				type = "numeric",
-				default_value = 10,
+				default_value = 5,
 				range = { 0, 20 },
 				decimals_number = 1,
 			},
@@ -54,6 +54,11 @@ return {
 			},
 			{
 				setting_id = "keep_rescue_targets_visible",
+				type = "checkbox",
+				default_value = true,
+			},
+			{
+				setting_id = "keep_allies_visible_while_holding_support_items",
 				type = "checkbox",
 				default_value = true,
 			},

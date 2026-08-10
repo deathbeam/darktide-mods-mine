@@ -1,8 +1,5 @@
 local mod = get_mod("GetOutOfTheWay")
 
-local DEFAULT_MIN_DISTANCE = 0.5
-local DEFAULT_MAX_DISTANCE = 0.7
-local DEFAULT_MAX_HEIGHT_DIFFERENCE = 1
 local DEFAULT_NODE_NAME = "j_spine"
 
 local RESCUE_STATES = {
@@ -12,8 +9,18 @@ local RESCUE_STATES = {
 	netted = true,
 }
 
+local SUPPORT_ITEM_TEMPLATES = {
+	ammo_cache_pocketable = true,
+	medical_crate_pocketable = true,
+	syringe_ability_boost_pocketable = true,
+	syringe_corruption_pocketable = true,
+	syringe_power_boost_pocketable = true,
+	syringe_speed_boost_pocketable = true,
+}
+
 local player_fade_profiles = {}
 local rescue_visibility_active = {}
+local support_item_visibility_active = false
 local fade_system_instance
 
 local function should_override_fade(owner, unit, breed_name)
@@ -68,6 +75,20 @@ local function replace_fade_registration(unit, profile)
 	return true
 end
 
+local function apply_player_fade_profile(unit)
+	local profiles = player_fade_profiles[unit]
+
+	if not profiles then
+		return false
+	end
+
+	local use_official_profile = support_item_visibility_active
+		or rescue_visibility_active[unit] == true
+	local profile = use_official_profile and profiles.official or profiles.normal
+
+	return replace_fade_registration(unit, profile)
+end
+
 local function set_rescue_visibility(unit, visible)
 	local profiles = player_fade_profiles[unit]
 	local is_active = rescue_visibility_active[unit] == true
@@ -80,10 +101,56 @@ local function set_rescue_visibility(unit, visible)
 		return
 	end
 
-	local profile = visible and profiles.official or profiles.normal
+	local previous_state = rescue_visibility_active[unit]
 
-	if replace_fade_registration(unit, profile) then
-		rescue_visibility_active[unit] = visible or nil
+	rescue_visibility_active[unit] = visible or nil
+
+	if not apply_player_fade_profile(unit) then
+		rescue_visibility_active[unit] = previous_state
+	end
+end
+
+local function is_holding_support_item()
+	if not mod:get("keep_allies_visible_while_holding_support_items") then
+		return false
+	end
+
+	local player_manager = Managers and Managers.player
+	local player = player_manager and player_manager:local_player_safe(1)
+	local player_unit = player and player.player_unit
+
+	if not player_unit or ALIVE and not ALIVE[player_unit] then
+		return false
+	end
+
+	local unit_data_extension = ScriptUnit.has_extension(player_unit, "unit_data_system")
+	local inventory = unit_data_extension
+		and unit_data_extension.read_component
+		and unit_data_extension:read_component("inventory")
+	local wielded_slot = inventory and inventory.wielded_slot
+
+	if wielded_slot ~= "slot_pocketable" and wielded_slot ~= "slot_pocketable_small" then
+		return false
+	end
+
+	local visual_loadout_extension = ScriptUnit.has_extension(player_unit, "visual_loadout_system")
+	local weapon_template = visual_loadout_extension
+		and visual_loadout_extension:weapon_template_from_slot(wielded_slot)
+
+	return weapon_template and SUPPORT_ITEM_TEMPLATES[weapon_template.name] == true or false
+end
+
+mod.update = function(dt)
+	local active = is_holding_support_item()
+
+	if active == support_item_visibility_active then
+		return
+	end
+
+	support_item_visibility_active = active
+
+	for unit, _ in pairs(player_fade_profiles) do
+		apply_player_fade_profile(unit)
 	end
 end
 
@@ -101,20 +168,18 @@ mod:hook(CLASS.FadeSystem, "on_add_extension", function(func, self, world, unit,
 	local fade = breed and breed.fade
 	local breed_name = breed and breed.name
 	local override_fade = fade and should_override_fade(owner, unit, breed_name)
-	local registered_min_distance = override_fade and (mod:get("min_distance") or DEFAULT_MIN_DISTANCE)
-		or (fade and fade.min_distance or DEFAULT_MIN_DISTANCE)
+	local registered_min_distance = override_fade
+		and (mod:get("min_distance") or fade.min_distance)
 	local registered_max_distance = override_fade
-			and math.max(registered_min_distance, mod:get("max_distance") or DEFAULT_MAX_DISTANCE)
-		or (fade and fade.max_distance or DEFAULT_MAX_DISTANCE)
+		and math.max(registered_min_distance, mod:get("max_distance") or fade.max_distance)
 	local registered_max_height_difference = override_fade
-			and math.max(registered_min_distance, mod:get("max_height_difference") or DEFAULT_MAX_HEIGHT_DIFFERENCE)
-		or (fade and fade.max_height_difference or DEFAULT_MAX_HEIGHT_DIFFERENCE)
+		and math.max(registered_min_distance, mod:get("max_height_difference") or fade.max_height_difference)
 	local registered_node_name = fade and fade.node_name or DEFAULT_NODE_NAME
-	local official_profile = fade and {
-		min_distance = fade.min_distance or DEFAULT_MIN_DISTANCE,
-		max_distance = fade.max_distance or DEFAULT_MAX_DISTANCE,
-		max_height_difference = fade.max_height_difference or DEFAULT_MAX_HEIGHT_DIFFERENCE,
-		node_name = fade.node_name or DEFAULT_NODE_NAME,
+	local official_profile = override_fade and {
+		min_distance = fade.min_distance,
+		max_distance = fade.max_distance,
+		max_height_difference = fade.max_height_difference,
+		node_name = registered_node_name,
 	}
 	local extension
 
@@ -168,6 +233,10 @@ mod:hook(CLASS.FadeSystem, "on_add_extension", function(func, self, world, unit,
 
 		if character_state and RESCUE_STATES[character_state.state_name] then
 			set_rescue_visibility(unit, true)
+		end
+
+		if support_item_visibility_active and rescue_visibility_active[unit] ~= true then
+			apply_player_fade_profile(unit)
 		end
 	end
 
