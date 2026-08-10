@@ -1,7 +1,7 @@
 SimpleActivate 1145 0.0.3
 SimpleCharging 1141 0.0.7
 SimpleMovement 1146 0.0.2
-SimpleSequencer 1160 0.0.2
+SimpleSequencer 1160 0.0.4
 CharacterStats 1093 0.2.9
 CombatStats 661 0.5.11
 EnemyStats 1054 0.3.3
