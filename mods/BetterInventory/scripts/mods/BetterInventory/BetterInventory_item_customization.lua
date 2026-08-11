@@ -168,6 +168,15 @@ ItemCustomization.on_disabled = function(mod)
 	end
 end
 
+ItemCustomization.on_view_closed = function(mod)
+	if type(Editor.release_view) == "function" then
+		Editor.release_view(mod)
+	else
+		Editor.clear_pending()
+		Editor.close_input(mod)
+	end
+end
+
 ItemCustomization.on_all_mods_loaded = function(mod)
 	if mod:get("enable_custom_item_name_and_colors") == false then
 		if NameIt.is_available() then
@@ -227,6 +236,13 @@ ItemCustomization.update_runtime = function(mod, dt)
 	if persistence_pending then
 		Store.update_runtime(mod, dt)
 	end
+end
+
+ItemCustomization.needs_update = function()
+	local _, persistence_pending = Store.persistence_status()
+	local editor_pending = type(Editor.has_pending) == "function" and Editor.has_pending() == true
+
+	return editor_pending or Store.has_pending_deleted_gear() == true or persistence_pending == true
 end
 
 ItemCustomization.persistence_status = function()

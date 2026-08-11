@@ -11,6 +11,7 @@ local Diagnostics
 local AutoCrafter
 local Capabilities
 local CharacterOverviewUI
+local FeatureDomains
 local CraftingMechanicusModifyView
 local CreditsVendorView
 local MainMenuView
@@ -19,6 +20,9 @@ local ItemGridViewBase
 local ItemGridViewBaseDefinitions
 local InventoryWeaponsView
 local ViewElementGrid
+local synchronize_myfavorites_grid = function()
+	return 0
+end
 local CreditsGoodsVendorView = require("scripts/ui/views/credits_goods_vendor_view/credits_goods_vendor_view")
 
 local function configure_dependencies(dependencies)
@@ -33,6 +37,7 @@ local function configure_dependencies(dependencies)
 	AutoCrafter = dependencies.AutoCrafter
 	Capabilities = dependencies.Capabilities
 	CharacterOverviewUI = dependencies.CharacterOverviewUI
+	FeatureDomains = dependencies.FeatureDomains
 	CraftingMechanicusModifyView = dependencies.CraftingMechanicusModifyView
 	CreditsVendorView = dependencies.CreditsVendorView
 	MainMenuView = dependencies.MainMenuView
@@ -1199,8 +1204,18 @@ function mod.update(dt)
 	end
 	local auto_crafter_busy = AutoCrafter and type(AutoCrafter.is_busy) == "function" and AutoCrafter.is_busy() or false
 
-	ItemCustomization.update_runtime(mod, dt)
-	EquipmentPersistence.update(mod, dt)
+	if type(CharacterOverviewUI.update_registered_views) == "function" then
+		CharacterOverviewUI.update_registered_views(dt)
+	end
+	if FeatureDomains and FeatureDomains.markers and type(FeatureDomains.markers.update) == "function" then
+		FeatureDomains.markers.update(dt, synchronize_myfavorites_grid)
+	end
+	if type(ItemCustomization.needs_update) ~= "function" or ItemCustomization.needs_update() then
+		ItemCustomization.update_runtime(mod, dt)
+	end
+	if type(EquipmentPersistence.has_pending) ~= "function" or EquipmentPersistence.has_pending() then
+		EquipmentPersistence.update(mod, dt)
+	end
 	if Features.discard_owner() then
 		Features.reconcile_discard_transaction()
 	end
@@ -1221,10 +1236,20 @@ function mod.on_disabled()
 	end
 
 	ItemCustomization.on_disabled(mod)
+	if EquipmentPersistence and type(EquipmentPersistence.reset) == "function" then
+		EquipmentPersistence.reset()
+	end
 	Features.cancel_morningstar_auto_discard()
 	Features.cancel_manual_discard()
 	CurioAcquisition.cancel()
 	Features.disable_inventory_views()
+	Features.close_all_view_sessions("mod_disable")
+	if CharacterOverviewUI and type(CharacterOverviewUI.release_all_views) == "function" then
+		CharacterOverviewUI.release_all_views()
+	end
+	if FeatureDomains and FeatureDomains.markers and type(FeatureDomains.markers.release_all) == "function" then
+		FeatureDomains.markers.release_all()
+	end
 	if type(Diagnostics.reset) == "function" then
 		Diagnostics.reset()
 	end
@@ -1324,22 +1349,22 @@ if ensure_class_method(CreditsVendorView, "_setup_sort_options") then
 end
 
 if ensure_class_method(InventoryWeaponsView, "update") then
-	mod:hook(InventoryWeaponsView, "update", function(func, view, dt, t, input_service)
-		Features.capture_inventory_options_panel_controller_focus(mod, Layout, view, input_service)
-		Features.capture_inventory_controller_navigation(view, input_service)
-		-- InventoryWeaponsView ultimately returns BaseView's two-value input/draw
-		-- contract. Keep those values without allocating a vararg table each frame.
-		local pass_input, pass_draw = func(view, dt, t, input_service)
-
+	-- Post-update work does not need to wrap Darktide's complete inventory update.
+	-- Besides adding a hot-path call frame, wrapper ownership makes performance
+	-- monitors charge the native O(inventory) traversal to BetterInventory.
+	mod:hook_safe(InventoryWeaponsView, "update", function(view, dt, t, input_service)
 		Features.update_inventory_sort_toggle(mod, Layout, view)
 		Features.update_inventory_options_panel_controller_selection(view, input_service)
-
-		return pass_input, pass_draw
 	end)
 end
 
 if ensure_class_method(InventoryWeaponsView, "_handle_input") then
 	mod:hook(InventoryWeaponsView, "_handle_input", function(func, view, input_service, ...)
+		-- These two captures must precede native input handling. Keeping them here
+		-- preserves same-frame controller behavior without wrapping the full update.
+		Features.capture_inventory_options_panel_controller_focus(mod, Layout, view, input_service)
+		Features.capture_inventory_controller_navigation(view, input_service)
+
 		if Features.inventory_options_panel_controller_focused(view) or Features.consume_inventory_controller_grid_navigation(view) then
 			-- View elements process directional input before the parent view. The
 			-- multi-column item grid has already moved right this frame, so bypass
@@ -1355,10 +1380,7 @@ end
 mod:hook_safe(InventoryWeaponsView, "cb_on_favorite_pressed", function(view)
 	local item_grid = view and view._item_grid
 
-	if item_grid and item_grid._better_inventory_myfavorites_active == true then
-		item_grid._better_inventory_myfavorites_dirty = true
-		item_grid._better_inventory_myfavorites_generation = (item_grid._better_inventory_myfavorites_generation or 0) + 1
-	end
+	invalidate_myfavorites_grid(item_grid)
 
 	if mod:get("prioritize_equipped_favorites") ~= false then
 		Features.resort_inventory(mod, Layout, view)
@@ -1374,6 +1396,24 @@ end
 if ensure_class_method(InventoryBackgroundView, "event_player_profile_updated") then
 	mod:hook_safe(InventoryBackgroundView, "event_player_profile_updated", function(view, peer_id, local_player_id)
 		EquipmentPersistence.refresh_from_authoritative_profile(view, peer_id, local_player_id)
+		invalidate_myfavorites_grid(view and view._item_grid)
+	end)
+end
+
+
+if ensure_class_method(InventoryBackgroundView, "on_exit") then
+	mod:hook_safe(InventoryBackgroundView, "on_exit", function(view)
+		if EquipmentPersistence and type(EquipmentPersistence.on_view_closed) == "function" then
+			EquipmentPersistence.on_view_closed(view)
+		end
+	end)
+end
+
+if ensure_class_method(InventoryBackgroundView, "destroy") then
+	mod:hook_safe(InventoryBackgroundView, "destroy", function(view)
+		if EquipmentPersistence and type(EquipmentPersistence.on_view_closed) == "function" then
+			EquipmentPersistence.on_view_closed(view)
+		end
 	end)
 end
 
@@ -1394,10 +1434,7 @@ mod:hook_safe(InventoryWeaponsView, "_equip_item", function(view)
 
 	local item_grid = view and view._item_grid
 
-	if item_grid and item_grid._better_inventory_myfavorites_active == true then
-		item_grid._better_inventory_myfavorites_dirty = true
-		item_grid._better_inventory_myfavorites_generation = (item_grid._better_inventory_myfavorites_generation or 0) + 1
-	end
+	invalidate_myfavorites_grid(item_grid)
 
 	if mod:get("prioritize_equipped_favorites") ~= false then
 		Features.resort_inventory(mod, Layout, view)
@@ -1407,28 +1444,53 @@ end)
 mod:hook_safe(InventoryWeaponsView, "on_exit", function(view)
 	Features.release_lantern_inventory_section(view)
 	Features.unregister_inventory_view(view)
+	if ItemCustomization and type(ItemCustomization.on_view_closed) == "function" then
+		ItemCustomization.on_view_closed(mod)
+	end
 end)
 
+if ensure_class_method(InventoryWeaponsView, "destroy") then
+	mod:hook_safe(InventoryWeaponsView, "destroy", function(view)
+		Features.release_lantern_inventory_section(view)
+		Features.unregister_inventory_view(view)
+	end)
+end
+
+local function release_item_grid_view_runtime(view)
+	local item_grid = view and view._item_grid
+
+	if FeatureDomains and FeatureDomains.markers and type(FeatureDomains.markers.release_grid) == "function" then
+		FeatureDomains.markers.release_grid(item_grid)
+	end
+
+	if view then
+		view._auto_crafter_status_overlay = nil
+	end
+end
+
+if ensure_class_method(ItemGridViewBase, "on_exit") then
+	mod:hook_safe(ItemGridViewBase, "on_exit", release_item_grid_view_runtime)
+end
+
+if ensure_class_method(ItemGridViewBase, "destroy") then
+	mod:hook_safe(ItemGridViewBase, "destroy", release_item_grid_view_runtime)
+end
+
 if ensure_class_method(CreditsVendorView, "update") then
-	mod:hook(CreditsVendorView, "update", function(func, view, dt, t, input_service)
-		if is_armoury_sort_view(view) then
-			Features.capture_armoury_sort_panel_controller_focus(mod, view, input_service)
-		end
-
-		-- VendorViewBase/BaseView has the same fixed two-value update contract.
-		local pass_input, pass_draw = func(view, dt, t, input_service)
-
+	mod:hook_safe(CreditsVendorView, "update", function(view)
 		if is_armoury_sort_view(view) then
 			Features.update_armoury_native_sort_panel(view)
 			align_quick_level_mastery_buttons(view)
 		end
-
-		return pass_input, pass_draw
 	end)
 end
 
 if ensure_class_method(CreditsVendorView, "_handle_input") then
 	mod:hook(CreditsVendorView, "_handle_input", function(func, view, input_service, ...)
+		if is_armoury_sort_view(view) then
+			Features.capture_armoury_sort_panel_controller_focus(mod, view, input_service)
+		end
+
 		if Features.armoury_sort_panel_controller_focused(view) then
 			-- The panel's ViewElementGrid already processed navigation this frame.
 			-- Skip VendorViewBase's A-to-purchase path while widget focus is active.
@@ -1445,6 +1507,12 @@ if ensure_class_method(CreditsVendorView, "on_exit") then
 	end)
 end
 
+if ensure_class_method(CreditsVendorView, "destroy") then
+	mod:hook_safe(CreditsVendorView, "destroy", function(view)
+		Features.unregister_armoury_view(view)
+	end)
+end
+
 -- Brunt's Armoury uses CreditsGoodsVendorView, not CreditsVendorView. Keep
 -- Auto Crafter lifecycle hooks on the exact vanilla view so the read-only
 -- probe is armed only for Brunt and not for Requisition or GlobalStore.
@@ -1452,6 +1520,22 @@ if ensure_class_method(CreditsGoodsVendorView, "on_enter") then
 	mod:hook_safe(CreditsGoodsVendorView, "on_enter", function(view)
 		if AutoCrafter and type(AutoCrafter.on_brunt_view_ready) == "function" then
 			AutoCrafter.on_brunt_view_ready(view)
+		end
+	end)
+end
+
+if ensure_class_method(CreditsGoodsVendorView, "on_exit") then
+	mod:hook_safe(CreditsGoodsVendorView, "on_exit", function(view)
+		if AutoCrafter and type(AutoCrafter.on_view_closed) == "function" then
+			AutoCrafter.on_view_closed(view)
+		end
+	end)
+end
+
+if ensure_class_method(CreditsGoodsVendorView, "destroy") then
+	mod:hook_safe(CreditsGoodsVendorView, "destroy", function(view)
+		if AutoCrafter and type(AutoCrafter.on_view_closed) == "function" then
+			AutoCrafter.on_view_closed(view)
 		end
 	end)
 end
@@ -1681,6 +1765,8 @@ local function synchronize_myfavorites_marker(widget)
 		equipped_visible = ok and visible == true
 	end
 
+	content.better_inventory_equipped_icon_visible = equipped_visible
+
 	local offset_y = equipped_visible and 33 or 7
 	local favorite_shift_y = favorite_style and favorite_style.better_inventory_native_curio_favorite_shift_y or 0
 	offset_y = offset_y + favorite_shift_y
@@ -1708,54 +1794,16 @@ local function synchronize_myfavorites_marker(widget)
 	end
 end
 
--- Synchronize independently of favorite_icon visibility. This is required for
--- unfavorited items: equipping, unequipping, or adding/removing them from an
--- inactive loadout can move Equipped Icon+'s marker while the favorite text
--- pass is hidden. The input hotspot must still be ready at the correct place.
-if ensure_class_method(ViewElementGrid, "_update_grid_widgets") then
-	mod:hook(ViewElementGrid, "_update_grid_widgets", function(func, item_grid, ...)
-		if not item_grid or item_grid._better_inventory_myfavorites_active ~= true then
-			return func(item_grid, ...)
-		end
-
-		local tracked_widgets = item_grid and item_grid._better_inventory_myfavorites_widgets
-
-		if not tracked_widgets or next(tracked_widgets) == nil then
-			return func(item_grid, ...)
-		end
-
-		-- Darktide's _update_grid_widgets contract returns no values. Calling it
-		-- directly avoids allocating a packed vararg table for every active grid.
-		func(item_grid, ...)
-
-		local native_generation = item_grid._grid_generation or item_grid._layout_generation or item_grid._content_generation
-		local previous_native_generation = item_grid._better_inventory_myfavorites_native_generation
-
-		if native_generation ~= nil and native_generation ~= previous_native_generation then
-			item_grid._better_inventory_myfavorites_native_generation = native_generation
-			item_grid._better_inventory_myfavorites_dirty = true
-		elseif native_generation == nil then
-			-- Some Darktide builds expose no grid generation. Keep a bounded,
-			-- conservative fallback for backend-driven rebinds that bypass our
-			-- creation/favorite/equip hooks, while leaving idle frames untouched.
-			item_grid._better_inventory_myfavorites_fallback_frames = (item_grid._better_inventory_myfavorites_fallback_frames or 0) + 1
-
-			if item_grid._better_inventory_myfavorites_fallback_frames >= 15 then
-				item_grid._better_inventory_myfavorites_fallback_frames = 0
-				item_grid._better_inventory_myfavorites_dirty = true
-			end
-		end
-
-		if item_grid._better_inventory_myfavorites_dirty ~= true then
-			return
-		end
-
-		for widget in pairs(tracked_widgets) do
+synchronize_myfavorites_grid = function(_, tracked_widgets)
+	local sync_ok, sync_error = pcall(function()
+		for widget in pairs(tracked_widgets or {}) do
 			synchronize_myfavorites_marker(widget)
 		end
-
-		item_grid._better_inventory_myfavorites_dirty = false
 	end)
+
+	if not sync_ok and mod and type(mod.warning) == "function" then
+		mod:warning("MyFavorites marker reconciliation skipped after a compatibility error: %s", tostring(sync_error))
+	end
 end
 
 mod:hook(ViewElementGrid, "present_grid_layout", function(func, item_grid, layout, content_blueprints, ...)

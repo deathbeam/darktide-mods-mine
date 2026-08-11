@@ -37,8 +37,7 @@ local function companion_mark_callback()
 
     local target_tag = smart_tag_system:unit_tag(target_unit)
     local tag_name = TAG_NAMES.COMPANION_TAG
-    mod:on_manual_mark(mark_context[tag_name], target_unit)
-    mod:mark(tag_name, target_unit, target_tag)
+    mod:set_manual_mark(tag_name, target_unit, target_tag)
 end
 
 -- Callback Function for Enemy Mark
@@ -59,8 +58,7 @@ local function enemy_mark_callback()
     end
 
     local tag_name = TAG_NAMES.ENEMY_TAG
-    mod:on_manual_mark(mark_context[tag_name], target_unit)
-    mod:mark(tag_name, target_unit, target_tag)
+    mod:set_manual_mark(tag_name, target_unit, target_tag)
 end
 
 -- Companion Mark Keybind Function

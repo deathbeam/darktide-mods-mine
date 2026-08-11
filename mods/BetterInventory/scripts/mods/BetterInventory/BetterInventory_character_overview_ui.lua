@@ -13,6 +13,7 @@ local Text
 local lantern_recommendations_active = function() return false end
 local ensure_class_method
 local better_inventory_test
+local registered_character_overview_views = setmetatable({}, { __mode = "k" })
 
 local GLOBAL_STORE_SERVICE = "get_all_characters_store_custom"
 local CHARACTER_OVERVIEW_MELEE_WIDGET_TYPE = "better_inventory_character_overview_melee_weapon"
@@ -222,8 +223,8 @@ local function attach_runtime_marker_styles(widget, item_grid)
 			end
 
 			tracked_widgets[widget] = true
-			item_grid._better_inventory_myfavorites_dirty = true
-			item_grid._better_inventory_myfavorites_generation = (item_grid._better_inventory_myfavorites_generation or 0) + 1
+			FeatureDomains.markers.track_grid(item_grid)
+			FeatureDomains.markers.invalidate_grid(item_grid)
 		end
 	end
 
@@ -401,7 +402,15 @@ local function character_overview_weapon_blueprint(rarity_strip_setting_id)
 		local current_item = slot and parent.equipped_item_in_slot and parent:equipped_item_in_slot(slot.name)
 		local item_changed = character_overview_item_changed(previous_item, current_item)
 
-		if item_changed and type(Layout.restore_item_customization_style) == "function" then
+		-- Native item-slot update only performs work when the equipped identity or
+		-- mark changed. Avoid invoking it through our blueprint on every stable
+		-- Character Overview frame; that nested call was charged to BetterInventory
+		-- and scaled badly on slower/high-cardinality inventory sessions.
+		if not item_changed then
+			return
+		end
+
+		if type(Layout.restore_item_customization_style) == "function" then
 			Layout.restore_item_customization_style(widget)
 		end
 
@@ -411,7 +420,7 @@ local function character_overview_weapon_blueprint(rarity_strip_setting_id)
 
 		mark_character_overview_requirement_met(widget)
 
-		if element and item_changed then
+		if element then
 			element.item = current_item
 
 			if type(blueprint.update_data) == "function" then
@@ -974,14 +983,21 @@ local function character_overview_curio_blueprint()
 		local slot = element and element.slot
 		local current_item = slot and parent.equipped_item_in_slot and parent:equipped_item_in_slot(slot.name)
 		local item_changed = character_overview_item_changed(previous_item, current_item)
+		local hotspot = content and content.hotspot
 
-		if item_changed then
-			if type(Layout.restore_item_customization_style) == "function" then
-				Layout.restore_item_customization_style(widget)
-			end
-
-			reset_character_overview_curio_fit_state(widget)
+		if hotspot then
+			hotspot.disabled = not content.unlocked
 		end
+
+		if not item_changed then
+			return
+		end
+
+		if type(Layout.restore_item_customization_style) == "function" then
+			Layout.restore_item_customization_style(widget)
+		end
+
+		reset_character_overview_curio_fit_state(widget)
 
 		if type(native_update) == "function" then
 			native_update(parent, widget, input_service, dt, t, ui_renderer)
@@ -989,7 +1005,7 @@ local function character_overview_curio_blueprint()
 
 		mark_character_overview_requirement_met(widget)
 
-		if element and item_changed then
+		if element then
 			element.item = current_item
 
 			if type(blueprint.update_data) == "function" then
@@ -997,10 +1013,9 @@ local function character_overview_curio_blueprint()
 			end
 
 			fit_curio_text(widget, ui_renderer, true)
-		else
-			-- This performs only cache-key comparisons when the item and layout are
-			-- unchanged; word wrapping and table allocation happen only on a miss.
-			fit_curio_text(widget, ui_renderer, false)
+			-- Fitted text can move the native equipped badge. Ask the view-level
+			-- synchronizer for one pass; unchanged Curios do no fitting work.
+			parent._better_inventory_equipped_icons_dirty = true
 		end
 	end
 
@@ -1120,13 +1135,30 @@ local function synchronize_character_overview_equipped_icon(widget, lantern_acti
 	offset[2] = target_y
 end
 
-local function synchronize_character_overview_equipped_icons(view)
+local function synchronize_character_overview_equipped_icons(view, force)
 	local widgets = view and view._loadout_widgets
 	local lantern_active = lantern_recommendations_active()
+
+	if not view then
+		return 0
+	end
+
+	if force ~= true
+		and view._better_inventory_equipped_icons_dirty ~= true
+		and view._better_inventory_equipped_icons_widgets == widgets
+		and view._better_inventory_equipped_icons_lantern_active == lantern_active then
+		return 0
+	end
+
+	view._better_inventory_equipped_icons_dirty = false
+	view._better_inventory_equipped_icons_widgets = widgets
+	view._better_inventory_equipped_icons_lantern_active = lantern_active
 
 	for index = 1, #(widgets or {}) do
 		synchronize_character_overview_equipped_icon(widgets[index], lantern_active)
 	end
+
+	return #(widgets or {})
 end
 
 local function character_overview_curio_transition_type(widget_type, has_item)
@@ -1181,9 +1213,33 @@ local function reconcile_character_overview_curio_widgets(view)
 	return 0
 end
 
+local CHARACTER_OVERVIEW_RECONCILE_INTERVAL = 0.25
+
+local function reconcile_character_overview_curio_widgets_if_needed(view, dt)
+	if not view then
+		return 0
+	end
+
+	local widgets = view._loadout_widgets
+	local widgets_changed = view._better_inventory_reconcile_widgets ~= widgets
+	local elapsed = (view._better_inventory_reconcile_elapsed or 0) + (tonumber(dt) or 0)
+
+	if not widgets_changed and elapsed < CHARACTER_OVERVIEW_RECONCILE_INTERVAL then
+		view._better_inventory_reconcile_elapsed = elapsed
+
+		return 0
+	end
+
+	view._better_inventory_reconcile_widgets = widgets
+	view._better_inventory_reconcile_elapsed = 0
+
+	return reconcile_character_overview_curio_widgets(view)
+end
+
 if type(better_inventory_test) == "table" then
 	better_inventory_test.character_overview_curio_transition_type = character_overview_curio_transition_type
 	better_inventory_test.reconcile_character_overview_curio_widgets = reconcile_character_overview_curio_widgets
+	better_inventory_test.reconcile_character_overview_curio_widgets_if_needed = reconcile_character_overview_curio_widgets_if_needed
 end
 
 local function refresh_character_overview_visual_layout_if_needed(view)
@@ -1242,6 +1298,7 @@ OverviewUI.configure = function(dependencies)
 		better_inventory_test.character_overview_item_changed = character_overview_item_changed
 		better_inventory_test.character_overview_curio_transition_type = character_overview_curio_transition_type
 		better_inventory_test.reconcile_character_overview_curio_widgets = reconcile_character_overview_curio_widgets
+		better_inventory_test.reconcile_character_overview_curio_widgets_if_needed = reconcile_character_overview_curio_widgets_if_needed
 	end
 
 	return OverviewUI
@@ -1255,8 +1312,91 @@ OverviewUI.bump_visual_settings_generation = function()
 	character_overview_visual_settings_generation = character_overview_visual_settings_generation + 1
 end
 
+OverviewUI.unregister_view = function(view)
+	if not view then
+		return false
+	end
+
+	local registered = registered_character_overview_views[view] ~= nil
+
+	registered_character_overview_views[view] = nil
+	view._better_inventory_equipped_icons_dirty = nil
+	view._better_inventory_equipped_icons_widgets = nil
+	view._better_inventory_equipped_icons_lantern_active = nil
+	view._better_inventory_reconcile_widgets = nil
+	view._better_inventory_reconcile_elapsed = nil
+	view._auto_crafter_status_overlay = nil
+
+	return registered
+end
+
+OverviewUI.release_all_views = function()
+	local views = {}
+
+	for view in pairs(registered_character_overview_views) do
+		views[#views + 1] = view
+	end
+
+	for index = 1, #views do
+		OverviewUI.unregister_view(views[index])
+	end
+
+	return #views
+end
+
+OverviewUI.registered_view_count = function()
+	local count = 0
+
+	for _ in pairs(registered_character_overview_views) do
+		count = count + 1
+	end
+
+	return count
+end
+
+OverviewUI.update_registered_views = function(dt)
+	local updated = 0
+
+	for view in pairs(registered_character_overview_views) do
+		if view._destroyed == true then
+			OverviewUI.unregister_view(view)
+		else
+			local update_ok, update_error = pcall(function()
+				refresh_character_overview_visual_layout_if_needed(view)
+				reconcile_character_overview_curio_widgets_if_needed(view, dt)
+				synchronize_character_overview_equipped_icons(view)
+			end)
+
+			if update_ok then
+				updated = updated + 1
+			else
+				-- A third-party inspected/read-only InventoryView can expose a
+				-- partially compatible shape. Quarantine that view instead of
+				-- throwing from BetterInventory's global frame update forever.
+				OverviewUI.unregister_view(view)
+
+				if mod and type(mod.warning) == "function" then
+					mod:warning("Character Overview compatibility update disabled for one view: %s", tostring(update_error))
+				end
+			end
+		end
+	end
+
+	return updated
+end
+
 OverviewUI.install_hooks = function(class_method_guard)
 	ensure_class_method = class_method_guard
+	if ensure_class_method(InventoryView, "on_exit") then
+		mod:hook_safe(InventoryView, "on_exit", function(view)
+			OverviewUI.unregister_view(view)
+		end)
+	end
+	if ensure_class_method(InventoryView, "destroy") then
+		mod:hook_safe(InventoryView, "destroy", function(view)
+			OverviewUI.unregister_view(view)
+		end)
+	end
 -- The character overview uses InventoryView's individual item-slot widgets
 -- instead of ViewElementGrid. Swap only its primary/secondary weapon slots to
 -- the detailed inventory card while retaining Darktide's native icon loading,
@@ -1289,6 +1429,10 @@ if ensure_class_method(InventoryView, "_create_entry_widget_from_config") then
 
 		local preserve_visible_equipment_placement = visible_equipment_active
 		local adjust_runtime_equipped_icon = view and view.__class_name == "InventoryView" and not preserve_visible_equipment_placement and setting_id ~= nil
+
+		if view and view.__class_name == "InventoryView" and setting_id ~= nil then
+			registered_character_overview_views[view] = true
+		end
 
 		local function create_widget(resolved_config)
 			local results = pack_values(func(view, resolved_config, suffix, callback_name, secondary_callback_name, optional_scenegraph_id))
@@ -1325,12 +1469,6 @@ if ensure_class_method(InventoryView, "_create_entry_widget_from_config") then
 		return create_widget(config)
 	end)
 end
-
-mod:hook_safe(InventoryView, "update", function(view)
-	refresh_character_overview_visual_layout_if_needed(view)
-	reconcile_character_overview_curio_widgets(view)
-	synchronize_character_overview_equipped_icons(view)
-end)
 end
 
 OverviewUI.pack_values = pack_values
@@ -1353,6 +1491,7 @@ OverviewUI.synchronize_character_overview_equipped_icon = synchronize_character_
 OverviewUI.synchronize_character_overview_equipped_icons = synchronize_character_overview_equipped_icons
 OverviewUI.character_overview_curio_transition_type = character_overview_curio_transition_type
 OverviewUI.reconcile_character_overview_curio_widgets = reconcile_character_overview_curio_widgets
+OverviewUI.reconcile_character_overview_curio_widgets_if_needed = reconcile_character_overview_curio_widgets_if_needed
 OverviewUI.refresh_character_overview_visual_layout_if_needed = refresh_character_overview_visual_layout_if_needed
 OverviewUI.invalidate_myfavorites_grid = invalidate_myfavorites_grid
 OverviewUI.invalidate_myfavorites_view = invalidate_myfavorites_view

@@ -131,6 +131,12 @@ local function selected_offer_matches_target(selected_offer, target)
 		return false
 	end
 
+	-- Manual mark selection keeps Brunt's family offer selected while narrowing
+	-- purchase candidates to one lootChoice. Other targets retain strict IDs.
+	if target.family_mark_selection == true and selected_offer.offer_id ~= nil and target.offer_id ~= nil then
+		return selected_offer.offer_id == target.offer_id
+	end
+
 	if selected_offer.master_id ~= nil and target.master_id ~= nil and selected_offer.master_id ~= target.master_id then
 		return false
 	end
@@ -140,6 +146,20 @@ local function selected_offer_matches_target(selected_offer, target)
 	end
 
 	return selected_offer.master_id ~= nil and target.master_id ~= nil or selected_offer.offer_id ~= nil and target.offer_id ~= nil
+end
+
+local function offer_with_mark(offer, mark)
+	local target = {}
+
+	for key, value in pairs(offer or {}) do
+		target[key] = value
+	end
+	for key, value in pairs(mark or {}) do
+		target[key] = value
+	end
+	target.family_mark_selection = true
+
+	return target
 end
 
 local function find_item(items, gear_id, items_by_id)
@@ -184,6 +204,37 @@ end
 
 local function same_optional_trait(left, right)
 	return left == nil and right == nil or same_trait(left, right)
+end
+
+local function has_pending_trait_replacement(current_traits, targets)
+	for index = 1, 2 do
+		local desired = targets and targets[index]
+
+		if desired and not same_trait(trait_at(current_traits, index), desired) then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function has_trait_targets(values, targets)
+	for _, target in ipairs(targets or {}) do
+		local found = false
+
+		for _, value in ipairs(values or {}) do
+			if same_trait(value, target) then
+				found = true
+				break
+			end
+		end
+
+		if not found then
+			return false
+		end
+	end
+
+	return true
 end
 
 local function temporary_swap_trait(kind, current_traits, targets, catalog, sticker_book)
@@ -549,6 +600,7 @@ local function planner_config_signature(config)
 		tostring(config.upgrade_expertise_500),
 		tostring(config.reuse_inventory_base),
 		tostring(config.include_favorite_inventory_bases),
+		tostring(config.craft_duplicate_completed_queued_weapons),
 	}, "|")
 end
 
@@ -607,6 +659,7 @@ function Controller.new(dependencies)
 		_operation_promise = nil,
 		_operation_kind = nil,
 		_operation_sequence = 0,
+		_terminal_sequence = 0,
 		_operation_elapsed = 0,
 		_operation_started_at = nil,
 		_operation_quarantined = false,
@@ -638,6 +691,13 @@ function Controller.new(dependencies)
 		_observed_character_id = nil,
 		_run_character_id = nil,
 		_account_operation_token = nil,
+		_queue_operation_owner = false,
+		_queue_run_policy = nil,
+		_queue_preflight = nil,
+		_imported_job = nil,
+		_run_imported_job = nil,
+		_manual_mark_master_id = nil,
+		_manual_mark_offer_key = nil,
 	}
 
 	local function report(kind, payload)
@@ -710,7 +770,7 @@ function Controller.new(dependencies)
 		return table.concat(fields, " ")
 	end
 
-	local function setting(id, default_value)
+	local function raw_setting(id, default_value)
 		local get = self._settings.get
 
 		if type(get) ~= "function" then
@@ -724,6 +784,15 @@ function Controller.new(dependencies)
 		end
 
 		return value
+	end
+
+	local function setting(id, default_value)
+		local policy_values = self._queue_operation_owner and self._queue_run_policy and self._queue_run_policy.values
+		if type(policy_values) == "table" and policy_values[id] ~= nil then
+			return policy_values[id]
+		end
+
+		return raw_setting(id, default_value)
 	end
 
 	local function set_setting(id, value)
@@ -765,6 +834,7 @@ function Controller.new(dependencies)
 		auto_crafter_upgrade_expertise_500 = true,
 		auto_crafter_reuse_inventory_base = true,
 		auto_crafter_include_favorite_inventory_bases = true,
+		auto_crafter_craft_duplicate_completed_queued_weapons = true,
 		auto_crafter_allocate_mastery_points = true,
 		auto_crafter_change_perks = true,
 		auto_crafter_change_blessings = true,
@@ -840,8 +910,18 @@ function Controller.new(dependencies)
 	end
 
 	local function release_account_operation_if_settled()
+		if self._queue_operation_owner then
+			return false
+		end
+
 		if not run_is_active() and not self._operation_inflight and (self._auxiliary_inflight_count or 0) == 0 then
-			return release_account_operation()
+			local released = release_account_operation()
+			if released then
+				self._queue_run_policy = nil
+				self._queue_preflight = nil
+			end
+
+			return released
 		end
 
 		return false
@@ -955,7 +1035,7 @@ function Controller.new(dependencies)
 			return true
 		end
 
-		return setting(setting_id) ~= frozen[setting_id]
+		return raw_setting(setting_id) ~= frozen[setting_id]
 	end
 
 	local mutation_setting_ids = {
@@ -969,9 +1049,11 @@ function Controller.new(dependencies)
 	}
 
 	local function planner_config()
+		local imported_job = self._run_imported_job or self._imported_job
+
 		return {
-			dump_stat = setting("auto_crafter_target_dump_stat", "damage"),
-			dump_target = setting("auto_crafter_dump_stat_target", 60),
+			dump_stat = imported_job and imported_job.dump_stat or setting("auto_crafter_target_dump_stat", "damage"),
+			dump_target = imported_job and imported_job.dump_target or setting("auto_crafter_dump_stat_target", 60),
 			cap_by_dockets = setting("auto_crafter_cap_by_dockets", true),
 			docket_cap = setting("auto_crafter_docket_cap", 500000),
 			cap_by_max_purchases = setting("auto_crafter_cap_by_max_purchases", false),
@@ -984,8 +1066,9 @@ function Controller.new(dependencies)
 			upgrade_expertise_500 = setting("auto_crafter_upgrade_expertise_500", true),
 			reuse_inventory_base = setting("auto_crafter_reuse_inventory_base", true),
 			include_favorite_inventory_bases = setting("auto_crafter_include_favorite_inventory_bases", true),
-			trait_catalog = self._catalog,
-			target_offer = nil,
+			craft_duplicate_completed_queued_weapons = setting("auto_crafter_craft_duplicate_completed_queued_weapons", false),
+			trait_catalog = imported_job and imported_job.catalog or self._catalog,
+			target_offer = imported_job and imported_job.offer or nil,
 		}
 	end
 
@@ -1007,11 +1090,90 @@ function Controller.new(dependencies)
 			local matches = selected_offer.offer_id and offer.offer_id == selected_offer.offer_id or selected_offer.master_id and offer.master_id == selected_offer.master_id
 
 			if matches then
+				local key = offer_key(offer)
+
+				if self._manual_mark_offer_key ~= key then
+					self._manual_mark_offer_key = key
+					self._manual_mark_master_id = nil
+				end
+
+				for _, mark in ipairs(offer.marks or {}) do
+					if self._manual_mark_master_id ~= nil and mark.master_id == self._manual_mark_master_id then
+						return offer_with_mark(offer, mark)
+					end
+				end
+
 				return offer
 			end
 		end
 
 		return nil
+	end
+
+	function self:select_manual_mark(offer_id, master_id)
+		local function reject_selection(reason)
+			local payload = {
+				offer_id = offer_id,
+				master_id = master_id,
+				reason = reason,
+			}
+
+			log("warning", diagnostic_message("mark_selection_rejected", payload))
+			report("mark_selection_rejected", payload)
+
+			return false, reason
+		end
+
+		if run_is_active() or self._imported_job or self._run_imported_job or master_id == nil then
+			return reject_selection("mark_selection_unavailable")
+		end
+		local current_offer = self:_selected_offer_summary()
+
+		if not current_offer or current_offer.offer_id ~= offer_id then
+			return reject_selection("selected_weapon_changed")
+		end
+
+		local target_offer
+
+		for _, offer in ipairs(self._snapshot and self._snapshot.store and self._snapshot.store.offers or {}) do
+			if offer.offer_id == offer_id then
+				target_offer = offer
+
+				break
+			end
+		end
+
+		if not target_offer then
+			return reject_selection("weapon_offer_unavailable")
+		end
+
+		local selected_mark
+
+		for _, mark in ipairs(target_offer.marks or {}) do
+			if mark.master_id == master_id then
+				selected_mark = mark
+
+				break
+			end
+		end
+
+		if not selected_mark then
+			return reject_selection("weapon_mark_unavailable")
+		end
+
+		self._manual_mark_offer_key = offer_key(target_offer)
+		self._manual_mark_master_id = master_id
+		self._selected_target_key = nil
+		self._catalog_key = nil
+		self:_refresh_plan("manual_mark_changed")
+
+		return true
+	end
+
+	function self:selected_manual_mark()
+		local offer = self:_selected_offer_summary()
+
+		return offer and offer.master_id or nil
 	end
 
 	function self:_refresh_plan(reason)
@@ -1021,7 +1183,7 @@ function Controller.new(dependencies)
 
 		local previous_target_key = self._selected_target_key
 		local config = planner_config()
-		config.target_offer = self:_selected_offer_summary()
+		config.target_offer = (self._run_imported_job or self._imported_job) and config.target_offer or self:_selected_offer_summary()
 		self._selected_native_key = offer_key(config.target_offer)
 		self._planner_signature = planner_config_signature(config)
 		local ok, plan = pcall(self._planner.build, self._snapshot, config)
@@ -1031,7 +1193,7 @@ function Controller.new(dependencies)
 			local target_changed = next_target_key ~= previous_target_key
 			local default_dump_stat = self._planner.default_dump_stat(plan)
 
-			if not run_is_active() and default_dump_stat and (target_changed or config.dump_stat == "auto") and config.dump_stat ~= default_dump_stat and set_setting("auto_crafter_target_dump_stat", default_dump_stat) then
+			if not self._run_imported_job and not self._imported_job and not run_is_active() and default_dump_stat and (target_changed or config.dump_stat == "auto") and config.dump_stat ~= default_dump_stat and set_setting("auto_crafter_target_dump_stat", default_dump_stat) then
 				config.dump_stat = default_dump_stat
 				self._planner_signature = planner_config_signature(config)
 				ok, plan = pcall(self._planner.build, self._snapshot, config)
@@ -1111,6 +1273,18 @@ function Controller.new(dependencies)
 
 	local function operation_report(kind, payload)
 		payload = payload or {}
+		payload.run_generation = self._generation
+		payload.operation_sequence = self._operation_sequence
+		payload.character_id = self._run_character_id or current_character_id()
+		local imported_job = self._run_imported_job or self._imported_job
+		if imported_job then
+			payload.queue_id = imported_job.queue_id
+			payload.job_id = imported_job.job_id
+		end
+		if kind == "phase4_complete" or kind == "operation_failed" or kind == "operation_quarantined" or kind == "operation_reconciliation_required" or kind == "phase4_stopped" or kind == "purchase_search_stopped" then
+			self._terminal_sequence = self._terminal_sequence + 1
+			payload.terminal_sequence = self._terminal_sequence
+		end
 		self._last_progress_elapsed = self._run_elapsed
 		log(kind == "operation_failed" and "error" or "info", diagnostic_message(kind, payload))
 		report(kind, payload)
@@ -2102,7 +2276,8 @@ function Controller.new(dependencies)
 	end
 
 	function self:_phase4_targets(item)
-		local catalog = self._search and self._search.catalog or self._catalog
+		local imported_job = self._run_imported_job or self._imported_job
+		local catalog = imported_job and imported_job.catalog or self._search and self._search.catalog or self._catalog
 		local mastery_enabled = setting("auto_crafter_level_mastery_20", true) == true
 		local allocate_mastery = mastery_enabled and setting("auto_crafter_allocate_mastery_points", true) == true
 		local change_perks = mastery_enabled and setting("auto_crafter_change_perks", true) == true
@@ -2116,11 +2291,11 @@ function Controller.new(dependencies)
 			perks = {},
 			traits = {},
 		}
-		local perk_values = {
+		local perk_values = imported_job and { imported_job.perks[1], imported_job.perks[2] } or {
 			setting("auto_crafter_perk_1_target"),
 			setting("auto_crafter_perk_2_target"),
 		}
-		local blessing_values = {
+		local blessing_values = imported_job and { imported_job.blessings[1], imported_job.blessings[2] } or {
 			setting("auto_crafter_blessing_1_target"),
 			setting("auto_crafter_blessing_2_target"),
 		}
@@ -2130,9 +2305,16 @@ function Controller.new(dependencies)
 				local excluded = targets.perks[index == 1 and 2 or 1]
 				local peer_index = index == 1 and 2 or 1
 				local kept_peer = perk_values[peer_index] == "keep" and trait_at(item.perks, peer_index) or nil
-				targets.perks[index] = catalog_choice(catalog.perks, perk_values[index], trait_at(item.perks, index), excluded and excluded.id or kept_peer and kept_peer.id, true)
+				targets.perks[index] = imported_job and {
+					id = perk_values[index] and perk_values[index].id,
+					rarity = perk_values[index] and perk_values[index].rarity,
+				} or catalog_choice(catalog.perks, perk_values[index], trait_at(item.perks, index), excluded and excluded.id or kept_peer and kept_peer.id, true)
 
-				if perk_values[index] ~= "keep" and not targets.perks[index] then
+				if imported_job then
+					if not targets.perks[index] or not targets.perks[index].id then
+						return nil, "imported perk target is unavailable"
+					end
+				elseif perk_values[index] ~= "keep" and not targets.perks[index] then
 					return nil, "selected Tier IV perk target is unavailable"
 				end
 			end
@@ -2143,9 +2325,16 @@ function Controller.new(dependencies)
 				local excluded = targets.traits[index == 1 and 2 or 1]
 				local peer_index = index == 1 and 2 or 1
 				local kept_peer = blessing_values[peer_index] == "keep" and trait_at(item.traits, peer_index) or nil
-				targets.traits[index] = catalog_choice(catalog.blessings, blessing_values[index], trait_at(item.traits, index), excluded and excluded.id or kept_peer and kept_peer.id, false)
+				targets.traits[index] = imported_job and {
+					id = blessing_values[index] and blessing_values[index].id,
+					rarity = blessing_values[index] and blessing_values[index].rarity,
+				} or catalog_choice(catalog.blessings, blessing_values[index], trait_at(item.traits, index), excluded and excluded.id or kept_peer and kept_peer.id, false)
 
-				if blessing_values[index] ~= "keep" and not targets.traits[index] then
+				if imported_job then
+					if not targets.traits[index] or not targets.traits[index].id then
+						return nil, "imported blessing target is unavailable"
+					end
+				elseif blessing_values[index] ~= "keep" and not targets.traits[index] then
 					return nil, "selected blessing target is unavailable"
 				end
 			end
@@ -2173,6 +2362,36 @@ function Controller.new(dependencies)
 
 		if not phase4 or not phase4.running then
 			return false
+		end
+
+		if phase4.verify_completion then
+			local invalid_reason
+
+			if not item or item.available ~= true or item.gear_id ~= phase4.gear_id then
+				invalid_reason = "final weapon is absent from authoritative inventory"
+			elseif phase4.mastery_id ~= nil and (item.parent_pattern or item.mastery_id) ~= phase4.mastery_id then
+				invalid_reason = "final weapon changed weapon family"
+			elseif tonumber(candidate_stat(item, phase4.dump_stat)) ~= tonumber(phase4.target_dump) then
+				invalid_reason = "final weapon changed dump stat"
+			elseif phase4.consecrate and (tonumber(item.rarity) or -1) < TRANSCENDENT_RARITY then
+				invalid_reason = "final weapon is below Transcendent"
+			elseif phase4.expertise and (tonumber(item.expertise_level) or -1) < MAX_EXPERTISE_LEVEL then
+				invalid_reason = "final weapon is below item level 500"
+			elseif not has_trait_targets(item.perks, phase4.targets and phase4.targets.perks) then
+				invalid_reason = "final weapon perks do not match targets"
+			elseif not has_trait_targets(item.traits, phase4.targets and phase4.targets.traits) then
+				invalid_reason = "final weapon blessings do not match targets"
+			elseif phase4.allocate_mastery and unseen_blessing_tier_count(phase4.sticker_book) > 0 then
+				invalid_reason = "final weapon mastery points are not fully allocated"
+			elseif phase4.favorite_result and item.favorited ~= true then
+				invalid_reason = "final weapon favorite state was not preserved"
+			end
+
+			if invalid_reason then
+				self:_operation_failed(self._generation, invalid_reason)
+
+				return false
+			end
 		end
 
 		local completed_at = clock_now()
@@ -2276,6 +2495,21 @@ function Controller.new(dependencies)
 					self:_phase4_step(generation, updated)
 				end)
 			end)
+		end
+
+		-- Darktide's perk/blessing mutation recipes are only entered after the
+		-- authoritative item has reached the final expertise level. A completed
+		-- add_weapon_expertise promise is not enough: the refreshed gear snapshot
+		-- above must report 500 before any trait mutation is allowed to dispatch.
+		-- This also fails closed when the user disabled automatic expertise but
+		-- requested a perk or blessing change on a sub-500 resume candidate.
+		local trait_replacement_pending = has_pending_trait_replacement(item.perks, phase4.targets.perks)
+			or has_pending_trait_replacement(item.traits, phase4.targets.traits)
+
+		if trait_replacement_pending and (expertise == nil or expertise < MAX_EXPERTISE_LEVEL) then
+			self:_operation_failed(generation, "perk or blessing replacement was blocked until the weapon is authoritatively item level 500")
+
+			return false
 		end
 
 		if not phase4.replacement_baseline then
@@ -2409,6 +2643,14 @@ function Controller.new(dependencies)
 						kind = group.kind,
 					})
 				end
+
+				operation_report("phase4_trait_mutation_preflight", {
+					gear_id = phase4.gear_id,
+					kind = group.kind,
+					slot = index,
+					target = desired.id,
+					tier = desired.rarity,
+				})
 
 				return self:_dispatch_operation(generation, temporary_swap and "phase4_temporary_swap_" .. group.kind or "phase4_replace_" .. group.kind, function ()
 					return adapter(backend, phase4.gear_id, index, desired.id, desired.rarity)
@@ -2573,14 +2815,17 @@ function Controller.new(dependencies)
 			consecrate = consecrate,
 			dump_stat = self._search and self._search.dump_stat,
 			expertise = expertise_enabled,
+			favorite_result = self._search and self._search.favorite_result == true,
 			gear_id = candidate.gear_id,
 			mastery_id = candidate.mastery_id or candidate.parent_pattern,
 			running = true,
 			sticker_book = catalog and catalog.blessings or {},
 			mastery_costs = nil,
 			target_dump = self._search and self._search.target_dump,
+			target_master_id = self._search and self._search.target_offer and self._search.target_offer.master_id,
 			targets = targets,
 			trait_category = catalog and catalog.trait_category,
+			verify_completion = true,
 		}
 		self._phase = "phase4_preflight"
 		operation_report("phase4_started", {
@@ -3291,6 +3536,69 @@ function Controller.new(dependencies)
 		return true
 	end
 
+	function self:_imported_family_matches(candidate, job)
+		local expected_pattern = job and (job.parent_pattern or job.offer and job.offer.parent_pattern)
+		local candidate_pattern = candidate and (candidate.parent_pattern or candidate.mastery_id)
+
+		return expected_pattern ~= nil and candidate_pattern ~= nil and expected_pattern == candidate_pattern
+	end
+
+	function self:_imported_item_is_complete(item, job)
+		local catalog = job and job.catalog
+
+		if not self:_imported_family_matches(item, job) or item.available ~= true or item.gear_id == nil or job.dump_stat == nil or job.dump_target == nil or type(catalog) ~= "table" or catalog.available ~= true then
+			return false
+		end
+
+		local mastery_enabled = setting("auto_crafter_level_mastery_20", true) == true
+		local allocate_mastery = mastery_enabled and setting("auto_crafter_allocate_mastery_points", true) == true
+		local change_perks = mastery_enabled and setting("auto_crafter_change_perks", true) == true
+		local change_blessings = mastery_enabled and setting("auto_crafter_change_blessings", true) == true
+		local mastery = catalog.mastery
+
+		if mastery_enabled and (type(mastery) ~= "table" or (tonumber(mastery.mastery_level) or -1) < 20 or (tonumber(mastery.claimed_level) or -1) < 19) then
+			return false
+		end
+		if allocate_mastery and (#(catalog.blessings or {}) == 0 or unseen_blessing_tier_count(catalog.blessings) > 0) then
+			return false
+		end
+
+		return tonumber(candidate_stat(item, job.dump_stat)) == tonumber(job.dump_target)
+			and (setting("auto_crafter_consecrate_transcendent", true) ~= true or (tonumber(item.rarity) or -1) >= TRANSCENDENT_RARITY)
+			and (setting("auto_crafter_upgrade_expertise_500", true) ~= true or (tonumber(item.expertise_level) or -1) >= MAX_EXPERTISE_LEVEL)
+			and (not change_perks or has_trait_targets(item.perks, job.perks))
+			and (not change_blessings or has_trait_targets(item.traits, job.blessings))
+	end
+
+	function self:_has_resumable_imported_job(job)
+		if setting("auto_crafter_reuse_inventory_base", true) ~= true then
+			return false
+		end
+
+		local include_favorites = setting("auto_crafter_include_favorite_inventory_bases", true) == true
+		for _, candidate in ipairs(self._snapshot and self._snapshot.gear and self._snapshot.gear.items or {}) do
+			local favorite_allowed = include_favorites or candidate.favorite_known == true and candidate.favorited ~= true
+			if candidate.available == true and candidate.gear_id ~= nil and candidate.equipped ~= true and favorite_allowed and self:_imported_family_matches(candidate, job) and tonumber(candidate_stat(candidate, job.dump_stat)) == tonumber(job.dump_target) and not self:_imported_item_is_complete(candidate, job) then
+				return true
+			end
+		end
+
+		return false
+	end
+
+	function self:_imported_job_inventory_decision(job)
+		if self:_has_resumable_imported_job(job) then
+			return "resume"
+		end
+
+		local completed = self:_completed_imported_job_result(job)
+		if completed and setting("auto_crafter_craft_duplicate_completed_queued_weapons", false) ~= true then
+			return "skip", completed
+		end
+
+		return "new"
+	end
+
 	function self:_find_inventory_base()
 		local search = self._search
 
@@ -3302,23 +3610,28 @@ function Controller.new(dependencies)
 		local best
 		local best_analysis
 		local target = search.target_offer or {}
+		local imported_job = self._run_imported_job or self._imported_job
 
 		local function family_matches(candidate)
+			if imported_job then
+				return self:_imported_family_matches(candidate, imported_job), "mastery_family"
+			end
+
+			local target_pattern = target.parent_pattern
+			local candidate_pattern = candidate.parent_pattern or candidate.mastery_id
+
+			-- Marks are free choices within one mastery family. Prefer that stable
+			-- identity even when both sides expose different master items/templates.
+			if target_pattern ~= nil and candidate_pattern ~= nil then
+				return target_pattern == candidate_pattern, "mastery_family"
+			end
+
 			if target.master_id ~= nil and candidate.master_id ~= nil then
 				return target.master_id == candidate.master_id, "master_item"
 			end
 
 			if target.weapon_template ~= nil and candidate.weapon_template ~= nil then
 				return target.weapon_template == candidate.weapon_template, "weapon_template"
-			end
-
-			local target_pattern = target.parent_pattern
-			local candidate_pattern = candidate.parent_pattern or candidate.mastery_id
-
-			-- Mastery family is a safe fallback only when exact mark/template identity
-			-- is unavailable on one side.
-			if target_pattern ~= nil and candidate_pattern ~= nil then
-				return target_pattern == candidate_pattern, "mastery_family"
 			end
 
 			return false, "identity_unavailable"
@@ -3443,7 +3756,8 @@ function Controller.new(dependencies)
 			local matched, identity_source = family_matches(candidate)
 			local favorite_allowed = include_favorites or candidate.favorite_known == true and candidate.favorited ~= true
 
-			if candidate.available == true and candidate.gear_id ~= nil and candidate.equipped ~= true and matched and favorite_allowed and tonumber(candidate_stat(candidate, search.dump_stat)) == tonumber(search.target_dump) then
+			local imported_complete = imported_job and self:_imported_item_is_complete(candidate, imported_job)
+			if candidate.available == true and candidate.gear_id ~= nil and candidate.equipped ~= true and matched and favorite_allowed and not imported_complete and tonumber(candidate_stat(candidate, search.dump_stat)) == tonumber(search.target_dump) then
 				local analysis = profile_analysis(candidate)
 				analysis.expertise = tonumber(candidate.expertise_level) or -1
 				analysis.family_identity = identity_source
@@ -3666,6 +3980,327 @@ function Controller.new(dependencies)
 		end)
 	end
 
+	function self:set_imported_job(job)
+		if type(job) ~= "table" or job.kind ~= "games_lantern_job" or type(job.offer) ~= "table" or job.offer.master_id == nil or job.dump_stat == nil or type(job.perks) ~= "table" or #job.perks ~= 2 or type(job.blessings) ~= "table" or #job.blessings ~= 2 or type(job.catalog) ~= "table" or job.catalog.available ~= true then
+			return false, "invalid imported job"
+		end
+
+		if run_is_active() or self._operation_inflight or self._operation_quarantined or (self._auxiliary_inflight_count or 0) > 0 then
+			return false, "Auto Crafter is busy"
+		end
+
+		self._imported_job = job
+		self._run_imported_job = nil
+		self._catalog = job.catalog
+		self._catalog_key = offer_key(job.offer)
+		self._selected_target_key = nil
+		self._selected_native_key = offer_key(job.offer)
+		self:_refresh_plan("games_lantern_job_staged")
+
+		return true
+	end
+
+	function self:clear_imported_job()
+		if run_is_active() or self._operation_inflight or self._operation_quarantined or (self._auxiliary_inflight_count or 0) > 0 then
+			return false
+		end
+
+		self._imported_job = nil
+		self._run_imported_job = nil
+		self._catalog = nil
+		self._catalog_key = nil
+		self._selected_target_key = nil
+		self._selected_native_key = nil
+		self:_refresh_plan("games_lantern_job_cleared")
+
+		if self._view_is_valid and self._snapshot then
+			self:_schedule_catalog("games_lantern_job_cleared")
+		end
+
+		return true
+	end
+
+	function self:capture_queue_run_policy()
+		if run_is_active() or self._operation_inflight or self._operation_quarantined or self._reconciliation_required or (self._auxiliary_inflight_count or 0) > 0 then
+			return nil, "Auto Crafter is busy"
+		end
+
+		local values = {}
+		for setting_id in pairs(planner_setting_ids) do
+			values[setting_id] = setting(setting_id)
+		end
+		values.auto_crafter_buy_until_target = setting("auto_crafter_buy_until_target", true)
+		values.auto_crafter_favorite_result = setting("auto_crafter_favorite_result", true)
+
+		return {
+			kind = "games_lantern_queue_run_policy",
+			character_id = current_character_id(),
+			values = values,
+		}
+	end
+
+	function self:preview_imported_queue(build)
+		if not self._snapshot or type(build) ~= "table" or type(build.jobs) ~= "table" or #build.jobs ~= 2 or not self._planner or type(self._planner.build) ~= "function" then
+			return nil, "queue preview unavailable"
+		end
+
+		local previews = {}
+		local signature_parts = { "games_lantern_authority_v1", tostring(current_character_id()) }
+		local aggregate = { dockets_max = 0, dockets_min = 0, plasteel_max = 0, plasteel_min = 0, diamantine_max = 0, diamantine_min = 0 }
+		for index, job in ipairs(build.jobs) do
+			local config = planner_config()
+			config.dump_stat = job.dump_stat
+			config.dump_target = job.dump_target
+			config.target_offer = job.offer
+			config.trait_catalog = job.catalog
+			local ok, plan = pcall(self._planner.build, self._snapshot, config)
+			if not ok or type(plan) ~= "table" or type(plan.estimate) ~= "table" then
+				return nil, "queue job " .. tostring(index) .. " preview unavailable"
+			end
+			previews[index] = plan
+			signature_parts[#signature_parts + 1] = table.concat({
+				tostring(job.queue_id),
+				tostring(job.job_id),
+				tostring(job.slot),
+				tostring(job.offer and (job.offer.offer_id or job.offer.master_id)),
+				tostring(job.dump_stat),
+				tostring(job.dump_target),
+				planner_config_signature(config),
+			}, ":")
+			for _, trait in ipairs(job.perks or {}) do
+				signature_parts[#signature_parts + 1] = "perk:" .. tostring(trait.id or trait.name) .. ":" .. tostring(trait.rarity)
+			end
+			for _, trait in ipairs(job.blessings or {}) do
+				signature_parts[#signature_parts + 1] = "blessing:" .. tostring(trait.id or trait.name) .. ":" .. tostring(trait.rarity)
+			end
+			local estimate = plan.estimate
+			aggregate.dockets_min = aggregate.dockets_min + (tonumber(estimate.dockets_floor) or 0) + (tonumber(estimate.dockets_min) or 0)
+			aggregate.dockets_max = aggregate.dockets_max + (tonumber(estimate.dockets_cap) or 0) + (tonumber(estimate.dockets_max) or 0)
+			aggregate.plasteel_min = aggregate.plasteel_min + (tonumber(estimate.plasteel_min) or 0)
+			aggregate.plasteel_max = aggregate.plasteel_max + (tonumber(estimate.plasteel_max) or 0)
+			aggregate.diamantine_min = aggregate.diamantine_min + (tonumber(estimate.diamantine_min) or 0)
+			aggregate.diamantine_max = aggregate.diamantine_max + (tonumber(estimate.diamantine_max) or 0)
+		end
+
+		for _, field in ipairs({ "dockets_min", "dockets_max", "plasteel_min", "plasteel_max", "diamantine_min", "diamantine_max" }) do
+			signature_parts[#signature_parts + 1] = field .. ":" .. tostring(aggregate[field])
+		end
+
+		return { aggregate = aggregate, jobs = previews, signature = table.concat(signature_parts, "|") }
+	end
+
+	function self:stop_imported_queue_boundary()
+		if run_is_active() then
+			return self:_stop_active_run("user_stopped")
+		end
+		if not self._queue_preflight then
+			return false
+		end
+
+		invalidate_generation()
+		cancel_catalog()
+		self._queue_preflight = nil
+		self._probe_scheduled = false
+		self._probe_elapsed = 0
+		self._phase = "user_stopped"
+		release_account_operation_if_settled()
+
+		return true
+	end
+
+	function self:prepare_imported_job(job, index, completed_results, jobs)
+		if type(job) ~= "table" or job.job_id == nil or job.queue_id == nil or self._imported_job ~= job then
+			return false, "imported job identity unavailable"
+		end
+
+		local character_id = current_character_id()
+		if not self._queue_run_policy or self._queue_run_policy.character_id ~= character_id then
+			return false, "active character differs from confirmed queue policy"
+		end
+
+		local selected_ok, raw_offer = safe_call(self._get_selected_offer, self._active_view)
+		local selected = selected_ok and selected_offer_ids(raw_offer) or nil
+		if offer_key(selected) ~= offer_key(job.offer) then
+			return nil, "waiting for native weapon selection"
+		end
+
+		local preflight = self._queue_preflight
+		if not preflight or preflight.job_id ~= job.job_id then
+			self._queue_preflight = {
+				job_id = job.job_id,
+				probe_count = self._probe_count,
+			}
+			cancel_catalog()
+			self._catalog = nil
+			self._catalog_key = nil
+			if not self:_schedule_probe("games_lantern_queue_boundary") then
+				return false, "fresh authoritative probe could not be scheduled"
+			end
+
+			return nil, "waiting for fresh authoritative probe"
+		end
+
+		if self._probe_count <= preflight.probe_count or self._probe_scheduled or self._probe_inflight then
+			return nil, "waiting for fresh authoritative probe"
+		end
+
+		if not snapshot_matches_character(self._snapshot, character_id) then
+			return false, "fresh inventory snapshot belongs to another character"
+		end
+
+		if self._catalog_inflight or not self._catalog then
+			return nil, "waiting for fresh weapon catalogue"
+		elseif self._catalog.available ~= true or self._catalog_key ~= offer_key(job.offer) then
+			return false, self._catalog.reason or "fresh weapon catalogue unavailable"
+		end
+
+		job.catalog = self._catalog
+		self._imported_job.catalog = self._catalog
+
+		local completed_count = math.max(0, (tonumber(index) or 1) - 1)
+		for completed_index = 1, completed_count do
+			local verified, verify_reason = self:_verify_imported_result(completed_results and completed_results[completed_index], jobs and jobs[completed_index], completed_index)
+			if not verified then
+				return false, "completed queue prefix changed before next job: " .. tostring(verify_reason)
+			end
+		end
+
+		self:_refresh_plan("games_lantern_boundary_preflight")
+		if not self._plan or not self._plan.preflight or self._plan.preflight.ok ~= true then
+			return false, self._plan and self._plan.preflight and self._plan.preflight.summary or "queue job preflight unavailable"
+		end
+
+		local inventory_action, completed = self:_imported_job_inventory_decision(job)
+		if inventory_action == "skip" and completed then
+			operation_report("imported_queue_job_already_complete", {
+				candidate = completed.candidate,
+				slot = job.slot,
+			})
+
+			return completed
+		end
+
+		return true
+	end
+
+	function self:_verify_imported_result(result, job, index)
+		local snapshot = self._snapshot
+		local character_id = current_character_id()
+		local policy = self._queue_run_policy and self._queue_run_policy.values or {}
+		local gear = snapshot and snapshot.gear or {}
+		local item = result and result.gear_id ~= nil and find_item(gear.items, result.gear_id, gear.items_by_id) or nil
+		local label = tostring(index or "?")
+
+		if type(result) ~= "table" or type(job) ~= "table" then
+			return false, "completed queue weapon " .. label .. " has invalid identity"
+		end
+		if not snapshot_matches_character(snapshot, character_id) or result.character_id ~= character_id or not item or item.available ~= true then
+			return false, "completed queue weapon " .. label .. " is missing from authoritative inventory"
+		end
+
+		local expected_pattern = job.parent_pattern or job.offer and job.offer.parent_pattern
+		if expected_pattern and (item.parent_pattern or item.mastery_id) ~= expected_pattern then
+			return false, "completed queue weapon " .. label .. " changed weapon family"
+		end
+		if tonumber(candidate_stat(item, job.dump_stat)) ~= tonumber(job.dump_target) then
+			return false, "completed queue weapon " .. label .. " changed dump stat"
+		end
+		if policy.auto_crafter_consecrate_transcendent == true and (tonumber(item.rarity) or -1) < TRANSCENDENT_RARITY then
+			return false, "completed queue weapon " .. label .. " is below Transcendent"
+		end
+		if policy.auto_crafter_upgrade_expertise_500 == true and (tonumber(item.expertise_level) or -1) < MAX_EXPERTISE_LEVEL then
+			return false, "completed queue weapon " .. label .. " is below item level 500"
+		end
+		if policy.auto_crafter_change_perks == true and not has_trait_targets(item.perks, job.perks) then
+			return false, "completed queue weapon " .. label .. " changed perks"
+		end
+		if policy.auto_crafter_change_blessings == true and not has_trait_targets(item.traits, job.blessings) then
+			return false, "completed queue weapon " .. label .. " changed blessings"
+		end
+
+		return true
+	end
+
+	function self:_completed_imported_job_result(job)
+		local character_id = current_character_id()
+		local snapshot = self._snapshot
+		local catalog = job and job.catalog
+		local expected_pattern = job and (job.parent_pattern or job.offer and job.offer.parent_pattern)
+
+		if type(job) ~= "table" or job.kind ~= "games_lantern_job" or job.job_id == nil or job.queue_id == nil or expected_pattern == nil or job.dump_stat == nil or job.dump_target == nil or type(catalog) ~= "table" or catalog.available ~= true or not snapshot_matches_character(snapshot, character_id) then
+			return nil
+		end
+
+		local completed
+		for _, item in ipairs(snapshot.gear and snapshot.gear.items or {}) do
+			if self:_imported_item_is_complete(item, job) and (not completed or tostring(item.gear_id) < tostring(completed.gear_id)) then
+				completed = item
+			end
+		end
+
+		if not completed then
+			return nil
+		end
+
+		return {
+			candidate = completed,
+			character_id = character_id,
+			gear_id = completed.gear_id,
+			job_id = job.job_id,
+			kind = "games_lantern_completed_inventory_result",
+			queue_id = job.queue_id,
+		}
+	end
+
+	function self:verify_imported_queue_results(results, jobs)
+		if type(results) ~= "table" or #results ~= 2 or type(jobs) ~= "table" or #jobs ~= 2 or not self._snapshot then
+			return false, "two completed queue results are required"
+		end
+
+		local character_id = current_character_id()
+		if not snapshot_matches_character(self._snapshot, character_id) then
+			return false, "final inventory snapshot belongs to another character"
+		end
+
+		for index, result in ipairs(results) do
+			local verified, reason = self:_verify_imported_result(result, jobs[index], index)
+			if not verified then return false, reason end
+		end
+
+		return true
+	end
+
+	function self:begin_queue_operation(policy)
+		if self._queue_operation_owner or run_is_active() or self._operation_inflight or self._operation_quarantined or self._reconciliation_required or (self._auxiliary_inflight_count or 0) > 0 then
+			return false, "Auto Crafter is busy"
+		end
+		if type(policy) ~= "table" or policy.kind ~= "games_lantern_queue_run_policy" or type(policy.values) ~= "table" or policy.character_id ~= current_character_id() then
+			return false, "queue run policy is invalid or stale"
+		end
+
+		local acquired, reason = acquire_account_operation()
+		if not acquired then
+			return false, reason or "account-operation ownership unavailable"
+		end
+
+		self._queue_operation_owner = true
+		self._queue_run_policy = policy
+		self._queue_preflight = nil
+
+		return true
+	end
+
+	function self:end_queue_operation()
+		self._queue_operation_owner = false
+		self._queue_preflight = nil
+		local released = release_account_operation_if_settled()
+		if released then
+			self._queue_run_policy = nil
+		end
+
+		return released
+	end
+
 	function self:start_purchase_search()
 		if not mutations_enabled() then
 			operation_report("mutation_blocked", {
@@ -3705,6 +4340,7 @@ function Controller.new(dependencies)
 			return false
 		end
 
+		local imported_job = self._imported_job
 		self:_refresh_plan("purchase_search_start")
 
 		local plan = self._plan
@@ -3766,7 +4402,7 @@ function Controller.new(dependencies)
 		self._failure_at = nil
 		self._search = {
 			cap_by_dockets = setting("auto_crafter_cap_by_dockets", true) == true,
-			catalog = self._catalog,
+			catalog = imported_job and imported_job.catalog or self._catalog,
 			docket_cap = tonumber(setting("auto_crafter_docket_cap", 500000)) or 0,
 			dump_stat = dump_stat,
 			favorite_result = setting("auto_crafter_favorite_result", true) == true,
@@ -3777,11 +4413,12 @@ function Controller.new(dependencies)
 			phase3 = setting("auto_crafter_level_mastery_20", true) == true,
 			running = true,
 			spent = 0,
-			target_dump = tonumber(setting("auto_crafter_dump_stat_target", 60)) or 60,
+			target_dump = tonumber(imported_job and imported_job.dump_target or setting("auto_crafter_dump_stat_target", 60)) or 60,
 			target_offer = plan.target,
 			raw_offer = raw_offer,
 			start_wallet = wallet_values(self._snapshot),
 		}
+		self._run_imported_job = imported_job
 		self._phase3 = setting("auto_crafter_level_mastery_20", true) == true and {
 			cleanup_started = false,
 			current = nil,
@@ -4340,6 +4977,11 @@ function Controller.new(dependencies)
 		self._planner_signature = nil
 		self._frozen_run_settings = nil
 		self._run_character_id = nil
+		self._queue_operation_owner = false
+		self._queue_run_policy = nil
+		self._queue_preflight = nil
+		self._imported_job = nil
+		self._run_imported_job = nil
 		self._observed_character_id = character_id
 		self._phase = "character_changed"
 		self._last_error = had_active_run and "active character changed; run stopped before any further operation" or nil
@@ -4424,6 +5066,11 @@ function Controller.new(dependencies)
 		self._planner_signature = nil
 		self._frozen_run_settings = nil
 		self._run_character_id = nil
+		self._queue_operation_owner = false
+		self._queue_run_policy = nil
+		self._queue_preflight = nil
+		self._imported_job = nil
+		self._run_imported_job = nil
 		report("context_exit", {
 			reason = reason or "game_state_exit",
 		})
@@ -4681,7 +5328,11 @@ function Controller.new(dependencies)
 				self:_stop_active_run("selected_weapon_changed")
 				self._selected_native_key = selected_key
 				self:_refresh_plan("target_changed")
-				self:_schedule_catalog("target_changed")
+				if self._imported_job then
+					self._catalog = self._imported_job.catalog
+				else
+					self:_schedule_catalog("target_changed")
+				end
 			end
 		end
 
@@ -4706,6 +5357,7 @@ function Controller.new(dependencies)
 			operation_inflight = self._operation_inflight,
 			operation_kind = self._operation_kind,
 			operation_sequence = self._operation_sequence,
+			terminal_sequence = self._terminal_sequence,
 			operation_elapsed_seconds = self._operation_elapsed,
 			operation_quarantined = self._operation_quarantined,
 			reconciliation_required = self._reconciliation_required,
@@ -4726,7 +5378,16 @@ function Controller.new(dependencies)
 			mastery = self._mastery,
 			run_elapsed_seconds = self._run_elapsed,
 			resource_costs = resource_costs,
+			queue_operation_owner = self._queue_operation_owner,
+			queue_run_policy = self._queue_run_policy,
+			queue_preflight = self._queue_preflight,
+			imported_job = self._imported_job,
+			run_imported_job = self._run_imported_job,
 		}
+	end
+
+	function self:is_busy()
+		return self._operation_inflight == true or self._operation_quarantined == true or (tonumber(self._auxiliary_inflight_count) or 0) > 0 or run_is_active() == true
 	end
 
 	function self:preview_plan()
@@ -4763,6 +5424,11 @@ function Controller.new(dependencies)
 		self._frozen_run_settings = nil
 		self._run_elapsed = 0
 		self._run_started_at = nil
+		self._queue_operation_owner = false
+		self._queue_run_policy = nil
+		self._queue_preflight = nil
+		self._imported_job = nil
+		self._run_imported_job = nil
 		release_account_operation_if_settled()
 	end
 

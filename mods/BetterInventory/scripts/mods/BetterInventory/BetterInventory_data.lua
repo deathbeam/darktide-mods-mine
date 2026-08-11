@@ -1,4 +1,4 @@
-local MOD_VERSION = "2.0.3"
+local MOD_VERSION = "2.1.2"
 local mod = get_mod("BetterInventory")
 local DEFAULT_OPERATIVE_SLOT_CAPACITY = 10
 local MAX_REASONABLE_OPERATIVE_SLOT_CAPACITY = 64
@@ -737,6 +737,7 @@ return {
 						sub_widgets = {
 							{ setting_id = "auto_crafter_reuse_inventory_base", tooltip = "auto_crafter_reuse_inventory_base_tooltip", type = "checkbox", default_value = true },
 							{ setting_id = "auto_crafter_include_favorite_inventory_bases", tooltip = "auto_crafter_include_favorite_inventory_bases_tooltip", type = "checkbox", default_value = true },
+							{ setting_id = "auto_crafter_craft_duplicate_completed_queued_weapons", tooltip = "auto_crafter_craft_duplicate_completed_queued_weapons_tooltip", type = "checkbox", default_value = false },
 						},
 					},
 					{

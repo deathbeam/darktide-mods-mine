@@ -146,6 +146,18 @@ local function init_systems()
     if smoke_fog_system then
         context.smoke_fog_system = smoke_fog_system
     end
+    local force_field_system = Managers.state.extension and Managers.state.extension:system("force_field_system")
+    if force_field_system then
+        context.force_field_system = force_field_system
+    end
+    local broadphase_system = Managers.state.extension and Managers.state.extension:system("broadphase_system")
+    if broadphase_system then
+        context.broadphase_system = broadphase_system
+    end
+    local side_system = Managers.state.extension and Managers.state.extension:system("side_system")
+    if side_system then
+        context.side_system = side_system
+    end
 end
 
 -- Track Game Settings
@@ -157,12 +169,19 @@ function mod:init_game_settings()
     init_game_settings()
 end
 
+local INVALID_MODE_NAMES = {
+    training_grounds = true,
+    hub = true,
+    prologue_hub = true,
+}
 -- Check if player is in hub
 function mod:check_game_mode()
     local game_mode_manager = Managers.state.game_mode
-    if game_mode_manager and not game_mode_manager:is_social_hub() and not game_mode_manager:is_prologue_hub() then
+    local game_mode_name = game_mode_manager and game_mode_manager:game_mode_name()
+    if game_mode_name and not INVALID_MODE_NAMES[game_mode_name] then
         context.game_mode_valid = true
     end
+    mod:print_debug("Game mode:", game_mode_name, context.game_mode_valid and "valid" or "invalid")
 end
 
 -- Init all params
@@ -342,6 +361,42 @@ mod:hook_safe(CLASS.SmokeFogSystem, "destroy",
     function()
         mod:print_debug("Destroy SmokeFogSystem")
         context.smoke_fog_system = nil
+    end)
+
+mod:hook_safe(CLASS.ForceFieldSystem, "init",
+    function(self)
+        mod:print_debug("Init ForceFieldSystem")
+        context.force_field_system = self
+    end)
+
+mod:hook_safe(CLASS.ForceFieldSystem, "destroy",
+    function()
+        mod:print_debug("Destroy ForceFieldSystem")
+        context.force_field_system = nil
+    end)
+
+mod:hook_safe(CLASS.BroadphaseSystem, "init",
+    function(self)
+        mod:print_debug("Init BroadphaseSystem")
+        context.broadphase_system = self
+    end)
+
+mod:hook_safe(CLASS.BroadphaseSystem, "destroy",
+    function()
+        mod:print_debug("Destroy BroadphaseSystem")
+        context.broadphase_system = nil
+    end)
+
+mod:hook_safe(CLASS.SideSystem, "init",
+    function(self)
+        mod:print_debug("Init SideSystem")
+        context.side_system = self
+    end)
+
+mod:hook_safe(CLASS.SideSystem, "destroy",
+    function()
+        mod:print_debug("Destroy SideSystem")
+        context.side_system = nil
     end)
 
 -- Update settings when input settings changed

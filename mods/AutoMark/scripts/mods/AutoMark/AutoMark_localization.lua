@@ -565,6 +565,16 @@ local localization = {
         ["zh-cn"] = "单位：米",
         ["zh-tw"] = "單位：公尺",
     },
+    max_angle = {
+        en = "Max Angle",
+        ["zh-cn"] = "最大角度",
+        ["zh-tw"] = "最大角度",
+    },
+    max_angle_description = {
+        en = "Maximum angle in degrees between your crosshair and markable enemies. \n\nSet to " .. highlight("0") .. " to use vanilla raycast detection.",
+        ["zh-cn"] = "可标记敌人与准星间的最大角度。\n\n设置为" .. highlight("0") .. "时将使用游戏原版射线检测。",
+        ["zh-tw"] = "可標記敵人與準星間的最大角度。\n\n設為" .. highlight("0") .. "時將使用遊戲原版射線偵測。",
+    },
     override_manual = {
         en = "Override Manual",
         ["zh-cn"] = "覆盖手动标记",

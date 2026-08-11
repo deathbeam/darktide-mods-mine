@@ -266,6 +266,10 @@ Features.end_view_session = function(view, reason)
 	return false
 end
 
+Features.close_all_view_sessions = function(reason)
+	return Features._view_session.close_all(reason)
+end
+
 Features.register_view_session_cleanup = function(view, cleanup_id, callback)
 	local sessions = Features._view_session
 
@@ -1278,6 +1282,8 @@ Features.compact_inventory_curio_stats_blueprints = function(mod, item_grid, con
 	return adjusted_blueprints
 end
 
+Features.release_inventory_options_panel = PanelRuntime.release_inventory_options_panel
+
 Features.setup_inventory_options_panel = function(mod, layout, view, ViewElementGrid)
 	if mod:get("enable_inventory_options_panel_prototype") ~= true or not is_inventory_view(layout, view) or view._better_inventory_options_panel then
 		return false
@@ -1713,9 +1719,6 @@ local function acquire_discard_transaction(owner, view)
 	return discard_transaction:acquire(owner, view)
 end
 
--- Shared destructive/account-operation gate. Auto Crafter uses same owner token
--- as manual and automatic discard so BetterInventory cannot mutate one wallet or
--- gear collection through two workflows at once.
 Features.acquire_account_operation = function(owner, view)
 	return acquire_discard_transaction(owner, view)
 end
@@ -1805,6 +1808,8 @@ end
 Features.morningstar_auto_discard_has_started = function()
 	return automatic_discard:morningstar_auto_discard_has_started()
 end
+
+Features.defer_morningstar_auto_discard_for_account_operation = function(mod) return automatic_discard:defer_for_account_operation(mod) end
 
 Features.automatic_discard_read_request_count = function()
 	return automatic_discard:automatic_discard_read_request_count()
@@ -2482,6 +2487,8 @@ Features.unregister_inventory_view = function(view)
 		Features.cancel_manual_discard()
 	end
 
+	Features.release_inventory_options_panel(view)
+
 	Features._registered_sort_views[view] = nil
 	registered_inventory_views[view] = nil
 end
@@ -2492,18 +2499,13 @@ Features.unregister_armoury_view = function(view)
 		Features.restore_sort_options(view)
 	end
 
-	if view and view._better_inventory_armoury_controller_focused == true then
-		set_armoury_controller_focus(view, false)
-	end
+	if armoury_panel and type(armoury_panel.release) == "function" then
+		armoury_panel.release(view)
+	elseif view then
+		if view._better_inventory_armoury_controller_focused == true then
+			set_armoury_controller_focus(view, false)
+		end
 
-	local legend = view and view._better_inventory_armoury_controller_legend
-	local legend_id = view and view._better_inventory_armoury_controller_legend_id
-
-	if legend and legend_id and type(legend.remove_entry) == "function" then
-		pcall(legend.remove_entry, legend, legend_id)
-	end
-
-	if view then
 		view._better_inventory_armoury_controller_legend = nil
 		view._better_inventory_armoury_controller_legend_id = nil
 		view._better_inventory_armoury_controller_legend_action = nil

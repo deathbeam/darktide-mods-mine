@@ -8,6 +8,7 @@ local Mastery = require("scripts/utilities/mastery")
 local MasterItems = require("scripts/backend/master_items")
 local ProfileUtils = require("scripts/utilities/profile_utils")
 local CraftingSettings = require("scripts/settings/item/crafting_settings")
+local RankSettings = require("scripts/settings/item/rank_settings")
 local WeaponTemplate = require("scripts/utilities/weapon/weapon_template")
 
 local Backend = {}
@@ -77,6 +78,120 @@ local function call_service(service, method_name, ...)
 	end
 
 	return promise_or_resolved(result)
+end
+
+local function normalized_trait_mutation(kind, gear_id, index, trait_id, tier)
+	local normalized_index = tonumber(index)
+	local normalized_tier = tonumber(tier)
+	local maximum_tier = kind == "perk" and safe_member(RankSettings, "max_perk_rank") or safe_member(RankSettings, "max_trait_rank")
+
+	if type(gear_id) ~= "string" or gear_id == "" then
+		return nil, kind .. " replacement gear id is invalid"
+	end
+
+	if normalized_index == nil or normalized_index ~= math.floor(normalized_index) or normalized_index < 1 or normalized_index > 2 then
+		return nil, kind .. " replacement slot must be 1 or 2"
+	end
+
+	if type(trait_id) ~= "string" or trait_id == "" then
+		return nil, kind .. " replacement master item id is invalid"
+	end
+
+	if normalized_tier == nil or normalized_tier ~= math.floor(normalized_tier) or normalized_tier < 1 or (tonumber(maximum_tier) and normalized_tier > tonumber(maximum_tier)) then
+		return nil, kind .. " replacement tier is outside Darktide's supported rank range"
+	end
+
+	if type(MasterItems) ~= "table" or type(MasterItems.get_item) ~= "function" then
+		return nil, kind .. " replacement master item registry is unavailable"
+	end
+
+	local item_ok, trait_item = pcall(MasterItems.get_item, trait_id)
+
+	if not item_ok or trait_item == nil then
+		return nil, kind .. " replacement master item is unavailable: " .. trait_id
+	end
+
+	return {
+		gear_id = gear_id,
+		index = normalized_index,
+		trait_id = trait_id,
+		tier = normalized_tier,
+	}
+end
+
+local function nonempty_string(value)
+	return type(value) == "string" and value ~= ""
+end
+
+local function finite_number(value)
+	local number = tonumber(value)
+
+	return number and number == number and number ~= math.huge and number ~= -math.huge and number or nil
+end
+
+local function normalized_mastery_trait(trait_id, tier)
+	local normalized_tier = finite_number(tier)
+	local maximum_tier = tonumber(safe_member(RankSettings, "max_trait_rank"))
+
+	if not nonempty_string(trait_id) then
+		return nil, "mastery blessing id is invalid"
+	end
+	if not normalized_tier or normalized_tier ~= math.floor(normalized_tier) or normalized_tier < 1 or maximum_tier and normalized_tier > maximum_tier then
+		return nil, "mastery blessing tier is outside Darktide's supported rank range"
+	end
+	if type(MasterItems) ~= "table" or type(MasterItems.get_item) ~= "function" then
+		return nil, "mastery blessing registry is unavailable"
+	end
+
+	local item_ok, item = pcall(MasterItems.get_item, trait_id)
+	if not item_ok or item == nil then
+		return nil, "mastery blessing master item is unavailable: " .. trait_id
+	end
+
+	return {
+		rarity = normalized_tier,
+		trait_name = trait_id,
+	}
+end
+
+local function normalized_gear_ids(gear_ids, label)
+	if type(gear_ids) ~= "table" or #gear_ids == 0 then
+		return nil, tostring(label) .. " requires at least one item"
+	end
+
+	local normalized = {}
+	local unique = {}
+	for index, gear_id in ipairs(gear_ids) do
+		if not nonempty_string(gear_id) or unique[gear_id] then
+			return nil, tostring(label) .. " contains an invalid or duplicate gear id"
+		end
+
+		unique[gear_id] = true
+		normalized[index] = gear_id
+	end
+
+	return normalized
+end
+
+local function confirmed_trait_mutation(kind, operation)
+	return function(result)
+		local items = safe_member(result, "items")
+
+		if type(items) ~= "table" or next(items) == nil then
+			return rejected(kind .. " replacement returned no authoritative item confirmation; mutation will not be retried")
+		end
+
+		for _, item in pairs(items) do
+			local gear = safe_member(item, "gear")
+			local result_gear_id = safe_member(item, "gear_id") or safe_member(item, "uuid") or safe_member(gear, "uuid") or safe_member(gear, "gear_id")
+
+			if result_gear_id ~= nil and tostring(result_gear_id) == operation.gear_id then
+				return result
+			end
+		end
+
+		return rejected(kind .. " replacement response did not confirm the requested gear; mutation will not be retried")
+	end
 end
 
 local function add_loadout_gear_ids(target, loadout)
@@ -159,16 +274,20 @@ local function current_character_id()
 	return nil
 end
 
+local function choice_master_id(choice)
+	if type(choice) == "table" then
+		return choice.masterId or choice.master_id or choice.id or choice.name
+	end
+
+	return choice
+end
+
 local function offer_master_id(offer)
 	local description = safe_member(offer, "description")
 	local choices = safe_member(description, "lootChoices") or safe_member(description, "loot_choices")
 	local choice = type(choices) == "table" and choices[1] or nil
 
-	if type(choice) == "table" then
-		return choice.masterId or choice.master_id or choice.id or choice.name
-	end
-
-	return choice or safe_member(description, "masterId") or safe_member(description, "master_id")
+	return choice_master_id(choice) or safe_member(description, "masterId") or safe_member(description, "master_id")
 end
 
 local master_item_details
@@ -176,6 +295,69 @@ local merge_stat_catalog
 local summarize_base_stats
 local summarize_weapon_template_stats
 local store_item_preview
+local weapon_mark_index
+local weapon_mark_index_source
+
+local function indexed_weapon_marks(parent_pattern)
+	if parent_pattern == nil or type(MasterItems) ~= "table" or type(MasterItems.get_cached) ~= "function" then
+		return {}
+	end
+
+	local ok, cached = pcall(MasterItems.get_cached)
+
+	if not ok or type(cached) ~= "table" then
+		return {}
+	end
+
+	if cached ~= weapon_mark_index_source then
+		local index = {}
+
+		for master_id, item in pairs(cached) do
+			local pattern = safe_member(item, "parent_pattern")
+			local slots = safe_member(item, "slots")
+			local slot = type(slots) == "table" and slots[1] or nil
+			local weapon_template = safe_member(item, "weapon_progression_template") or safe_member(item, "weapon_template")
+
+			if pattern ~= nil and (slot == "slot_primary" or slot == "slot_secondary") and weapon_template ~= nil then
+				local marks = index[pattern] or {}
+
+				marks[#marks + 1] = {
+					item = item,
+					master_id = master_id,
+				}
+				index[pattern] = marks
+			end
+		end
+
+		for _, marks in pairs(index) do
+			table.sort(marks, function(left, right)
+				return tostring(left.master_id) < tostring(right.master_id)
+			end)
+		end
+
+		weapon_mark_index = index
+		weapon_mark_index_source = cached
+	end
+
+	return weapon_mark_index and weapon_mark_index[parent_pattern] or {}
+end
+
+local function valid_weapon_slot(slot_type)
+	return slot_type == "slot_primary" or slot_type == "slot_secondary"
+end
+
+local function mark_matches_offer_contract(mark_master_id, mark_item, mark_details, parent_pattern, offer_details)
+	return type(mark_master_id) == "string"
+		and mark_master_id ~= ""
+		and type(mark_item) == "table"
+		and type(parent_pattern) == "string"
+		and parent_pattern ~= ""
+		and valid_weapon_slot(offer_details and offer_details.slot_type)
+		and mark_details.parent_pattern == parent_pattern
+		and mark_details.slot_type == offer_details.slot_type
+		and mark_details.weapon_category == offer_details.weapon_category
+		and mark_details.weapon_template ~= nil
+end
 
 local function summarize_store(store)
 	local offers = safe_member(store, "offers") or {}
@@ -213,6 +395,52 @@ local function summarize_store(store)
 			local base_stats = merge_stat_catalog(template_stats, rolled_stats)
 			local parent_pattern = details.parent_pattern or safe_member(preview_item, "parent_pattern") or safe_member(description, "parent_pattern")
 			local sku = safe_member(offer, "sku")
+			local choices = safe_member(description, "lootChoices") or safe_member(description, "loot_choices") or {}
+			local marks = {}
+			local seen_marks = {}
+			local mark_candidates = {}
+
+			for _, indexed in ipairs(indexed_weapon_marks(parent_pattern)) do
+				mark_candidates[#mark_candidates + 1] = indexed
+			end
+			for _, choice in ipairs(choices) do
+				mark_candidates[#mark_candidates + 1] = {
+					master_id = choice_master_id(choice),
+				}
+			end
+
+			for _, candidate in ipairs(mark_candidates) do
+				local mark_master_id = candidate.master_id
+
+				if type(mark_master_id) == "string" and mark_master_id ~= "" and not seen_marks[mark_master_id] then
+					local mark_item = candidate.item
+					local mark_ok, resolved_mark = false, nil
+
+					if mark_item == nil and type(MasterItems) == "table" and type(MasterItems.get_item) == "function" then
+						mark_ok, resolved_mark = pcall(MasterItems.get_item, mark_master_id)
+					end
+
+					if mark_ok then
+						mark_item = resolved_mark
+					end
+
+					local mark_details = master_item_details(mark_master_id, mark_item)
+
+					if mark_matches_offer_contract(mark_master_id, mark_item, mark_details, parent_pattern, details) then
+						seen_marks[mark_master_id] = true
+						marks[#marks + 1] = {
+							base_stats = summarize_weapon_template_stats(mark_item),
+							display_name = mark_details.display_name,
+							master_id = mark_master_id,
+							parent_pattern = mark_details.parent_pattern,
+							slot_type = mark_details.slot_type,
+							sub_display_name = mark_details.sub_display_name,
+							weapon_category = mark_details.weapon_category,
+							weapon_template = mark_details.weapon_template,
+						}
+					end
+				end
+			end
 
 			summary.offers[index] = {
 				base_item_level = tonumber(safe_member(preview_item, "baseItemLevel") or safe_member(description, "baseItemLevel")),
@@ -220,6 +448,7 @@ local function summarize_store(store)
 				display_name = details.display_name,
 				offer_id = safe_member(offer, "offerId") or safe_member(offer, "offer_id"),
 				master_id = master_id,
+				marks = marks,
 				parent_pattern = parent_pattern,
 				price_type = safe_member(amount, "type"),
 				price_amount = tonumber(safe_member(amount, "discounted_price") or safe_member(amount, "amount")),
@@ -622,7 +851,22 @@ local function canonical_master_item_name(value)
 		return value
 	end
 
-	return safe_member(value, "name") or safe_member(value, "id")
+	local direct = safe_member(value, "name")
+		or safe_member(value, "id")
+		or safe_member(value, "master_id")
+		or safe_member(value, "masterId")
+
+	if direct ~= nil then
+		return direct
+	end
+
+	local nested = safe_member(value, "item") or safe_member(value, "trait")
+
+	if nested ~= value then
+		return canonical_master_item_name(nested)
+	end
+
+	return nil
 end
 
 local function trait_display_name_key(trait_id, source)
@@ -646,6 +890,7 @@ end
 local function summarize_perk_catalog(metadata)
 	local ranks = safe_member(metadata, "perks") or {}
 	local catalog = {}
+	local catalog_by_id = {}
 	local maximum_tier
 
 	if type(ranks) ~= "table" then
@@ -690,13 +935,27 @@ local function summarize_perk_catalog(metadata)
 						display_name = description_ok and description or nil
 					end
 
-					catalog[#catalog + 1] = {
+					local entry = {
+						description_key = perk_item and safe_member(perk_item, "description") or nil,
 						display_name = display_name,
 						display_name_key = trait_display_name_key(name, perk),
 						id = tostring(name),
 						tier = tier,
 						trait = perk_item and safe_member(perk_item, "trait") or nil,
 					}
+					local existing = catalog_by_id[entry.id]
+
+					-- The metadata endpoint may repeat the same canonical perk inside a
+					-- rank. It is still one backend mutation target and must not become
+					-- an artificial Games Lantern ambiguity.
+					if existing == nil then
+						catalog[#catalog + 1] = entry
+						catalog_by_id[entry.id] = entry
+					elseif (tonumber(entry.tier) or 0) > (tonumber(existing.tier) or 0) then
+						for key, value in pairs(entry) do
+							existing[key] = value
+						end
+					end
 				end
 			end
 		end
@@ -764,6 +1023,7 @@ local function summarize_blessing_catalog(sticker_book)
 			end
 
 			catalog[#catalog + 1] = {
+				description_key = safe_member(trait_item, "description"),
 				display_name_key = trait_display_name_key(trait_name),
 				frame = frame,
 				id = tostring(trait_name),
@@ -940,6 +1200,61 @@ local function raw_gear_item(gear, gear_id)
 	end
 
 	return nil
+end
+
+local function validate_trait_mutation_item(backend, kind, operation)
+	local raw_item = raw_gear_item(backend and backend._raw_gear, operation.gear_id)
+	local item = raw_item and item_instance(raw_item, operation.gear_id)
+
+	if not item then
+		return nil, kind .. " replacement item is unavailable in authoritative gear"
+	end
+
+	local recipes = safe_member(CraftingSettings, "recipes")
+	local recipe = safe_member(recipes, kind == "perk" and "replace_perk" or "replace_trait")
+	local is_valid_item = safe_member(recipe, "is_valid_item")
+
+	if type(is_valid_item) ~= "function" then
+		return nil, kind .. " replacement recipe validation is unavailable"
+	end
+
+	local recipe_ok, valid = pcall(is_valid_item, item)
+	if not recipe_ok or valid ~= true then
+		return nil, kind .. " replacement recipe rejected the authoritative item"
+	end
+
+	local source = kind == "perk" and safe_member(item, "perks") or safe_member(item, "traits")
+	local current = type(source) == "table" and source[operation.index] or nil
+	local peer = type(source) == "table" and source[operation.index == 1 and 2 or 1] or nil
+	local current_id = safe_member(current, "id") or safe_member(current, "name") or safe_member(current, "trait")
+	local peer_id = safe_member(peer, "id") or safe_member(peer, "name") or safe_member(peer, "trait")
+	local current_tier = tonumber(safe_member(current, "rarity") or safe_member(current, "tier")) or 0
+
+	if type(current) ~= "table" then
+		return nil, kind .. " replacement slot is absent from the authoritative item"
+	end
+	if peer_id == operation.trait_id then
+		return nil, kind .. " replacement would create a duplicate trait"
+	end
+	if current_id == operation.trait_id and current_tier >= operation.tier then
+		return nil, kind .. " replacement is an invalid no-op or downgrade"
+	end
+
+	local maximum_ok, maximum = pcall(Items.max_expertise_level)
+	local expertise_ok, expertise = pcall(Items.expertise_level, item, true)
+	if not maximum_ok or not expertise_ok or tonumber(maximum) == nil or tonumber(expertise) == nil or tonumber(expertise) < tonumber(maximum) then
+		return nil, kind .. " replacement was blocked until authoritative item level 500"
+	end
+
+	local target_ok, target_item = pcall(MasterItems.get_item, operation.trait_id)
+	local target_type = target_ok and safe_member(target_item, "item_type") or nil
+	local expected_type = kind == "perk" and "PERK" or "TRAIT"
+
+	if target_type ~= nil and target_type ~= expected_type then
+		return nil, kind .. " replacement target has incompatible item type " .. tostring(target_type)
+	end
+
+	return item
 end
 
 local function summarize_purchase(result)
@@ -1219,7 +1534,7 @@ function Backend.new(dependencies)
 	end
 
 	function backend:favorite_item(gear_id)
-		if gear_id == nil then
+		if not nonempty_string(gear_id) then
 			return rejected("gear id unavailable for favorite")
 		end
 
@@ -1266,8 +1581,9 @@ function Backend.new(dependencies)
 	end
 
 	function backend:discard_items(gear_ids)
-		if type(gear_ids) ~= "table" or #gear_ids == 0 then
-			return rejected("no gear ids supplied for discard")
+		local normalized, normalization_error = normalized_gear_ids(gear_ids, "discard")
+		if not normalized then
+			return rejected(normalization_error)
 		end
 
 		local protection, protection_error = discard_protection_snapshot()
@@ -1276,14 +1592,9 @@ function Backend.new(dependencies)
 			return rejected(protection_error)
 		end
 
-		local unique = {}
 		local validated = {}
 
-		for _, gear_id in ipairs(gear_ids) do
-			if gear_id == nil or unique[gear_id] then
-				return rejected("discard gear ids are missing or duplicated")
-			end
-
+		for _, gear_id in ipairs(normalized) do
 			if protection.favorites[gear_id] == true then
 				return rejected("queued weapon became favorited before discard")
 			end
@@ -1292,7 +1603,6 @@ function Backend.new(dependencies)
 				return rejected("queued weapon became equipped or used by a saved loadout")
 			end
 
-			unique[gear_id] = true
 			validated[#validated + 1] = gear_id
 		end
 
@@ -1300,7 +1610,7 @@ function Backend.new(dependencies)
 	end
 
 	function backend:upgrade_weapon_rarity(gear_id)
-		if gear_id == nil then
+		if not nonempty_string(gear_id) then
 			return rejected("gear id unavailable for rarity upgrade")
 		end
 
@@ -1342,20 +1652,15 @@ function Backend.new(dependencies)
 	end
 
 	function backend:upgrade_weapon_rarities(gear_ids)
-		if type(gear_ids) ~= "table" or #gear_ids == 0 then
-			return rejected("rarity upgrade batch requires at least one item")
+		local normalized, normalization_error = normalized_gear_ids(gear_ids, "rarity upgrade batch")
+		if not normalized then
+			return rejected(normalization_error)
 		end
 
-		local unique = {}
 		local results = {}
 		local sequence = Promise.resolved(results)
 
-		for _, gear_id in ipairs(gear_ids) do
-			if gear_id == nil or unique[gear_id] then
-				return rejected("rarity upgrade batch contains missing or duplicate gear ids")
-			end
-
-			unique[gear_id] = true
+		for _, gear_id in ipairs(normalized) do
 			local pending_gear_id = gear_id
 			sequence = sequence:next(function ()
 				return self:upgrade_weapon_rarity(pending_gear_id):next(function (result)
@@ -1370,14 +1675,15 @@ function Backend.new(dependencies)
 		-- the controller may still overlap this lane with one Credits purchase.
 		return sequence:next(function ()
 			return {
-				count = #gear_ids,
+				count = #normalized,
 				results = results,
 			}
 		end)
 	end
 
 	function backend:add_weapon_expertise(gear_id, displayed_target)
-		if gear_id == nil or tonumber(displayed_target) == nil then
+		local target = finite_number(displayed_target)
+		if not nonempty_string(gear_id) or not target or target <= 0 or target ~= math.floor(target) then
 			return rejected("gear id or expertise target unavailable")
 		end
 
@@ -1391,38 +1697,59 @@ function Backend.new(dependencies)
 			return rejected("expertise multiplier invalid")
 		end
 
-		return self:_mutate("crafting", "add_weapon_expertise", gear_id, tonumber(displayed_target) / tonumber(multiplier))
+		local maximum_ok, maximum = pcall(Items.max_expertise_level)
+		if maximum_ok and tonumber(maximum) and target > tonumber(maximum) then
+			return rejected("expertise target exceeds Darktide's supported maximum")
+		end
+
+		return self:_mutate("crafting", "add_weapon_expertise", gear_id, target / tonumber(multiplier))
 	end
 
 	function backend:replace_perk(gear_id, index, perk_id, tier)
-		if gear_id == nil or tonumber(index) == nil or perk_id == nil or tonumber(tier) == nil then
-			return rejected("perk replacement parameters unavailable")
+		local operation, validation_error = normalized_trait_mutation("perk", gear_id, index, perk_id, tier)
+
+		if not operation then
+			return rejected(validation_error)
+		end
+		local _, item_error = validate_trait_mutation_item(self, "perk", operation)
+		if item_error then
+			return rejected(item_error)
 		end
 
-		return self:_mutate("crafting", "replace_perk_in_weapon", gear_id, tonumber(index), perk_id, nil, tonumber(tier))
+		-- Darktide's CraftingService perk signature is intentionally asymmetric:
+		-- (gear, slot, perk, costs, tier). Never leave a nil hole before tier because
+		-- third-party/older hook dispatchers can truncate varargs at that hole and
+		-- submit replaceTrait without traitTier. `false` preserves arity while keeping
+		-- StoreService.on_crafting_done on its no-cost immediate-resolve path; an empty
+		-- table would trigger an unnecessary wallet-cap request after mutation.
+		return self:_mutate("crafting", "replace_perk_in_weapon", operation.gear_id, operation.index, operation.trait_id, false, operation.tier)
+			:next(confirmed_trait_mutation("perk", operation))
 	end
 
 	function backend:replace_blessing(gear_id, index, blessing_id, tier)
-		if gear_id == nil or tonumber(index) == nil or blessing_id == nil or tonumber(tier) == nil then
-			return rejected("blessing replacement parameters unavailable")
+		local operation, validation_error = normalized_trait_mutation("blessing", gear_id, index, blessing_id, tier)
+
+		if not operation then
+			return rejected(validation_error)
+		end
+		local _, item_error = validate_trait_mutation_item(self, "blessing", operation)
+		if item_error then
+			return rejected(item_error)
 		end
 
-		return self:_mutate("crafting", "replace_trait_in_weapon", gear_id, tonumber(index), blessing_id, tonumber(tier))
+		return self:_mutate("crafting", "replace_trait_in_weapon", operation.gear_id, operation.index, operation.trait_id, operation.tier)
+			:next(confirmed_trait_mutation("blessing", operation))
 	end
 
 	function backend:purchase_mastery_trait(pattern_id, trait_id, tier)
-		if pattern_id == nil or trait_id == nil or tonumber(tier) == nil then
-			return rejected("mastery trait purchase parameters unavailable")
+		local operation, validation_error = normalized_mastery_trait(trait_id, tier)
+		if not nonempty_string(pattern_id) or not operation then
+			return rejected(validation_error or "mastery pattern id is invalid")
 		end
 
 		-- Follow vanilla MasteryView. purchase_trait() swallows a rejected PUT into
 		-- a resolved error value; purchase_traits() returns explicit failed entries
 		-- and resets/warms the sticker-book cache after its serialized batch.
-		local operation = {
-			rarity = tonumber(tier),
-			trait_name = trait_id,
-		}
-
 		return self:_mutate("mastery", "purchase_traits", pattern_id, { operation }):next(function (failed_traits)
 			if type(failed_traits) ~= "table" then
 				return rejected("mastery blessing allocation returned an invalid result")
@@ -1441,24 +1768,24 @@ function Backend.new(dependencies)
 	end
 
 	function backend:purchase_mastery_traits(pattern_id, requested_operations)
-		if pattern_id == nil or type(requested_operations) ~= "table" or #requested_operations == 0 then
+		if not nonempty_string(pattern_id) or type(requested_operations) ~= "table" or #requested_operations == 0 then
 			return rejected("mastery trait batch parameters unavailable")
 		end
 
 		local operations = {}
+		local unique = {}
 
 		for index, requested in ipairs(requested_operations) do
 			local trait_id = requested and requested.trait_id
-			local tier = requested and tonumber(requested.rarity)
+			local operation, validation_error = normalized_mastery_trait(trait_id, requested and requested.rarity)
+			local key = operation and operation.trait_name .. ":" .. tostring(operation.rarity)
 
-			if trait_id == nil or tier == nil then
-				return rejected("mastery trait batch contains an invalid operation")
+			if not operation or unique[key] then
+				return rejected(validation_error or "mastery trait batch contains a duplicate operation")
 			end
 
-			operations[index] = {
-				rarity = tier,
-				trait_name = trait_id,
-			}
+			unique[key] = true
+			operations[index] = operation
 		end
 
 		-- MasteryService.purchase_traits performs these operations recursively and
@@ -1514,11 +1841,12 @@ function Backend.new(dependencies)
 	end
 
 	function backend:extract_weapon_mastery(mastery_id, gear_ids)
-		if mastery_id == nil or type(gear_ids) ~= "table" or #gear_ids == 0 then
-			return rejected("mastery extraction requires at least one item")
+		local normalized, normalization_error = normalized_gear_ids(gear_ids, "mastery extraction")
+		if not nonempty_string(mastery_id) or not normalized then
+			return rejected(normalization_error or "mastery extraction pattern id is invalid")
 		end
 
-		return self:_mutate("crafting", "extract_weapon_mastery", mastery_id, gear_ids):next(function (result)
+		return self:_mutate("crafting", "extract_weapon_mastery", mastery_id, normalized):next(function (result)
 			return summarize_extraction(result)
 		end)
 	end

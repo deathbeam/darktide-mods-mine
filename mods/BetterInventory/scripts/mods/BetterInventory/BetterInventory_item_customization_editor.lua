@@ -526,6 +526,11 @@ local function resolve_input_widget(mod, create_if_missing)
 		else
 			input_widget = popup_handler._widgets_by_name and popup_handler._widgets_by_name[INPUT_WIDGET_ID] or nil
 		end
+	else
+		-- ConstantElementPopupHandler instances are recreated independently from
+		-- inventory views. Never retain a widget from a handler that is no longer
+		-- active.
+		input_widget = nil
 	end
 
 	return input_widget
@@ -540,6 +545,7 @@ local function close_input(mod)
 	end
 
 	show_input_field = false
+	input_widget = nil
 end
 
 local function show_name_editor(mod, context, layout)
@@ -665,14 +671,6 @@ Editor.install = function(mod, InventoryWeaponsView, layout)
 		definitions.widget_definitions[INPUT_WIDGET_ID] = input_widget_definition
 	end)
 
-	mod:hook_safe("ConstantElementPopupHandler", "update", function(handler)
-		-- Name It reinitializes the shared popup handler during on_all_mods_loaded,
-		-- replacing every widget instance. Never retain the detached pre-init
-		-- widget: always follow the instance the handler currently draws.
-		input_widget = ensure_input_widget(mod, handler)
-		if input_widget and input_widget.content then input_widget.content.visible = show_input_field end
-	end)
-
 	mod:hook("ConstantElementPopupHandler", "_update_popup_text_height", function(func, handler, ...)
 		local total_height = func(handler, ...)
 		local widgets = handler._widgets_by_name
@@ -784,12 +782,19 @@ Editor.close_input = close_input
 Editor.clear_pending = function()
 	pending_action = nil
 end
+Editor.release_view = function(mod)
+	pending_action = nil
+	close_input(mod)
+end
 Editor.run_pending = function()
 	if pending_action then
 		local action = pending_action
 		pending_action = nil
 		action()
 	end
+end
+Editor.has_pending = function()
+	return pending_action ~= nil
 end
 
 return Editor

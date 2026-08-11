@@ -25,7 +25,7 @@ local function focus_target_switch_callback(is_melee)
     local target_unit, target_tag
 
     if is_melee then
-        target_unit, target_tag = mod:find_target_unit_custom("focus_target_melee", 0, MELEE_RANGE, tag_name)
+        target_unit, target_tag = mod:find_target_unit_custom("focus_target_melee", 0, MELEE_RANGE, 0, tag_name)
     else
         target_unit = mod:find_target_unit(true)
     end
@@ -43,9 +43,9 @@ local function focus_target_switch_callback(is_melee)
     end
     tag_context.switch_unit_expired_time = mod:get_latest_fixed_time() + 1
 
-    mod:on_manual_mark(tag_context, target_unit)
     mod:print_debug("Focus Target Switch", target_unit)
-    mod:mark(tag_name, target_unit, target_tag)
+    mod:on_manual_mark(tag_context, target_unit)
+    mod:set_auto_mark(tag_name, target_unit, target_tag)
 end
 
 local function focus_target_switch(is_melee)

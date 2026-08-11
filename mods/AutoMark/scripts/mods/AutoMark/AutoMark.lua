@@ -112,6 +112,7 @@ local DEFAULT_CLASS_SETTINGS = {
     mark_limit       = true,
     min_range        = 0,
     max_range        = 100,
+    max_angle        = 0,
     override_manual  = false,
     priority_switch  = false,
     toggle_elite     = true,
@@ -159,6 +160,9 @@ local context                            = {
     smart_tag_system                   = nil,
     outline_system                     = nil,
     smoke_fog_system                   = nil,
+    force_field_system                 = nil,
+    broadphase_system                  = nil,
+    side_system                        = nil,
     hud_element_smart_tagging          = nil,
     companion_command_tap              = "double"
 }
@@ -296,6 +300,9 @@ local function destroy_references()
     context.smart_tag_system                   = nil
     context.outline_system                     = nil
     context.smoke_fog_system                   = nil
+    context.force_field_system                 = nil
+    context.broadphase_system                  = nil
+    context.side_system                        = nil
     context.hud_element_smart_tagging          = nil
     mod:destroy_visibility_raycast_objects()
 end
@@ -313,7 +320,7 @@ mod:io_dofile("AutoMark/scripts/mods/AutoMark/mark/focus_target_mark")
 mod:io_dofile("AutoMark/scripts/mods/AutoMark/mark/servo_skull_mark")
 
 --  Mod Enabled
-mod.on_enabled            = function(initial_call)
+mod.on_enabled                = function(initial_call)
     context.mod_enabled = true
     mod:check_game_mode()
     mod:init_auto_mark_settings()
@@ -325,7 +332,7 @@ mod.on_enabled            = function(initial_call)
 end
 
 --  Mod Disabled
-mod.on_disabled           = function(initial_call)
+mod.on_disabled               = function(initial_call)
     context.mod_enabled = false
     -- mark info rest
     reset_context()
@@ -333,7 +340,7 @@ mod.on_disabled           = function(initial_call)
 end
 
 -- Enter/Exit GameplayStateRun
-mod.on_game_state_changed = function(status, state_name)
+mod.on_game_state_changed     = function(status, state_name)
     if state_name == "GameplayStateRun" then
         if status == "enter" then
             mod:check_game_mode()
@@ -350,7 +357,7 @@ mod.on_game_state_changed = function(status, state_name)
 end
 
 -- Mod Setting Change
-mod.on_setting_changed    = function(setting_id)
+mod.on_setting_changed        = function(setting_id)
     local result = mod:get(setting_id)
     local class_name = mod:get("class_selection")
     -- Normal Mod Settings
@@ -495,11 +502,22 @@ mod.on_setting_changed    = function(setting_id)
 end
 
 -- Toggle Mod Enabled/Disabled
-mod.toggle_mod            = function()
+mod.toggle_mod                = function()
     if mod_settings.toggle_mod_notify then
         mod:notify("Auto Mark " .. (not mod_settings.toggle_mod and "Enabled" or "Disabled"))
     end
     mod:set("toggle_mod", not mod_settings.toggle_mod, true)
+end
+
+local talent_settings         = require("scripts/settings/talent/talent_settings")
+local cryptic_talent_settings = talent_settings.cryptic
+local function can_noospheric_command_boost()
+    local player_ability_extension = context.player_ability_extension
+    if not player_ability_extension then
+        return false
+    end
+
+    return player_ability_extension:has_enough_ability_capacitance("combat_ability", cryptic_talent_settings.servo_skull_shooting_tagging.minimum_capacitance)
 end
 
 local function is_sticky_targeting(tag_name, marked_tag)
@@ -511,7 +529,11 @@ local function is_sticky_targeting(tag_name, marked_tag)
         local marked_unit = marked_tag._target_unit
         local unit_data_extension = ScriptUnit_extension(marked_unit, "unit_data_system")
         local breed_data = unit_data_extension and unit_data_extension._breed
-        local breed_name = breed_data and breed_data.name
+        if not breed_data then
+            return false
+        end
+
+        local breed_name = breed_data.name
         local breed_settings = companion_cancel_mark_breed_settings[breed_name]
         if breed_settings and breed_settings.override then
             return breed_settings.sticky_targeting
@@ -532,7 +554,11 @@ local function is_sticky_targeting(tag_name, marked_tag)
         local marked_unit = marked_tag._target_unit
         local unit_data_extension = ScriptUnit_extension(marked_unit, "unit_data_system")
         local breed_data = unit_data_extension and unit_data_extension._breed
-        local breed_name = breed_data and breed_data.name
+        if not breed_data then
+            return false
+        end
+
+        local breed_name = breed_data.name
         local breed_settings = noospheric_command_breed_settings[breed_name]
         if breed_settings and breed_settings.override then
             return breed_settings.sticky_targeting
@@ -598,51 +624,55 @@ local function auto_mark_by_tag(tag_name, t, fixed_frame)
         local is_execution_order_priority = mod_settings.execution_order_priority and tag_name == TAG_NAMES.COMPANION_TAG and context.has_execution_order
         if class_settings.toggle_class and (class_settings.override_manual or not marked_tag_is_manual) then
             if is_cooldown_ready then
-                target_unit, target_tag, target_is_dormant_daemonhost = mod:find_target_unit_custom("auto", class_settings.min_range, class_settings.max_range, tag_name, tag_context, class_settings, true, is_execution_order_priority)
+                target_unit, target_tag, target_is_dormant_daemonhost = mod:find_target_unit_custom("auto", class_settings.min_range, class_settings.max_range, class_settings.max_angle, tag_name, tag_context, class_settings, is_execution_order_priority)
             elseif tag_context.priority_switch_cooldown <= 0 and (is_priority_switch or is_execution_order_priority and marked_tag) and not is_sticky_targeting(tag_name, marked_tag) then
-                target_unit, target_tag, target_is_dormant_daemonhost = mod:find_target_unit_custom("auto", class_settings.min_range, class_settings.max_range, tag_name, tag_context, class_settings, true, is_execution_order_priority, marked_tag)
+                target_unit, target_tag, target_is_dormant_daemonhost = mod:find_target_unit_custom("auto", class_settings.min_range, class_settings.max_range, class_settings.max_angle, tag_name, tag_context, class_settings, is_execution_order_priority, marked_tag)
             end
         end
     end
 
-    -- mark when focus target overwrite is on
-    if not target_unit and mod_settings.focus_target_overwrite and tag_name == TAG_NAMES.VETERAN_TAG and marked_tag then
-        local marked_unit = marked_tag._target_unit
-        if mod:is_target_valid(tag_name, marked_tag, marked_unit) then
-            mod:print_debug("Focus Target Overwrite")
-            target_unit = marked_unit
-            if marked_tag_is_manual then
-                mod:on_manual_mark(tag_context, target_unit)
-            end
-        end
-    end
-
-    if not target_unit and mod_settings.noospheric_command_boost and context.has_noospheric_command and tag_name == TAG_NAMES.SERVO_SKULL_TAG and marked_tag and t >= tag_context.noospheric_command_next_time then
-        local marked_unit = marked_tag._target_unit
-        if is_character_disabled or mod:is_noospheric_command_boost_breed_valid(marked_unit) and mod:is_target_valid(tag_name, nil, marked_unit) and mod:is_servo_skull_target_visible(marked_unit, fixed_frame, true) then
-            mod:print_debug("Noospheric Command Boost")
-            target_unit = marked_unit
-            if marked_tag_is_manual then
-                mod:on_manual_mark(tag_context, target_unit)
-            end
-        end
-    end
-
-    if not target_unit then
-        return false
-    end
-
-    if tag_name == TAG_NAMES.VETERAN_TAG and target_is_dormant_daemonhost then
-        if not target_tag then
-            tag_name = TAG_NAMES.ENEMY_TAG
+    if target_unit then
+        if tag_name == TAG_NAMES.VETERAN_TAG and target_is_dormant_daemonhost then
+            mod:set_auto_mark(TAG_NAMES.ENEMY_TAG, target_unit, target_tag)
         else
-            return
+            mod:set_auto_mark(tag_name, target_unit, target_tag)
+        end
+        return true
+    end
+
+    if tag_name == TAG_NAMES.VETERAN_TAG then
+        if mod_settings.focus_target_overwrite and marked_tag then
+            local marked_unit = marked_tag._target_unit
+            if not mod:is_dormant_daemonhost(marked_unit) and mod:can_focus_target_overwrite(marked_unit, marked_tag) then
+                mod:print_debug("Focus Target Overwrite")
+                if marked_tag_is_manual then
+                    mod:set_manual_mark(tag_name, marked_unit, target_tag)
+                else
+                    mod:set_auto_mark(tag_name, marked_unit, target_tag)
+                end
+
+                return true
+            end
+        end
+    elseif tag_name == TAG_NAMES.SERVO_SKULL_TAG then
+        if mod_settings.noospheric_command_boost and context.has_noospheric_command and marked_tag and t >= tag_context.noospheric_command_next_time and can_noospheric_command_boost() then
+            local marked_unit = marked_tag._target_unit
+            local unit_data_extension = ScriptUnit_extension(marked_unit, "unit_data_system")
+            local breed_data = unit_data_extension and unit_data_extension._breed
+            if is_character_disabled or mod:is_noospheric_command_boost_breed_valid(marked_unit) and mod:is_target_valid(tag_name, nil, marked_unit, breed_data) and mod:is_servo_skull_target_visible(marked_unit, fixed_frame, true) then
+                mod:print_debug("Noospheric Command Boost")
+                if marked_tag_is_manual then
+                    mod:set_manual_mark(tag_name, marked_unit, target_tag)
+                else
+                    mod:set_auto_mark(tag_name, marked_unit, target_tag)
+                end
+
+                return true
+            end
         end
     end
 
-    mod:print_debug("Auto Mark", tag_name, target_unit)
-    mod:mark(tag_name, target_unit, target_tag)
-    return true
+    return false
 end
 
 -- Auto-Mark

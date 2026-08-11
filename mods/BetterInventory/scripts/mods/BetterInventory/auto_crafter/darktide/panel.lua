@@ -10,6 +10,7 @@ local ROW_HEIGHT = 32
 local COMPACT_ROW_HEIGHT = 26
 local STATUS_ROW_HEIGHT = 50
 local CURRENCY_ROW_HEIGHT = 58
+local QUEUE_JOB_ROW_HEIGHT = 110
 local STAT_GRID_BUTTON_HEIGHT = 30
 local STAT_GRID_GAP = 6
 local STAT_GRID_HEIGHT = STAT_GRID_BUTTON_HEIGHT * 2 + STAT_GRID_GAP
@@ -35,9 +36,24 @@ local CURRENCY_ICONS = {
 	plasteel = "content/ui/materials/mission_board/currencies/plasteel_small_digital",
 }
 local SECTION_PLANNER = "planner"
+local SECTION_QUEUE = "games_lantern_queue"
+local SECTION_MARKS = "marks"
 local SECTION_WORKFLOW = "workflow"
 local SECTION_RESUMING = "resuming"
 local SECTION_TRAITS = "traits"
+local SECTION_ESTIMATES = "estimates"
+
+local function default_section_state()
+	return {
+		[SECTION_QUEUE] = false,
+		[SECTION_PLANNER] = false,
+		[SECTION_MARKS] = false,
+		[SECTION_TRAITS] = true,
+		[SECTION_WORKFLOW] = false,
+		[SECTION_RESUMING] = false,
+		[SECTION_ESTIMATES] = false,
+	}
+end
 local TRAIT_TARGET_PAIRS = {
 	auto_crafter_perk_1_target = "auto_crafter_perk_2_target",
 	auto_crafter_perk_2_target = "auto_crafter_perk_1_target",
@@ -68,6 +84,24 @@ local function clean_single_line(value)
 	return value
 end
 
+local function weapon_name_with_mark(display_name, mark_name)
+	local family = clean_single_line(display_name)
+	local mark = clean_single_line(mark_name)
+	mark = string.gsub(mark, "%s*[•·]%s*", " ")
+	mark = string.gsub(mark, "%s+", " ")
+
+	if family == "" then
+		return mark
+	end
+	if mark == "" or string.find(string.lower(family), string.lower(mark), 1, true) then
+		return family
+	end
+
+	return mark .. " " .. family
+end
+
+Panel.weapon_name_with_mark = weapon_name_with_mark
+
 local function dispatch_trait_press(hotspot, left_callback, right_callback)
 	if hotspot and hotspot.on_right_pressed and right_callback then
 		right_callback()
@@ -90,6 +124,55 @@ local function safe_call(fn, ...)
 	end
 
 	return pcall(fn, ...)
+end
+
+local function keyboard_key_down(name)
+	local keyboard = rawget(_G, "Keyboard")
+	if not keyboard or type(keyboard.button_index) ~= "function" then
+		return false
+	end
+
+	local index_ok, index = pcall(keyboard.button_index, name)
+	if not index_ok or index == nil then
+		index_ok, index = pcall(keyboard.button_index, keyboard, name)
+	end
+
+	if not index_ok or index == nil then
+		return false
+	end
+
+	-- Chords need held state.  Keyboard.pressed() is true only on the first
+	-- frame, so Ctrl is normally no longer "pressed" when V arrives.
+	if type(keyboard.button) == "function" then
+		local ok, value = pcall(keyboard.button, index)
+		if not ok then
+			ok, value = pcall(keyboard.button, keyboard, index)
+		end
+
+		if ok then
+			return value == true or (tonumber(value) or 0) > 0
+		end
+	end
+
+	if type(keyboard.pressed) == "function" then
+		local ok, pressed = pcall(keyboard.pressed, index)
+
+		if not ok then
+			ok, pressed = pcall(keyboard.pressed, keyboard, index)
+		end
+
+		return ok and pressed == true or false
+	end
+
+	return false
+end
+
+local function ctrl_v_down()
+	if not keyboard_key_down("v") then
+		return false
+	end
+
+	return keyboard_key_down("left ctrl") or keyboard_key_down("right ctrl") or keyboard_key_down("left_control") or keyboard_key_down("right_control")
 end
 
 local function safe_member(object, key)
@@ -423,6 +506,19 @@ local function status_block_passes(width)
 	}
 end
 
+local function queue_job_passes(width, height, highlighted)
+	height = height or QUEUE_JOB_ROW_HEIGHT
+	local border_color = highlighted and Color.terminal_corner_selected(255, true) or Color.terminal_frame(255, true)
+	local label_color = highlighted and Color.terminal_corner_selected(255, true) or Color.terminal_text_header(255, true)
+
+	return {
+		{ pass_type = "rect", style = { color = Color.terminal_background(220, true), size = { width, height }, offset = { 0, 0, 1 } } },
+		{ pass_type = "texture", value = "content/ui/materials/frames/frame_tile_2px", style = { color = border_color, size = { width, height }, offset = { 0, 0, 2 } } },
+		{ pass_type = "text", value_id = "label", style = { font_size = 15, font_type = "proxima_nova_bold", text_horizontal_alignment = "left", text_vertical_alignment = "top", text_color = label_color, size = { width - 16, 20 }, offset = { 8, 5, 3 } } },
+		{ pass_type = "text", value_id = "detail", style = { font_size = 12, font_type = "proxima_nova_medium", text_horizontal_alignment = "left", text_vertical_alignment = "top", text_color = Color.terminal_text_body(255, true), size = { width - 16, height - 28 }, offset = { 8, 25, 3 } } },
+	}
+end
+
 local function currency_row_passes(width)
 	local segment_width = width / 3
 	local passes = {
@@ -657,6 +753,8 @@ local BLUEPRINTS = {
 				return title_passes(width)
 			elseif variant == "status" then
 				return status_block_passes(width)
+			elseif variant == "queue_job" then
+				return queue_job_passes(width, entry.size[2], entry.initial_content and entry.initial_content.queue_current == true)
 			elseif variant == "currency" then
 				return currency_row_passes(width)
 			elseif variant == "section" then
@@ -749,9 +847,24 @@ function Panel.new(dependencies)
 	local self = {
 		_get_selected_offer = dependencies.get_selected_offer,
 		_select_offer = dependencies.select_offer,
+		_select_manual_mark = dependencies.select_manual_mark,
+		_get_selected_manual_mark = dependencies.get_selected_manual_mark,
 		_preview_plan = dependencies.preview_plan,
 		_start_purchase_search = dependencies.start_purchase_search,
 		_stop_active_run = dependencies.stop_active_run,
+		_games_lantern_queue_snapshot = dependencies.games_lantern_queue_snapshot,
+		_games_lantern_import_snapshot = dependencies.games_lantern_import_snapshot,
+		_games_lantern_paste = dependencies.games_lantern_paste,
+		_games_lantern_clear = dependencies.games_lantern_clear,
+		_games_lantern_select_choice = dependencies.games_lantern_select_choice,
+		_get_games_lantern_cost_authority = dependencies.games_lantern_cost_authority,
+		_start_games_lantern_queue = dependencies.start_games_lantern_queue,
+		_queue_craft_armed = false,
+		_queue_craft_confirmation_signature = nil,
+		_queue_craft_confirmation_text = nil,
+		_queue_snapshot_cache = nil,
+		_import_snapshot_cache = nil,
+		_presentation_snapshots_dirty = true,
 		_settings = dependencies.settings or {},
 		_localize = dependencies.localize,
 		_compact_perk_label = dependencies.compact_perk_label,
@@ -768,18 +881,15 @@ function Panel.new(dependencies)
 		_selected_offer_key = nil,
 		_selected_offer = nil,
 		_selected_offer_master_id = nil,
-		_section_collapsed = {
-			[SECTION_PLANNER] = false,
-			[SECTION_WORKFLOW] = false,
-			[SECTION_RESUMING] = false,
-			[SECTION_TRAITS] = true,
-		},
+		_section_collapsed = default_section_state(),
 		_pending_offer = nil,
 		_pending_offer_attempts = 0,
 		_idle_poll_elapsed = 0,
 		_layout_pending = false,
 		_layout_defer_frames = 0,
 		_trait_catalog_key = nil,
+		_queue_signature = nil,
+		_ctrl_v_down = false,
 		_pivot_x = nil,
 		_pivot_y = nil,
 	}
@@ -809,6 +919,7 @@ function Panel.new(dependencies)
 	function self:_queue_layout(frames)
 		self._layout_pending = true
 		self._layout_defer_frames = math.max(self._layout_defer_frames or 0, tonumber(frames) or 1)
+		self._presentation_snapshots_dirty = true
 	end
 
 	function self:_entry(label, detail, options)
@@ -820,6 +931,8 @@ function Panel.new(dependencies)
 			height = SECTION_ROW_HEIGHT
 		elseif variant == "status" then
 			height = STATUS_ROW_HEIGHT
+		elseif variant == "queue_job" then
+			height = options.height or QUEUE_JOB_ROW_HEIGHT
 		elseif variant == "currency" then
 			height = CURRENCY_ROW_HEIGHT
 		elseif variant == "stat_grid" then
@@ -848,6 +961,7 @@ function Panel.new(dependencies)
 				section_id = options.section_id,
 				selected = false,
 				selected_stat_index = 0,
+				queue_current = options.queue_current == true,
 				stat_count = 0,
 				stat_pressed_callbacks = {},
 				trait_count = #(options.trait_options or {}),
@@ -1008,7 +1122,23 @@ function Panel.new(dependencies)
 				local offer_matches = selected_offer.offer_id and offer.offer_id == selected_offer.offer_id or selected_offer.master_id and offer.master_id == selected_offer.master_id
 
 				if offer_matches then
-					selected_display_name = offer.display_name
+					local selected_mark
+					local selected_ok, selected_master_id = safe_call(self._get_selected_manual_mark)
+
+					if not selected_ok or selected_master_id == nil then
+						selected_master_id = offer.master_id
+					end
+					for _, mark in ipairs(offer.marks or {}) do
+						if mark.master_id == selected_master_id then
+							selected_mark = mark
+
+							break
+						end
+					end
+					selected_display_name = weapon_name_with_mark(
+						selected_mark and selected_mark.display_name or offer.display_name,
+						selected_mark and selected_mark.sub_display_name or offer.sub_display_name
+					)
 
 					break
 				end
@@ -1020,6 +1150,160 @@ function Panel.new(dependencies)
 		end
 
 		return offers, selected_offer and localize("auto_crafter_panel_selected_weapon", "Selected weapon") or localize("auto_crafter_panel_no_target", "no weapon selected")
+	end
+
+	function self:_selected_store_offer(snapshot)
+		local selected_offer = self._selected_offer
+
+		for _, offer in ipairs(snapshot and snapshot.store and snapshot.store.offers or {}) do
+			local matches = selected_offer and (selected_offer.offer_id and offer.offer_id == selected_offer.offer_id or selected_offer.master_id and offer.master_id == selected_offer.master_id)
+
+			if matches then
+				return offer
+			end
+		end
+
+		return nil
+	end
+
+	function self:_games_lantern_queue()
+		if self._queue_snapshot_cache == nil then self:_refresh_games_lantern_snapshots() end
+
+		return self._queue_snapshot_cache
+	end
+
+	function self:_games_lantern_import()
+		if self._import_snapshot_cache == nil then self:_refresh_games_lantern_snapshots() end
+
+		return self._import_snapshot_cache
+	end
+
+	function self:_refresh_games_lantern_snapshots()
+		local queue_ok, queue = safe_call(self._games_lantern_queue_snapshot)
+		local import_ok, import_state = safe_call(self._games_lantern_import_snapshot)
+		self._queue_snapshot_cache = queue_ok and type(queue) == "table" and queue or false
+		self._import_snapshot_cache = import_ok and type(import_state) == "table" and import_state or false
+		self._presentation_snapshots_dirty = false
+
+		return self._queue_snapshot_cache, self._import_snapshot_cache
+	end
+
+	function self:invalidate_games_lantern_snapshots()
+		self._presentation_snapshots_dirty = true
+
+		return true
+	end
+
+	function self:_games_lantern_queue_signature(queue)
+		if type(queue) ~= "table" then
+			return "none"
+		end
+
+		return table.concat({
+			tostring(queue.queue_id or ""),
+			tostring(queue.state or "empty"),
+			tostring(queue.current_index or 0),
+			tostring(queue.job_count or 0),
+			tostring(queue.last_error or ""),
+		}, "|")
+	end
+
+	function self:_games_lantern_import_signature(import_state)
+		if type(import_state) ~= "table" then return "none" end
+		local choices = import_state.choice_request or {}
+
+		return table.concat({
+			tostring(import_state.state or "idle"),
+			tostring(import_state.last_error or ""),
+			tostring(#(choices.melee or {})),
+			tostring(#(choices.ranged or {})),
+		}, "|")
+	end
+
+	function self:_games_lantern_job_detail(job)
+		job = job or {}
+		local perks = {}
+		local blessings = {}
+
+		for _, target in ipairs(job.perks or {}) do
+			perks[#perks + 1] = value_text(target.label or target.display_name, target.id or "?")
+		end
+
+		for _, target in ipairs(job.blessings or {}) do
+			blessings[#blessings + 1] = value_text(target.label or target.display_name, target.id or "?")
+		end
+
+		return string.format(
+			"Dump stat: %s %s\nPerk 1: %s\nPerk 2: %s\nBlessings: %s",
+			value_text(job.dump_stat_label or job.dump_stat, "?"),
+			integer_text(job.dump_target, "?"),
+			value_text(perks[1], "?"),
+			value_text(perks[2], "?"),
+			#blessings > 0 and table.concat(blessings, " / ") or "?"
+		)
+	end
+
+	function self:_manual_queue_detail(plan)
+		plan = plan or {}
+		local dump_stat = self:_planner_dump_stat_text()
+		local dump_target = integer_text(plan.dump_target or self:_setting("auto_crafter_dump_stat_target", 60))
+		local perks = {
+			self:_target_policy_text("auto_crafter_perk_1_target"),
+			self:_target_policy_text("auto_crafter_perk_2_target"),
+		}
+		local blessings = {
+			self:_target_policy_text("auto_crafter_blessing_1_target"),
+			self:_target_policy_text("auto_crafter_blessing_2_target"),
+		}
+
+		return string.format("Dump stat: %s %s\nPerk 1: %s\nPerk 2: %s\nBlessings: %s", dump_stat, dump_target, value_text(perks[1], "?"), value_text(perks[2], "?"), table.concat(blessings, " / "))
+	end
+
+	function self:_games_lantern_queue_target(queue)
+		if type(queue) ~= "table" or type(queue.jobs) ~= "table" or #queue.jobs ~= 2 then
+			return nil
+		end
+
+		local names = {}
+		for index, job in ipairs(queue.jobs) do
+			local offer = job.offer or {}
+			local name = value_text(job.display_name, weapon_name_with_mark(offer.display_name, offer.sub_display_name))
+			if job.status == "complete" then
+				name = name .. " [complete]"
+			elseif job.current then
+				name = name .. " [current]"
+			end
+			names[index] = name
+		end
+
+		return "Queued (" .. names[1] .. " => " .. names[2] .. ")"
+	end
+
+	function self:_games_lantern_cost_authority()
+		if type(self._get_games_lantern_cost_authority) ~= "function" then
+			return nil
+		end
+		local ok, authority = pcall(self._get_games_lantern_cost_authority)
+		if not ok or type(authority) ~= "table" or type(authority.aggregate) ~= "table" or authority.signature == nil then
+			return nil
+		end
+		local value = authority.aggregate
+
+		return authority, string.format("Projected authority: %s-%s Dockets | %s-%s Plasteel | %s-%s Diamantine. Press again to confirm.", integer_text(value.dockets_min), integer_text(value.dockets_max), integer_text(value.plasteel_min), integer_text(value.plasteel_max), integer_text(value.diamantine_min), integer_text(value.diamantine_max))
+	end
+
+	function self:_request_games_lantern_paste(queue_owned)
+		if type(self._games_lantern_paste) ~= "function" then
+			return false, "paste_unavailable"
+		end
+
+		local ok, pasted, reason = pcall(self._games_lantern_paste, queue_owned == true)
+
+		if not ok then
+			log("error", "Games Lantern paste failed: " .. tostring(pasted))
+		end
+
+		return ok and pasted == true, ok and reason or pasted
 	end
 
 	function self:_setting(setting_id, default_value)
@@ -1455,6 +1739,11 @@ function Panel.new(dependencies)
 		local _, selected_weapon = self:_selected_offers(snapshot)
 		local selected = selected_weapon or localize("auto_crafter_panel_no_target", "no weapon selected")
 		local plan = self._plan or snapshot and snapshot.plan
+		local queue = self:_games_lantern_queue()
+		local imported = self:_games_lantern_import()
+		local queue_target = self:_games_lantern_queue_target(queue)
+		local queue_owned = queue_target ~= nil and queue.state ~= "empty"
+		local queue_active = queue_owned and (queue.state == "starting" or queue.state == "selecting" or queue.state == "preflighting" or queue.state == "dispatching" or queue.state == "running" or queue.state == "waiting_next" or queue.state == "stopping" or queue.state == "quarantined" or queue.state == "reconciliation_required")
 		local entries = {
 			self:_entry(localize("auto_crafter_panel_title", "Auto Crafter Helper"), "", {
 				variant = "title",
@@ -1466,11 +1755,12 @@ function Panel.new(dependencies)
 			}),
 			self:_entry(localize("auto_crafter_panel_wallet", "Resources"), string.format("%s  |  %s  |  %s", integer_text(wallet_amount(snapshot, "credits")), integer_text(wallet_amount(snapshot, "plasteel")), integer_text(wallet_amount(snapshot, "diamantine")))),
 			self:_entry(localize("auto_crafter_panel_inventory", "Inventory"), string.format("%s: %s  |  %s: %s", localize("auto_crafter_panel_offers", "Offers"), value_text(store.offer_count, "?"), localize("auto_crafter_panel_gear", "Gear"), value_text(snapshot and snapshot.gear and snapshot.gear.item_count, "?"))),
-			self:_entry(localize("auto_crafter_panel_target", "Target"), selected, {
+			self:_entry(localize("auto_crafter_panel_target", "Target"), queue_target or selected, {
 				refresh = function(widget)
+					local current_queue_target = self:_games_lantern_queue_target(self:_games_lantern_queue())
 					local _, current_weapon = self:_selected_offers(self._snapshot)
 
-					widget.content.detail = current_weapon or localize("auto_crafter_panel_no_target", "no weapon selected")
+					widget.content.detail = current_queue_target or current_weapon or localize("auto_crafter_panel_no_target", "no weapon selected")
 				end,
 			}),
 			self:_entry(localize("auto_crafter_show_status_hud", "Show persistent crafting status"), "", {
@@ -1484,6 +1774,12 @@ function Panel.new(dependencies)
 					widget.content.checked = self:_setting("auto_crafter_show_status_hud", true) == true
 				end,
 			}),
+			self:_entry(localize("auto_crafter_panel_active_queue", "Active Queue"), imported and imported.state or queue and queue.state or "manual", {
+				selectable = false,
+				section_header = true,
+				section_id = SECTION_QUEUE,
+				variant = "section",
+			}),
 			self:_entry(localize("auto_crafter_panel_planner", "Planner configuration"), "", {
 				selectable = true,
 				section_header = true,
@@ -1491,8 +1787,85 @@ function Panel.new(dependencies)
 				variant = "section",
 			}),
 		}
+		local queue_jobs = queue and queue.jobs
+
+		if not self._section_collapsed[SECTION_QUEUE] and type(queue_jobs) == "table" and #queue_jobs > 0 then
+			for index, job in ipairs(queue_jobs) do
+				local offer = job.offer or {}
+				local name = value_text(job.display_name, value_text(weapon_name_with_mark(offer.display_name, offer.sub_display_name), value_text(offer.master_id, "Weapon")))
+
+				table.insert(entries, #entries, self:_entry(string.format("%d. %s", index, name), self:_games_lantern_job_detail(job), {
+					height = QUEUE_JOB_ROW_HEIGHT,
+					queue_job = true,
+					queue_index = index,
+					queue_current = job.current == true,
+					variant = "queue_job",
+				}))
+			end
+		elseif not self._section_collapsed[SECTION_QUEUE] then
+			local selected_detail = self:_manual_queue_detail(plan)
+
+			table.insert(entries, #entries, self:_entry("1. " .. selected, selected_detail, {
+				height = QUEUE_JOB_ROW_HEIGHT,
+				queue_job = true,
+				queue_index = 1,
+				queue_current = selected_weapon ~= nil,
+				variant = "queue_job",
+			}))
+		end
+		if imported and imported.state == "awaiting_weapon_choice" and type(self._games_lantern_select_choice) == "function" and not self._section_collapsed[SECTION_QUEUE] then
+			for _, slot in ipairs({ "melee", "ranged" }) do
+				local candidates = imported.choice_request and imported.choice_request[slot] or {}
+				if #candidates > 1 then
+					for _, candidate in ipairs(candidates) do
+						local external = candidate.external or {}
+						local card_index = external.card_index
+						local choice_slot = slot
+						local choice_index = card_index
+						local name = value_text(candidate.display_name or external.display_name, "Weapon")
+						table.insert(entries, #entries, self:_entry(string.format("Choose %s: %s", slot, name), "Games Lantern card " .. tostring(card_index), {
+							enabled = true,
+							selectable = true,
+							variant = "action",
+							action = function()
+								pcall(self._games_lantern_select_choice, choice_slot, choice_index)
+								self:_queue_layout(1)
+							end,
+						}))
+					end
+				end
+			end
+		end
+
+		if type(self._games_lantern_paste) == "function" and not self._section_collapsed[SECTION_QUEUE] and not queue_active then
+			table.insert(entries, #entries, self:_entry("Paste Games Lantern build (Ctrl+V)", "", {
+				enabled = true,
+				selectable = true,
+				variant = "action",
+				action = function()
+					self:_request_games_lantern_paste(queue_owned)
+				end,
+			}))
+			if queue_owned and type(self._games_lantern_clear) == "function" then
+				table.insert(entries, #entries, self:_entry("Clear Queue", "", {
+					enabled = true,
+					selectable = true,
+					variant = "action",
+					action = function()
+						pcall(self._games_lantern_clear)
+						self._queue_craft_armed = false
+						self._queue_craft_confirmation_signature = nil
+						self._queue_craft_confirmation_text = nil
+						self:_queue_layout(1)
+					end,
+				}))
+			end
+		end
 		local function add_checkbox(setting_id, label_id, fallback, default_value, enabled, reflow, height)
 			local function is_enabled()
+				if queue_active then
+					return false
+				end
 				if type(enabled) == "function" then
 					return enabled() == true
 				end
@@ -1522,6 +1895,9 @@ function Panel.new(dependencies)
 		end
 		local function add_target_selector(setting_id, label_id, fallback, enabled, unavailable_text)
 			local function is_enabled()
+				if queue_owned then
+					return false
+				end
 				if type(enabled) == "function" then
 					return enabled() == true
 				end
@@ -1558,13 +1934,14 @@ function Panel.new(dependencies)
 		end
 
 		if not self._section_collapsed[SECTION_PLANNER] then
-			table.insert(entries, self:_entry(localize("auto_crafter_panel_planner_target", "Planner target"), self:_planner_target_text(), {
+			table.insert(entries, self:_entry(localize("auto_crafter_panel_planner_target", "Planner target"), queue_target or self:_planner_target_text(), {
 				refresh = function(widget)
-					widget.content.detail = self:_planner_target_text()
+					widget.content.detail = self:_games_lantern_queue_target(self:_games_lantern_queue()) or self:_planner_target_text()
 				end,
 			}))
 			table.insert(entries, self:_entry(localize("auto_crafter_panel_dump_stat", "Dump stat"), self:_planner_dump_stat_text(), {
-				selectable = true,
+				enabled = not queue_owned,
+				selectable = not queue_owned,
 				variant = "enum_stepper",
 				decrease = function()
 					self:_step_planner_dump_stat(-1)
@@ -1578,7 +1955,7 @@ function Panel.new(dependencies)
 			}))
 			local stat_buttons = self:_planner_dump_stat_buttons()
 
-			if #stat_buttons > 0 then
+			if #stat_buttons > 0 and not queue_owned then
 				table.insert(entries, self:_entry("", "", {
 					selectable = true,
 					stat_buttons = stat_buttons,
@@ -1586,7 +1963,8 @@ function Panel.new(dependencies)
 				}))
 			end
 			table.insert(entries, self:_entry(localize("auto_crafter_panel_dump_target", "Dump target"), integer_text(self:_setting("auto_crafter_dump_stat_target", 60)), {
-				selectable = true,
+				enabled = not queue_owned,
+				selectable = not queue_owned,
 				variant = "stepper",
 				decrease = function()
 					self:_adjust_numeric_setting("auto_crafter_dump_stat_target", 60, 1, 100, -1)
@@ -1601,68 +1979,157 @@ function Panel.new(dependencies)
 			add_checkbox("auto_crafter_cap_by_dockets", "auto_crafter_cap_by_dockets", "Cap perfect-roll weapon acquisition by Ordo dockets", true, nil, true)
 			if self:_setting("auto_crafter_cap_by_dockets", true) == true then
 				table.insert(entries, self:_entry(localize("auto_crafter_panel_docket_cap", "Ordo dockets cap"), integer_text(self:_setting("auto_crafter_docket_cap", 500000)), {
-					selectable = true,
+					enabled = not queue_active,
+					selectable = not queue_active,
 					variant = "stepper",
 					decrease = function()
-						self:_adjust_numeric_setting("auto_crafter_docket_cap", 500000, 0, 10000000, -100000)
+						if not queue_active then self:_adjust_numeric_setting("auto_crafter_docket_cap", 500000, 0, 10000000, -100000) end
 					end,
 					increase = function()
-						self:_adjust_numeric_setting("auto_crafter_docket_cap", 500000, 0, 10000000, 100000)
+						if not queue_active then self:_adjust_numeric_setting("auto_crafter_docket_cap", 500000, 0, 10000000, 100000) end
 					end,
 					refresh = function(widget)
 						widget.content.detail = integer_text(self:_setting("auto_crafter_docket_cap", 500000))
+						widget.content.enabled = not queue_active
+						if widget.content.decrease_hotspot then widget.content.decrease_hotspot.disabled = queue_active end
+						if widget.content.increase_hotspot then widget.content.increase_hotspot.disabled = queue_active end
 					end,
 				}))
 			end
 			add_checkbox("auto_crafter_cap_by_max_purchases", "auto_crafter_cap_by_max_purchases", "Cap perfect-roll weapon acquisition by max purchases", false, nil, true)
 			if self:_setting("auto_crafter_cap_by_max_purchases", false) == true then
 				table.insert(entries, self:_entry(localize("auto_crafter_panel_max_purchases", "Max purchases"), integer_text(self:_setting("auto_crafter_max_purchases", 100)), {
-					selectable = true,
+					enabled = not queue_active,
+					selectable = not queue_active,
 					variant = "stepper",
 					decrease = function()
-						self:_adjust_numeric_setting("auto_crafter_max_purchases", 100, 1, 10000, -1)
+						if not queue_active then self:_adjust_numeric_setting("auto_crafter_max_purchases", 100, 1, 10000, -1) end
 					end,
 					increase = function()
-						self:_adjust_numeric_setting("auto_crafter_max_purchases", 100, 1, 10000, 1)
+						if not queue_active then self:_adjust_numeric_setting("auto_crafter_max_purchases", 100, 1, 10000, 1) end
 					end,
 					refresh = function(widget)
 						widget.content.detail = integer_text(self:_setting("auto_crafter_max_purchases", 100))
+						widget.content.enabled = not queue_active
+						if widget.content.decrease_hotspot then widget.content.decrease_hotspot.disabled = queue_active end
+						if widget.content.increase_hotspot then widget.content.increase_hotspot.disabled = queue_active end
 					end,
 				}))
 			end
 			table.insert(entries, self:_entry(localize("auto_crafter_panel_best_fallback", "Best-candidate fallback"), self:_planner_fallback_text(), {
 				checked = self:_setting("auto_crafter_best_candidate_fallback", true) == true,
-				selectable = true,
+				enabled = not queue_active,
+				selectable = not queue_active,
 				variant = "checkbox",
 				action = function()
-					self:_set_setting("auto_crafter_best_candidate_fallback", not (self:_setting("auto_crafter_best_candidate_fallback", true) == true))
+					if not queue_active then self:_set_setting("auto_crafter_best_candidate_fallback", not (self:_setting("auto_crafter_best_candidate_fallback", true) == true)) end
 				end,
 				refresh = function(widget)
+					widget.content.enabled = not queue_active
+					widget.content.hotspot.disabled = queue_active
 					widget.content.checked = self:_setting("auto_crafter_best_candidate_fallback", true) == true
 				end,
 			}))
-			table.insert(entries, self:_entry(localize("auto_crafter_panel_estimate", "Search budget"), self:_estimate_acquisition_text(), {
-				variant = "status",
-				refresh = function(widget)
-					widget.content.detail = self:_estimate_acquisition_text()
-				end,
-			}))
-			local function add_estimate_currency(label_id, fallback, phase_name)
-				local credits, plasteel, diamantine = self:_estimate_currency_values(phase_name)
-				table.insert(entries, self:_entry(localize(label_id, fallback), "", {
-					credits = credits,
-					diamantine = diamantine,
-					plasteel = plasteel,
-					variant = "currency",
-					refresh = function(widget)
-						widget.content.credits, widget.content.plasteel, widget.content.diamantine = self:_estimate_currency_values(phase_name)
-					end,
-				}))
+		end
+
+		table.insert(entries, self:_entry(localize("auto_crafter_panel_marks", "Marks"), "", {
+			selectable = true,
+			section_header = true,
+			section_id = SECTION_MARKS,
+			variant = "section",
+		}))
+
+		if not self._section_collapsed[SECTION_MARKS] then
+			local selected_store_offer = self:_selected_store_offer(snapshot)
+			local marks = selected_store_offer and selected_store_offer.marks or {}
+			local selected_mark
+			local selected_ok, selected_value = safe_call(self._get_selected_manual_mark)
+
+			if selected_ok then
+				selected_mark = selected_value
+			end
+			if selected_mark == nil and selected_store_offer then
+				selected_mark = selected_store_offer.master_id
 			end
 
-			add_estimate_currency("auto_crafter_panel_consecrate_cost", "Profane to Transcendent", "consecrate")
-			add_estimate_currency("auto_crafter_panel_mastery_cost", "Mastery fodder investment", "mastery")
-			add_estimate_currency("auto_crafter_panel_total_cost", "Known crafting investment", "total")
+			if #marks == 0 then
+				table.insert(entries, self:_entry(localize("auto_crafter_panel_select_weapon", "Select a weapon in Brunt's list."), "", {
+					variant = "summary",
+				}))
+			else
+				for _, mark in ipairs(marks) do
+					local mark_offer_id = selected_store_offer.offer_id
+					local mark_master_id = mark.master_id
+					local enabled = not queue_owned and not queue_active and type(self._select_manual_mark) == "function"
+
+					table.insert(entries, self:_entry(value_text(mark.display_name, mark_master_id), value_text(mark.sub_display_name, ""), {
+						enabled = enabled,
+						selectable = enabled,
+						variant = "offer",
+						action = function()
+							if enabled then
+								pcall(self._select_manual_mark, mark_offer_id, mark_master_id)
+								self:_queue_layout(1)
+							end
+						end,
+						refresh = function(widget)
+							local ok, current = safe_call(self._get_selected_manual_mark)
+
+							widget.content.selected = (ok and current or selected_mark) == mark_master_id
+						end,
+					}))
+				end
+			end
+		end
+
+		table.insert(entries, self:_entry(localize("auto_crafter_panel_trait_targets", "Perk and blessing targets"), "", {
+			selectable = true,
+			section_header = true,
+			section_id = SECTION_TRAITS,
+			variant = "section",
+		}))
+
+		if not self._section_collapsed[SECTION_TRAITS] then
+			local unavailable = localize("auto_crafter_panel_option_unavailable", "Enable prerequisite options")
+			local function perk_targets_enabled()
+				return not queue_owned and self:_setting("auto_crafter_level_mastery_20", true) == true and self:_setting("auto_crafter_change_perks", true) == true
+			end
+			add_target_selector("auto_crafter_perk_1_target", "auto_crafter_perk_1_target", "Perk target 1", perk_targets_enabled, unavailable)
+			add_target_selector("auto_crafter_perk_2_target", "auto_crafter_perk_2_target", "Perk target 2", perk_targets_enabled, unavailable)
+			add_checkbox("auto_crafter_show_perk_grid", "auto_crafter_show_perk_grid", "Show perk grid", true, perk_targets_enabled, true)
+			if self:_setting("auto_crafter_show_perk_grid", true) == true and perk_targets_enabled() then
+				local perk_grid_options = self:_trait_target_options("auto_crafter_perk_1_target")
+
+				table.insert(entries, self:_entry("", "", {
+					selectable = true,
+					target_1_setting = "auto_crafter_perk_1_target",
+					target_2_setting = "auto_crafter_perk_2_target",
+					trait_button_height = PERK_GRID_BUTTON_HEIGHT,
+					trait_columns = PERK_GRID_COLUMNS,
+					trait_options = perk_grid_options,
+					variant = "trait_grid",
+				}))
+			end
+			local function blessing_targets_enabled()
+				return not queue_owned and self:_setting("auto_crafter_level_mastery_20", true) == true and self:_setting("auto_crafter_change_blessings", true) == true
+			end
+			add_target_selector("auto_crafter_blessing_1_target", "auto_crafter_blessing_1_target", "Blessing target 1", blessing_targets_enabled, unavailable)
+			add_target_selector("auto_crafter_blessing_2_target", "auto_crafter_blessing_2_target", "Blessing target 2", blessing_targets_enabled, unavailable)
+			add_checkbox("auto_crafter_show_blessing_grid", "auto_crafter_show_blessing_grid", "Show blessing grid", true, blessing_targets_enabled, true)
+			if self:_setting("auto_crafter_show_blessing_grid", true) == true and blessing_targets_enabled() then
+				local blessing_grid_options = self:_trait_target_options("auto_crafter_blessing_1_target")
+
+				table.insert(entries, self:_entry("", "", {
+					selectable = true,
+					target_1_setting = "auto_crafter_blessing_1_target",
+					target_2_setting = "auto_crafter_blessing_2_target",
+					trait_button_height = BLESSING_GRID_BUTTON_HEIGHT,
+					trait_columns = BLESSING_GRID_COLUMNS,
+					trait_icons = true,
+					trait_options = blessing_grid_options,
+					variant = "trait_grid",
+				}))
+			end
 		end
 
 		table.insert(entries, self:_entry(localize("auto_crafter_panel_workflow", "Crafting workflow"), "", {
@@ -1704,71 +2171,103 @@ function Panel.new(dependencies)
 			add_checkbox("auto_crafter_include_favorite_inventory_bases", "auto_crafter_include_favorite_inventory_bases", "Include favorited inventory weapons when resuming", true, function()
 				return self:_setting("auto_crafter_reuse_inventory_base", true) == true
 			end, nil, 44)
+			add_checkbox("auto_crafter_craft_duplicate_completed_queued_weapons", "auto_crafter_craft_duplicate_completed_queued_weapons", "Craft duplicates of already completed queued weapons", false, nil, nil, 44)
 		end
 
-		table.insert(entries, self:_entry(localize("auto_crafter_panel_trait_targets", "Perk and blessing targets"), "", {
+		table.insert(entries, self:_entry(localize("auto_crafter_panel_estimates", "Estimates"), "", {
 			selectable = true,
 			section_header = true,
-			section_id = SECTION_TRAITS,
+			section_id = SECTION_ESTIMATES,
 			variant = "section",
 		}))
 
-		if not self._section_collapsed[SECTION_TRAITS] then
-			local unavailable = localize("auto_crafter_panel_option_unavailable", "Enable prerequisite options")
-			local function perk_targets_enabled()
-				return self:_setting("auto_crafter_level_mastery_20", true) == true and self:_setting("auto_crafter_change_perks", true) == true
-			end
-			add_target_selector("auto_crafter_perk_1_target", "auto_crafter_perk_1_target", "Perk target 1", perk_targets_enabled, unavailable)
-			add_target_selector("auto_crafter_perk_2_target", "auto_crafter_perk_2_target", "Perk target 2", perk_targets_enabled, unavailable)
-			add_checkbox("auto_crafter_show_perk_grid", "auto_crafter_show_perk_grid", "Show perk grid", true, perk_targets_enabled, true)
-			if self:_setting("auto_crafter_show_perk_grid", true) == true and perk_targets_enabled() then
-				local perk_grid_options = self:_trait_target_options("auto_crafter_perk_1_target")
-
-				table.insert(entries, self:_entry("", "", {
-					selectable = true,
-					target_1_setting = "auto_crafter_perk_1_target",
-					target_2_setting = "auto_crafter_perk_2_target",
-					trait_button_height = PERK_GRID_BUTTON_HEIGHT,
-					trait_columns = PERK_GRID_COLUMNS,
-					trait_options = perk_grid_options,
-					variant = "trait_grid",
+		if not self._section_collapsed[SECTION_ESTIMATES] then
+			table.insert(entries, self:_entry(localize("auto_crafter_panel_estimate", "Search budget"), self:_estimate_acquisition_text(), {
+				variant = "status",
+				refresh = function(widget)
+					widget.content.detail = self:_estimate_acquisition_text()
+				end,
+			}))
+			local function add_estimate_currency(label_id, fallback, phase_name)
+				local credits, plasteel, diamantine = self:_estimate_currency_values(phase_name)
+				table.insert(entries, self:_entry(localize(label_id, fallback), "", {
+					credits = credits,
+					diamantine = diamantine,
+					plasteel = plasteel,
+					variant = "currency",
+					refresh = function(widget)
+						widget.content.credits, widget.content.plasteel, widget.content.diamantine = self:_estimate_currency_values(phase_name)
+					end,
 				}))
 			end
-			local function blessing_targets_enabled()
-				return self:_setting("auto_crafter_level_mastery_20", true) == true and self:_setting("auto_crafter_change_blessings", true) == true
-			end
-			add_target_selector("auto_crafter_blessing_1_target", "auto_crafter_blessing_1_target", "Blessing target 1", blessing_targets_enabled, unavailable)
-			add_target_selector("auto_crafter_blessing_2_target", "auto_crafter_blessing_2_target", "Blessing target 2", blessing_targets_enabled, unavailable)
-			add_checkbox("auto_crafter_show_blessing_grid", "auto_crafter_show_blessing_grid", "Show blessing grid", true, blessing_targets_enabled, true)
-			if self:_setting("auto_crafter_show_blessing_grid", true) == true and blessing_targets_enabled() then
-				local blessing_grid_options = self:_trait_target_options("auto_crafter_blessing_1_target")
 
-				table.insert(entries, self:_entry("", "", {
-					selectable = true,
-					target_1_setting = "auto_crafter_blessing_1_target",
-					target_2_setting = "auto_crafter_blessing_2_target",
-					trait_button_height = BLESSING_GRID_BUTTON_HEIGHT,
-					trait_columns = BLESSING_GRID_COLUMNS,
-					trait_icons = true,
-					trait_options = blessing_grid_options,
-					variant = "trait_grid",
-				}))
-			end
+			add_estimate_currency("auto_crafter_panel_consecrate_cost", "Profane to Transcendent", "consecrate")
+			add_estimate_currency("auto_crafter_panel_mastery_cost", "Mastery fodder investment", "mastery")
+			add_estimate_currency("auto_crafter_panel_total_cost", "Known crafting investment", "total")
 		end
 
-		table.insert(entries, self:_entry(localize("auto_crafter_panel_preview", "> CLICK HERE TO CRAFT <"), "", {
-			enabled = true,
-			selectable = true,
+		local import_busy = imported and (imported.state == "fetching" or imported.state == "resolving_catalogues" or imported.state == "awaiting_weapon_choice")
+		local craft_enabled = not queue_active and not import_busy
+		local craft_label = queue_owned and self._queue_craft_armed and "> CONFIRM TWO-WEAPON CRAFT <" or localize("auto_crafter_panel_preview", "> CLICK HERE TO CRAFT <")
+		table.insert(entries, self:_entry(craft_label, queue_owned and self._queue_craft_armed and (self._queue_craft_confirmation_text or "Cost authority unavailable; crafting remains blocked.") or "", {
+			enabled = craft_enabled,
+			selectable = craft_enabled,
 			variant = "action",
 			action = function()
-				if type(self._start_purchase_search) == "function" then
+				local imported = self:_games_lantern_import()
+				local queue = self:_games_lantern_queue()
+				local queue_owned = queue and queue.job_count == 2 and queue.state ~= "empty" and queue.state ~= "complete"
+				local queue_active = queue_owned and (queue.state == "starting" or queue.state == "selecting" or queue.state == "preflighting" or queue.state == "dispatching" or queue.state == "running" or queue.state == "waiting_next" or queue.state == "stopping" or queue.state == "quarantined" or queue.state == "reconciliation_required")
+				local import_busy = imported and (imported.state == "fetching" or imported.state == "resolving_catalogues" or imported.state == "awaiting_weapon_choice")
+				if queue_active or import_busy then return end
+
+				if (imported and imported.state == "staged" or queue_owned) and type(self._start_games_lantern_queue) == "function" then
+					local authority, authority_text = self:_games_lantern_cost_authority()
+					if not authority then
+						self._queue_craft_armed = false
+						self._queue_craft_confirmation_signature = nil
+						self._queue_craft_confirmation_text = nil
+						log("error", "Games Lantern craft blocked: aggregate cost authority unavailable")
+						self:_queue_layout(1)
+						return
+					end
+					if not self._queue_craft_armed then
+						self._queue_craft_armed = true
+						self._queue_craft_confirmation_signature = authority.signature
+						self._queue_craft_confirmation_text = authority_text
+						self:_queue_layout(1)
+						return
+					end
+					if self._queue_craft_confirmation_signature ~= authority.signature then
+						self._queue_craft_confirmation_signature = authority.signature
+						self._queue_craft_confirmation_text = authority_text
+						log("info", "Games Lantern cost authority changed; refreshed confirmation required")
+						self:_queue_layout(1)
+						return
+					end
+					local confirmed_signature = self._queue_craft_confirmation_signature
+					self._queue_craft_armed = false
+					self._queue_craft_confirmation_signature = nil
+					self._queue_craft_confirmation_text = nil
+					local ok, started, reason = pcall(self._start_games_lantern_queue, true, confirmed_signature)
+					if not ok or started ~= true then
+						log("error", "Games Lantern craft did not start: " .. tostring(ok and reason or started))
+						self:_queue_layout(1)
+					end
+				elseif type(self._start_purchase_search) == "function" then
 					self._start_purchase_search()
 				end
 			end,
 			refresh = function(widget)
-				widget.content.enabled = true
-				widget.content.hotspot.disabled = false
-				widget.content.detail = ""
+				local current_import = self:_games_lantern_import()
+				local current_queue = self:_games_lantern_queue()
+				local current_owned = current_queue and current_queue.job_count == 2 and current_queue.state ~= "empty" and current_queue.state ~= "complete"
+				local current_active = current_owned and (current_queue.state == "starting" or current_queue.state == "selecting" or current_queue.state == "preflighting" or current_queue.state == "dispatching" or current_queue.state == "running" or current_queue.state == "waiting_next" or current_queue.state == "stopping" or current_queue.state == "quarantined" or current_queue.state == "reconciliation_required")
+				local current_import_busy = current_import and (current_import.state == "fetching" or current_import.state == "resolving_catalogues" or current_import.state == "awaiting_weapon_choice")
+				local current_enabled = not current_active and not current_import_busy
+				widget.content.enabled = current_enabled
+				widget.content.hotspot.disabled = not current_enabled
+				widget.content.detail = current_owned and self._queue_craft_armed and (self._queue_craft_confirmation_text or "Cost authority unavailable; crafting remains blocked.") or ""
 			end,
 		}))
 		local function run_is_active()
@@ -1777,8 +2276,10 @@ function Panel.new(dependencies)
 			local phase3 = state.phase3
 			local phase4 = state.phase4
 			local mastery = state.mastery
+			local queue = self:_games_lantern_queue()
+			local queue_active = queue and (queue.state == "running" or queue.state == "selecting" or queue.state == "preflighting" or queue.state == "dispatching" or queue.state == "waiting_next" or queue.state == "starting" or queue.state == "stopping" or queue.state == "quarantined" or queue.state == "reconciliation_required")
 
-			return search and search.running == true or phase3 and phase3.running == true or phase4 and phase4.running == true or mastery and mastery.running == true
+			return queue_active == true or search and search.running == true or phase3 and phase3.running == true or phase4 and phase4.running == true or mastery and mastery.running == true
 		end
 		local stop_enabled = run_is_active()
 		table.insert(entries, self:_entry(localize("auto_crafter_panel_stop", "> CLICK HERE TO STOP / INTERRUPT <"), "", {
@@ -1896,6 +2397,38 @@ function Panel.new(dependencies)
 
 		self._idle_poll_elapsed = 0
 		self:_update_pivot()
+		if self._presentation_snapshots_dirty or self._queue_snapshot_cache == nil or self._import_snapshot_cache == nil then
+			self:_refresh_games_lantern_snapshots()
+		end
+		local ctrl_v = ctrl_v_down()
+
+		if ctrl_v and not self._ctrl_v_down and type(self._games_lantern_paste) == "function" then
+			local current_queue = self:_games_lantern_queue()
+			local current_owned = current_queue and current_queue.job_count == 2 and current_queue.state ~= "empty" and current_queue.state ~= "complete"
+			local current_active = current_owned and (current_queue.state == "starting" or current_queue.state == "selecting" or current_queue.state == "preflighting" or current_queue.state == "dispatching" or current_queue.state == "running" or current_queue.state == "waiting_next" or current_queue.state == "stopping" or current_queue.state == "quarantined" or current_queue.state == "reconciliation_required")
+
+			if not current_active then
+				local pasted, paste_error = self:_request_games_lantern_paste(current_owned)
+
+				if pasted ~= true then
+					log("info", "Games Lantern Ctrl+V import was not started: " .. tostring(paste_error))
+				end
+			end
+		end
+
+		self._ctrl_v_down = ctrl_v
+		local queue = self:_games_lantern_queue()
+		local queue_signature = self:_games_lantern_queue_signature(queue)
+		local import_signature = self:_games_lantern_import_signature(self:_games_lantern_import())
+
+		if queue_signature ~= self._queue_signature then
+			self._queue_signature = queue_signature
+			self:_queue_layout(1)
+		end
+		if import_signature ~= self._import_signature then
+			self._import_signature = import_signature
+			self:_queue_layout(1)
+		end
 
 		if type(self._get_selected_offer) ~= "function" then
 			return
@@ -2061,21 +2594,26 @@ function Panel.new(dependencies)
 		self._selected_offer_key = nil
 		self._selected_offer = nil
 		self._selected_offer_master_id = nil
-		self._section_collapsed = {
-			[SECTION_PLANNER] = false,
-			[SECTION_WORKFLOW] = false,
-			[SECTION_RESUMING] = false,
-			[SECTION_TRAITS] = true,
-		}
+		self._section_collapsed = default_section_state()
 		self._pending_offer = nil
 		self._pending_offer_attempts = 0
 		self._idle_poll_elapsed = IDLE_POLL_INTERVAL
 		self._layout_pending = false
 		self._layout_defer_frames = 0
 		self._trait_catalog_key = nil
+		self._queue_signature = nil
+		self._import_signature = nil
+		self._queue_craft_armed = false
+		self._queue_craft_confirmation_signature = nil
+		self._queue_craft_confirmation_text = nil
+		self._queue_snapshot_cache = nil
+		self._import_snapshot_cache = nil
+		self._presentation_snapshots_dirty = true
+		self._ctrl_v_down = false
 
 
 		self:_update_pivot()
+		self:_refresh_games_lantern_snapshots()
 
 		if type(panel.disable_input) == "function" then
 			panel:disable_input(false)
@@ -2105,14 +2643,21 @@ function Panel.new(dependencies)
 		self._selected_offer_key = nil
 		self._selected_offer = nil
 		self._selected_offer_master_id = nil
-		self._section_collapsed = {
-			[SECTION_PLANNER] = false,
-		}
+		self._section_collapsed = default_section_state()
 		self._pending_offer = nil
 		self._pending_offer_attempts = 0
 		self._layout_pending = false
 		self._layout_defer_frames = 0
 		self._trait_catalog_key = nil
+		self._queue_signature = nil
+		self._import_signature = nil
+		self._queue_craft_armed = false
+		self._queue_craft_confirmation_signature = nil
+		self._queue_craft_confirmation_text = nil
+		self._queue_snapshot_cache = nil
+		self._import_snapshot_cache = nil
+		self._presentation_snapshots_dirty = true
+		self._ctrl_v_down = false
 		self._pivot_x = nil
 		self._pivot_y = nil
 	end

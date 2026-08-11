@@ -3,12 +3,24 @@ local AutoCrafter = {}
 local mod
 local controller
 local panel
+local games_lantern_queue
+local games_lantern_import
+local active_brunt_view
+local games_lantern_catalog_generation = 0
+local runtime_context
+local start_games_lantern_queue
 local hud_lines = {}
 local presentation_dirty = true
 local presentation_elapsed = 0
 local presentation_snapshot
 local controller_faulted = false
 local PRESENTATION_CLOCK_INTERVAL = 0.25
+
+local function invalidate_games_lantern_panel()
+	if panel and type(panel.invalidate_games_lantern_snapshots) == "function" then
+		pcall(panel.invalidate_games_lantern_snapshots, panel)
+	end
+end
 
 local function monotonic_now()
 	local application = rawget(_G, "Application")
@@ -20,6 +32,20 @@ local function monotonic_now()
 	end
 
 	return nil
+end
+
+local function running_under_wine()
+	local application = rawget(_G, "Application")
+	if not application or type(application.wine_version) ~= "function" then
+		return false
+	end
+
+	local ok, version = pcall(application.wine_version)
+	if not ok then
+		ok, version = pcall(application.wine_version, application)
+	end
+
+	return ok and version ~= nil and version ~= false
 end
 
 local function format_elapsed(seconds)
@@ -93,7 +119,10 @@ local function log(level, message)
 	local logger = mod[level]
 
 	if type(logger) == "function" then
-		pcall(logger, mod, message)
+		-- DMF loggers treat their first message argument as a string.format
+		-- template. Imported build labels legitimately contain percent signs, so
+		-- never pass external/runtime text as that template.
+		pcall(logger, mod, "%s", tostring(message))
 	end
 end
 
@@ -299,6 +328,20 @@ local function reporter(ui_panel)
 	return {
 		emit = function(_, kind, payload)
 			presentation_dirty = true
+
+			if games_lantern_queue and (kind == "phase4_complete" or kind == "operation_failed" or kind == "operation_quarantined" or kind == "operation_reconciliation_required" or kind == "phase4_stopped" or kind == "purchase_search_stopped" or kind == "probe_complete" or kind == "character_changed") then
+				pcall(games_lantern_queue.on_event, games_lantern_queue, kind, payload)
+			end
+
+			if kind == "character_changed" then
+				if games_lantern_import then
+					pcall(games_lantern_import.cancel, games_lantern_import, "character_changed")
+				end
+
+				if games_lantern_queue then
+					pcall(games_lantern_queue.clear, games_lantern_queue)
+				end
+			end
 
 			if kind == "probe_started" then
 				if ui_panel then
@@ -506,6 +549,15 @@ function AutoCrafter.configure(dependencies)
 	local ok_planner, Planner = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/core/planner")
 	local ok_backend, Backend = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/darktide/backend")
 	local ok_context, Context = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/darktide/context")
+	local ok_games_lantern_queue, GamesLanternQueue = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/games_lantern/queue")
+	local ok_games_lantern_clipboard, GamesLanternClipboard = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/games_lantern/clipboard")
+	local ok_games_lantern_clipboard_host, GamesLanternClipboardHost = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/games_lantern/clipboard_host")
+	local ok_games_lantern_parser, GamesLanternParser = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/games_lantern/parser")
+	local ok_games_lantern_resolver, GamesLanternResolver = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/games_lantern/resolver")
+	local ok_games_lantern_transport, GamesLanternTransport = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/games_lantern/transport")
+	local ok_games_lantern_transport_win, GamesLanternTransportWin = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/games_lantern/transport_win")
+	local ok_games_lantern_transport_wine, GamesLanternTransportWine = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/games_lantern/transport_wine")
+	local ok_games_lantern_import, GamesLanternImport = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/games_lantern/import_controller")
 	local ok_panel, Panel = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/darktide/panel")
 	local ok_viewport_layout, ViewportLayout = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/darktide/viewport_layout")
 	local ok_layout_content, LayoutContent = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/BetterInventory_layout_content")
@@ -534,6 +586,16 @@ function AutoCrafter.configure(dependencies)
 		return false
 	end
 
+	if not ok_games_lantern_queue or type(GamesLanternQueue) ~= "table" or type(GamesLanternQueue.new) ~= "function" then
+		log("error", "Games Lantern queue unavailable; imported build support disabled.")
+		GamesLanternQueue = nil
+	end
+
+	local games_lantern_import_available = ok_games_lantern_clipboard and type(GamesLanternClipboard) == "table" and type(GamesLanternClipboard.extract_url) == "function" and ok_games_lantern_clipboard_host and type(GamesLanternClipboardHost) == "table" and type(GamesLanternClipboardHost.read) == "function" and ok_games_lantern_parser and type(GamesLanternParser) == "table" and type(GamesLanternParser.parse) == "function" and ok_games_lantern_resolver and type(GamesLanternResolver) == "table" and type(GamesLanternResolver.resolve_identities) == "function" and type(GamesLanternResolver.attach_catalogs) == "function" and ok_games_lantern_transport and type(GamesLanternTransport) == "table" and type(GamesLanternTransport.new) == "function" and ok_games_lantern_import and type(GamesLanternImport) == "table" and type(GamesLanternImport.new) == "function" and ((not running_under_wine() and ok_games_lantern_transport_win and type(GamesLanternTransportWin) == "table" and type(GamesLanternTransportWin.spawn) == "function") or (running_under_wine() and ok_games_lantern_transport_wine and type(GamesLanternTransportWine) == "table" and type(GamesLanternTransportWine.spawn) == "function"))
+	if not games_lantern_import_available then
+		log("error", "Games Lantern import modules unavailable; Ctrl+V import disabled.")
+	end
+
 	if not ok_panel or type(Panel) ~= "table" or type(Panel.new) ~= "function" then
 		log("error", "Auto Crafter Helper diagnostic panel unavailable; continuing without UI.")
 		Panel = nil
@@ -550,6 +612,328 @@ function AutoCrafter.configure(dependencies)
 	local context = Context.new({
 		is_brunt_view = dependencies.is_brunt_view,
 	})
+	runtime_context = context
+	games_lantern_queue = GamesLanternQueue and GamesLanternQueue.new({
+		select_job = function(job)
+			if not active_brunt_view or type(dependencies.select_offer) ~= "function" then
+				return false
+			end
+
+			local ok, selected = pcall(dependencies.select_offer, active_brunt_view, job.offer)
+
+			return ok and selected == true
+		end,
+		configure_job = function(job)
+			local ok, configured = pcall(controller.set_imported_job, controller, job)
+
+			return ok and configured == true
+		end,
+		prepare_job = function(job, index, completed_results, jobs)
+			local ok, prepared, reason = pcall(controller.prepare_imported_job, controller, job, index, completed_results, jobs)
+			if not ok then
+				return false, prepared
+			end
+
+			return prepared, reason
+		end,
+		start_job = function()
+			local ok, started = pcall(controller.start_purchase_search, controller)
+
+			return ok and started == true
+		end,
+		stop_job = function(reason)
+			local ok, stopped = pcall(controller.stop_imported_queue_boundary, controller)
+			local snapshot = controller and controller:snapshot()
+			local active = snapshot and (snapshot.operation_inflight or (snapshot.auxiliary_inflight_count or 0) > 0 or snapshot.search and snapshot.search.running or snapshot.phase3 and snapshot.phase3.running or snapshot.phase4 and snapshot.phase4.running or snapshot.mastery and snapshot.mastery.running)
+
+			return ok and stopped == true or not active, not active and not (snapshot and (snapshot.operation_quarantined or snapshot.reconciliation_required))
+		end,
+		view_is_valid = function()
+			if not active_brunt_view or not runtime_context then
+				return false
+			end
+
+			local ok, valid = pcall(runtime_context.is_valid_brunt_view, runtime_context, active_brunt_view)
+
+			return ok and valid == true
+		end,
+		verify_results = function(results, queue_id, jobs)
+			local ok, verified, reason = pcall(controller.verify_imported_queue_results, controller, results, jobs)
+
+			return ok and verified == true, ok and reason or verified
+		end,
+		current_character_id = function()
+			return runtime_context and runtime_context:current_character_id() or nil
+		end,
+		validate_event = function(job, payload)
+			if not runtime_context or runtime_context:current_character_id() ~= payload.character_id then
+				return false
+			end
+			local snapshot = controller and controller:snapshot()
+			local running_job = snapshot and snapshot.run_imported_job
+
+			return running_job and running_job.queue_id == job.queue_id and running_job.job_id == job.job_id and snapshot.terminal_sequence == payload.terminal_sequence and snapshot.operation_sequence == payload.operation_sequence and snapshot.data and snapshot.data.character_id == payload.character_id
+		end,
+		report = function(kind, payload)
+			presentation_dirty = true
+			invalidate_games_lantern_panel()
+			log(kind == "queue_failed" and "error" or "info", string.format("Games Lantern queue event=%s queue=%s index=%s next=%s reason=%s", tostring(kind), tostring(payload and payload.queue_id or "?"), tostring(payload and payload.index or "?"), tostring(payload and payload.next_index or "?"), tostring(payload and payload.reason or "none")))
+
+			if kind == "queue_job_skipped" then
+				local job = payload and payload.job or {}
+				local slot = tostring(job.slot or "queued")
+				local weapon = tostring(job.display_name or job.offer and job.offer.display_name or "weapon")
+				notify(localize("auto_crafter_notification_title", "Auto Crafter Helper"), string.format("Skipped %s weapon (%s): a perfectly crafted family-equivalent weapon already exists.", slot, weapon))
+			elseif kind == "queue_complete" then
+				if controller then
+					pcall(controller.end_queue_operation, controller)
+					pcall(controller.clear_imported_job, controller)
+				end
+
+				if games_lantern_import then
+					pcall(games_lantern_import.clear, games_lantern_import)
+				end
+			elseif kind == "queue_failed" or kind == "queue_blocked" or kind == "queue_stopped" then
+				if controller then
+					pcall(controller.end_queue_operation, controller)
+				end
+			end
+		end,
+	}) or nil
+
+	start_games_lantern_queue = function(confirmed, confirmed_signature)
+		if not games_lantern_queue or not controller or not games_lantern_import then
+			return false
+		end
+
+		local import_state = games_lantern_import:snapshot()
+		local queue_state = games_lantern_queue:snapshot()
+		local queue_can_resume = queue_state and queue_state.job_count == 2 and (queue_state.state == "staged" or queue_state.state == "stopped" or queue_state.state == "failed" or queue_state.state == "blocked")
+		local new_import = import_state.state == "staged" and type(import_state.resolved_build) == "table"
+		local imported_controller = controller:snapshot().imported_job ~= nil
+
+		if not new_import and not (queue_can_resume and imported_controller) then
+			return false
+		end
+		if confirmed ~= true then
+			return false, "aggregate_confirmation_required"
+		end
+		local preview, preview_reason = controller:preview_imported_queue({ jobs = queue_state.jobs })
+		if not preview or preview.signature == nil or preview.signature ~= confirmed_signature then
+			log("info", "Games Lantern queue authority changed before dispatch: " .. tostring(preview_reason or "confirmation refresh required"))
+
+			return false, "aggregate_confirmation_stale", preview
+		end
+
+		local policy, policy_reason = controller:capture_queue_run_policy()
+		if not policy then
+			log("error", "Games Lantern queue could not capture run policy: " .. tostring(policy_reason))
+
+			return false
+		end
+
+		local acquired, acquire_reason = controller:begin_queue_operation(policy)
+		if not acquired then
+			log("error", "Games Lantern queue could not acquire account-operation ownership: " .. tostring(acquire_reason))
+
+			return false
+		end
+
+		local started, start_reason = games_lantern_queue:start()
+		if not started then
+			controller:end_queue_operation()
+			log("error", "Games Lantern queue did not start: " .. tostring(start_reason))
+
+			return false
+		end
+
+		return true
+	end
+
+	local function games_lantern_resolution_context()
+		local snapshot = controller and controller:snapshot()
+		local data = snapshot and snapshot.data or {}
+		local store = data.store or {}
+		local offers = store.offers or {}
+		local identity = runtime_context and runtime_context:current_identity() or nil
+
+		return {
+			active_archetype = identity and identity.archetype or nil,
+			character_id = identity and identity.character_id or nil,
+			identity_reason = identity and identity.reason or "character_context_unavailable",
+			identity_stable = identity and identity.stable ~= false or false,
+			dump_target = tonumber(setting("auto_crafter_dump_stat_target", 60)) or 60,
+			localize_offer_label = game_localize,
+			melee_offers = offers,
+			ranged_offers = offers,
+		}
+	end
+
+	local function games_lantern_fetch_catalogs(identity, complete, generation)
+		games_lantern_catalog_generation = generation
+		local catalogs = {}
+		local index = 1
+		local settled = false
+
+		local function finish(result, error_value)
+			if settled or games_lantern_catalog_generation ~= generation then
+				return false
+			end
+
+			settled = true
+
+			return complete(result, error_value)
+		end
+
+		local function read_next()
+			if games_lantern_catalog_generation ~= generation then
+				return false
+			end
+
+			local job = identity and identity.jobs and identity.jobs[index]
+			if not job then
+				return finish(catalogs, nil)
+			end
+
+			local call_ok, promise = pcall(backend.discover_weapon_catalog, backend, job.offer)
+			if not call_ok or not promise or type(promise.next) ~= "function" or type(promise.catch) ~= "function" then
+				return finish(nil, call_ok and "catalog discovery returned no Promise" or tostring(promise))
+			end
+
+			promise:next(function(catalog)
+				if games_lantern_catalog_generation ~= generation then
+					return catalog
+				end
+
+				if type(catalog) ~= "table" or catalog.available ~= true then
+					finish(nil, "trait catalog unavailable for " .. tostring(job.master_id or index))
+
+					return catalog
+				end
+
+				local key = job.master_id or job.offer and (job.offer.master_id or job.offer.parent_pattern)
+				catalogs[key] = catalog
+				index = index + 1
+				read_next()
+
+				return catalog
+			end):catch(function(error_value)
+				finish(nil, tostring(error_value or "catalog discovery failed"))
+
+				return nil
+			end)
+
+			return true
+		end
+
+		return read_next()
+	end
+
+	local function games_lantern_cancel_catalogs(generation)
+		if games_lantern_catalog_generation == generation then
+			games_lantern_catalog_generation = games_lantern_catalog_generation + 1
+		end
+
+		return true
+	end
+
+	local function games_lantern_import_allowed()
+		if not controller or controller_faulted then
+			return false, "controller_unavailable"
+		end
+
+		local snapshot_ok, snapshot = pcall(controller.snapshot, controller)
+
+		if not snapshot_ok or type(snapshot) ~= "table" then
+			return false, "controller_snapshot_unavailable"
+		end
+
+		if snapshot.operation_inflight or snapshot.operation_quarantined or snapshot.reconciliation_required or (tonumber(snapshot.auxiliary_inflight_count) or 0) > 0 then
+			return false, "auto_crafter_busy"
+		end
+
+		local search = snapshot.search
+		local phase3 = snapshot.phase3
+		local phase4 = snapshot.phase4
+		local mastery = snapshot.mastery
+
+		if search and search.running or phase3 and phase3.running or phase4 and phase4.running or mastery and mastery.running then
+			return false, "auto_crafter_busy"
+		end
+
+		local queue_snapshot = games_lantern_queue and games_lantern_queue:snapshot()
+		local queue_state = queue_snapshot and queue_snapshot.state
+
+		if queue_state == "starting" or queue_state == "selecting" or queue_state == "preflighting" or queue_state == "dispatching" or queue_state == "running" or queue_state == "waiting_next" or queue_state == "stopping" or queue_state == "quarantined" or queue_state == "reconciliation_required" then
+			return false, "games_lantern_queue_busy"
+		end
+
+		return true
+	end
+
+	local function games_lantern_install_queue(build)
+		if not games_lantern_queue or not active_brunt_view then
+			return false, "Brunt view unavailable"
+		end
+
+		local installed_ok, installed, install_reason = pcall(games_lantern_queue.install, games_lantern_queue, build)
+		if not installed_ok or installed ~= true then
+			return false, installed_ok and install_reason or installed
+		end
+
+		local staged_ok, staged, stage_reason = pcall(controller.set_imported_job, controller, build.jobs[1])
+		if not staged_ok or staged ~= true then
+			pcall(games_lantern_queue.clear, games_lantern_queue)
+			pcall(controller.clear_imported_job, controller)
+
+			return false, staged_ok and stage_reason or staged
+		end
+
+		return true
+	end
+
+	if games_lantern_import_available then
+		local adapter = running_under_wine() and GamesLanternTransportWine or GamesLanternTransportWin
+		local transport_ok, transport_instance = pcall(GamesLanternTransport.new, {
+			adapter = adapter,
+			clock = monotonic_now,
+			report = function(kind, payload)
+				presentation_dirty = true
+				log(kind == "transport_failed" and "error" or "info", string.format("Games Lantern transport event=%s generation=%s status=%s bytes=%s reason=%s", tostring(kind), tostring(payload and payload.generation or "?"), tostring(payload and payload.status or "?"), tostring(payload and payload.bytes or "?"), tostring(payload and payload.reason or "none")))
+			end,
+		})
+
+		if transport_ok and transport_instance then
+			games_lantern_import = GamesLanternImport.new({
+				clipboard_read = GamesLanternClipboardHost.read,
+				clipboard = GamesLanternClipboard,
+				transport = transport_instance,
+				parser = GamesLanternParser,
+				resolver = GamesLanternResolver,
+				get_resolution_context = games_lantern_resolution_context,
+				fetch_catalogs = games_lantern_fetch_catalogs,
+				cancel_catalogs = games_lantern_cancel_catalogs,
+				install_queue = games_lantern_install_queue,
+				can_import = games_lantern_import_allowed,
+				queue_snapshot = function()
+					return games_lantern_queue and games_lantern_queue:snapshot() or nil
+				end,
+				report = function(kind, payload)
+					presentation_dirty = true
+					invalidate_games_lantern_panel()
+					if kind == "import_failed" then
+						local reason = tostring(payload and payload.reason)
+						local detail = payload and payload.error
+						local message = "Games Lantern import failed: " .. reason .. (detail and " (" .. tostring(detail) .. ")" or "")
+						log("error", message)
+						notify(localize("auto_crafter_notification_title", "Auto Crafter Helper"), message)
+					else
+						log("info", string.format("Games Lantern import event=%s generation=%s state=%s reason=%s", tostring(kind), tostring(payload and payload.generation or "?"), tostring(payload and payload.state or "?"), tostring(payload and payload.reason or "none")))
+					end
+				end,
+			})
+		end
+	end
 
 	panel = Panel and Panel.new({
 		ViewElementGrid = dependencies.ViewElementGrid,
@@ -570,11 +954,88 @@ function AutoCrafter.configure(dependencies)
 		preview_plan = function()
 			return controller and controller:preview_plan() or false
 		end,
+		select_manual_mark = function(offer_id, master_id)
+			return controller and controller:select_manual_mark(offer_id, master_id) or false
+		end,
+		get_selected_manual_mark = function()
+			return controller and controller:selected_manual_mark() or nil
+		end,
 		start_purchase_search = function()
+			local queue_state = games_lantern_queue and games_lantern_queue:snapshot()
+			local queue_owned = queue_state and queue_state.job_count == 2 and queue_state.state ~= "empty" and queue_state.state ~= "complete"
+
+			if queue_owned then
+				log("info", "Manual craft ignored while a Games Lantern queue is staged.")
+
+				return false
+			end
+
 			return controller and controller:start_purchase_search() or false
 		end,
 		stop_active_run = function()
+			local queue_state = games_lantern_queue and games_lantern_queue:snapshot()
+			if queue_state and (queue_state.state == "running" or queue_state.state == "selecting" or queue_state.state == "preflighting" or queue_state.state == "dispatching" or queue_state.state == "waiting_next" or queue_state.state == "starting") then
+				return games_lantern_queue:stop("user_stopped")
+			end
+
 			return controller and controller:stop_active_run() or false
+		end,
+		games_lantern_queue_snapshot = function()
+			return games_lantern_queue and games_lantern_queue:presentation_snapshot() or nil
+		end,
+		games_lantern_import_snapshot = function()
+			return games_lantern_import and games_lantern_import:presentation_snapshot() or nil
+		end,
+		games_lantern_paste = function(replace_confirmed)
+			local queue_state = games_lantern_queue and games_lantern_queue:snapshot()
+			local existing = queue_state and queue_state.job_count == 2 and queue_state.state ~= "empty"
+			if existing and replace_confirmed ~= true then
+				return false, "replacement_confirmation_required"
+			end
+			if existing then
+				local match_ok, matches, match_reason = pcall(games_lantern_import.clipboard_matches_current, games_lantern_import)
+				if not match_ok then
+					return false, "clipboard_preflight_failed"
+				end
+				if matches == true then
+					return true, "already_current"
+				end
+				if match_reason then
+					return false, match_reason
+				end
+
+				local cleared = games_lantern_queue:clear()
+				if not cleared then
+					return false, "queue_busy"
+				end
+				pcall(controller.clear_imported_job, controller)
+				pcall(games_lantern_import.clear, games_lantern_import)
+			end
+
+			return games_lantern_import and games_lantern_import:paste() or false
+		end,
+		games_lantern_clear = function()
+			local cleared, reason = games_lantern_queue and games_lantern_queue:clear()
+			if cleared then
+				pcall(controller.clear_imported_job, controller)
+				pcall(games_lantern_import.clear, games_lantern_import)
+			end
+
+			return cleared == true, reason
+		end,
+		games_lantern_select_choice = function(slot, card_index)
+			return games_lantern_import and games_lantern_import:select_weapon_choice(slot, card_index) or false
+		end,
+		games_lantern_cost_authority = function()
+			local queue_state = games_lantern_queue and games_lantern_queue:snapshot()
+			if not queue_state or queue_state.job_count ~= 2 then
+				return nil
+			end
+
+			return controller:preview_imported_queue({ jobs = queue_state.jobs })
+		end,
+		start_games_lantern_queue = function(confirmed, confirmed_signature)
+			return start_games_lantern_queue and start_games_lantern_queue(confirmed, confirmed_signature) or false
 		end,
 		localize = function(setting_id)
 			return localize(setting_id, setting_id)
@@ -608,6 +1069,7 @@ function AutoCrafter.configure(dependencies)
 end
 
 function AutoCrafter.on_brunt_view_ready(view)
+	active_brunt_view = view
 	presentation_dirty = true
 
 	if not setting("auto_crafter_enable", false) then
@@ -626,7 +1088,26 @@ function AutoCrafter.on_brunt_view_ready(view)
 end
 
 function AutoCrafter.on_view_closed(view)
+	if view and active_brunt_view ~= view then
+		return false
+	end
+
+	active_brunt_view = nil
 	presentation_dirty = true
+
+	if games_lantern_import then
+		local import_state = games_lantern_import:snapshot()
+		if import_state and (import_state.state == "fetching" or import_state.state == "resolving_catalogues") then
+			pcall(games_lantern_import.cancel, games_lantern_import, "brunt_view_closed")
+		end
+	end
+
+	if games_lantern_queue then
+		local queue_state = games_lantern_queue:snapshot()
+		if queue_state and (queue_state.state == "starting" or queue_state.state == "selecting" or queue_state.state == "preflighting" or queue_state.state == "waiting_next") then
+			pcall(games_lantern_queue.stop, games_lantern_queue, "brunt_view_closed")
+		end
+	end
 
 	if panel then
 		panel:detach()
@@ -636,10 +1117,30 @@ function AutoCrafter.on_view_closed(view)
 end
 
 function AutoCrafter.on_context_exit(reason)
+	active_brunt_view = nil
 	presentation_dirty = true
 
+	if games_lantern_queue then
+		local queue_state = games_lantern_queue:snapshot()
+		if queue_state and (queue_state.state == "running" or queue_state.state == "selecting" or queue_state.state == "preflighting" or queue_state.state == "dispatching" or queue_state.state == "waiting_next" or queue_state.state == "starting") then
+			pcall(games_lantern_queue.stop, games_lantern_queue, reason or "context_exit")
+		end
+	end
+
+	if games_lantern_import then
+		pcall(games_lantern_import.cancel, games_lantern_import, reason or "context_exit")
+	end
+
 	if controller then
-		controller:on_context_exit(reason)
+		pcall(controller.on_context_exit, controller, reason)
+	end
+
+	if games_lantern_queue then
+		pcall(games_lantern_queue.clear, games_lantern_queue)
+	end
+
+	if games_lantern_import then
+		pcall(games_lantern_import.clear, games_lantern_import)
 	end
 
 	if panel then
@@ -669,6 +1170,18 @@ function AutoCrafter.update(dt)
 		end
 	end
 
+	if games_lantern_import and games_lantern_import:state() == "fetching" then
+		local import_state_before = games_lantern_import:state()
+		local import_ok, import_error = pcall(games_lantern_import.update, games_lantern_import)
+
+		if not import_ok then
+			log("error", "Games Lantern import update failed: " .. tostring(import_error))
+		end
+		if games_lantern_import:state() ~= import_state_before then
+			invalidate_games_lantern_panel()
+		end
+	end
+
 	if controller and not controller_faulted then
 		local update_ok, update_error = pcall(controller.update, controller, dt)
 
@@ -678,6 +1191,20 @@ function AutoCrafter.update(dt)
 			pcall(controller.on_context_exit, controller, "controller_update_crash")
 
 			return
+		end
+
+		if games_lantern_queue then
+			local queue_state = games_lantern_queue:state()
+			if queue_state == "selecting" or queue_state == "preflighting" or queue_state == "starting" or queue_state == "waiting_next" then
+				local queue_ok, queue_error = pcall(games_lantern_queue.update, games_lantern_queue)
+
+				if not queue_ok then
+					log("error", "Games Lantern queue update failed: " .. tostring(queue_error))
+				end
+				if games_lantern_queue:state() ~= queue_state then
+					invalidate_games_lantern_panel()
+				end
+			end
 		end
 
 		presentation_elapsed = presentation_elapsed + math.max(tonumber(dt) or 0, 0)
@@ -733,9 +1260,13 @@ function AutoCrafter.snapshot()
 end
 
 function AutoCrafter.is_busy()
-	local snapshot = AutoCrafter.snapshot()
+	local import_state = games_lantern_import and games_lantern_import:state()
+	local import_busy = import_state == "fetching" or import_state == "resolving_catalogues"
+	local queue_state = games_lantern_queue and games_lantern_queue:state()
+	local queue_busy = queue_state == "starting" or queue_state == "selecting" or queue_state == "preflighting" or queue_state == "dispatching" or queue_state == "running" or queue_state == "waiting_next" or queue_state == "stopping" or queue_state == "quarantined" or queue_state == "reconciliation_required"
+	local controller_busy = controller and controller:is_busy() or false
 
-	return snapshot and (snapshot.operation_inflight or snapshot.operation_quarantined or (tonumber(snapshot.auxiliary_inflight_count) or 0) > 0 or snapshot.search and snapshot.search.running or snapshot.phase3 and snapshot.phase3.running or snapshot.phase4 and snapshot.phase4.running or snapshot.mastery and snapshot.mastery.running) == true or false
+	return import_busy or queue_busy or controller_busy
 end
 
 function AutoCrafter.interrupt_for_external_mutation(kind)
@@ -758,6 +1289,23 @@ function AutoCrafter.shutdown()
 	presentation_dirty = true
 	presentation_elapsed = 0
 	presentation_snapshot = nil
+	if games_lantern_import then
+		pcall(games_lantern_import.cancel, games_lantern_import, "shutdown")
+	end
+
+	if games_lantern_queue then
+		local queue_state = games_lantern_queue:snapshot()
+		if queue_state and (queue_state.state == "running" or queue_state.state == "selecting" or queue_state.state == "preflighting" or queue_state.state == "dispatching" or queue_state.state == "waiting_next" or queue_state.state == "starting") then
+			pcall(games_lantern_queue.stop, games_lantern_queue, "shutdown")
+		end
+
+		pcall(games_lantern_queue.clear, games_lantern_queue)
+	end
+
+	if games_lantern_import then
+		pcall(games_lantern_import.clear, games_lantern_import)
+	end
+
 	if panel then
 		panel:detach()
 		panel = nil

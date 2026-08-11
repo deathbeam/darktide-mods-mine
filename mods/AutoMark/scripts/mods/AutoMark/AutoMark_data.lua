@@ -703,6 +703,12 @@ local widgets = {
                 range         = { 1, 100 },
             },
             {
+                setting_id    = "max_angle",
+                type          = "numeric",
+                default_value = 0,
+                range         = { 0, 180 },
+            },
+            {
                 setting_id = "override_manual",
                 type = "checkbox",
                 default_value = false

@@ -202,8 +202,10 @@ local function configure_native_quick_look_card_passes(mod, pass_template, card_
 					local target_color = content and content.better_inventory_weapon_modifier_lowest_index == stat_index and lowest_modifier_color or WEAPON_MODIFIER_TITLE_COLOR
 					local text_color = current_style.text_color
 
-					for channel = 1, 4 do
-						text_color[channel] = target_color[channel]
+					if text_color[1] ~= target_color[1] or text_color[2] ~= target_color[2] or text_color[3] ~= target_color[3] or text_color[4] ~= target_color[4] then
+						for channel = 1, 4 do
+							text_color[channel] = target_color[channel]
+						end
 					end
 				end
 			end
@@ -364,10 +366,16 @@ local function populate_card_content(mod, widget, element, blessing_display_mode
 	end
 
 	content.better_inventory_curio_primary_color = nil
+	content.better_inventory_quick_look_card_dump_stat_visibility_resolved = nil
+	content.better_inventory_quick_look_card_dump_stat_parenthesized = nil
 
 	local item = item_from_element(element or content.element)
+	local weapon = is_weapon(item)
+	local curio = not weapon and is_curio(item)
+	content.better_inventory_is_weapon = weapon
+	content.better_inventory_is_curio = curio
 
-	if is_weapon(item) then
+	if weapon then
 		if show_weapon_modifiers then
 			populate_weapon_modifier_content(mod, content, item)
 		end
@@ -426,7 +434,7 @@ local function populate_card_content(mod, widget, element, blessing_display_mode
 		return
 	end
 
-	if not is_curio(item) then
+	if not curio then
 		return
 	end
 
@@ -507,8 +515,13 @@ local function add_blessing_pass(pass_template, index, size, x_offset, y_offset)
 			local material_values = style and style.material_values
 
 			if data and material_values then
-				material_values.icon = data.icon
-				material_values.frame = data.frame
+				if material_values.icon ~= data.icon then
+					material_values.icon = data.icon
+				end
+
+				if material_values.frame ~= data.frame then
+					material_values.frame = data.frame
+				end
 			end
 		end,
 	}
@@ -659,8 +672,10 @@ local function add_curio_stat_pass(pass_template, index, options)
 			local color = content and content.better_inventory_curio_primary_color or DEFAULT_CURIO_PRIMARY_COLOR
 			local text_color = style.text_color
 
-			for channel = 1, 4 do
-				text_color[channel] = color[channel]
+			if text_color[1] ~= color[1] or text_color[2] ~= color[2] or text_color[3] ~= color[3] or text_color[4] ~= color[4] then
+				for channel = 1, 4 do
+					text_color[channel] = color[channel]
+				end
 			end
 		end or nil,
 	}
@@ -733,28 +748,6 @@ local function configure_favorite_marker(mod, pass_template, text_left)
 		}
 	end
 
-	-- Equipped Icon+ extends Darktide's equipped-icon visibility function to
-	-- include items equipped in inactive loadouts and changes the icon colour.
-	-- Keep the favorite marker below that icon whenever the extension reports
-	-- it as visible. Calling the pass function (rather than checking only
-	-- content.equipped) keeps this compatible with the mod's configurable
-	-- active/inactive colours and avoids a hard dependency on its internals.
-	local function equipped_icon_is_visible(content)
-		if content and content.equipped then
-			return true
-		end
-
-		local visibility_function = equipped_icon and equipped_icon.visibility_function
-
-		if not content or type(visibility_function) ~= "function" then
-			return false
-		end
-
-		local ok, visible = pcall(visibility_function, content, equipped_icon.style)
-
-		return ok and visible == true
-	end
-
 	if setting(mod, "compact_favorite_marker", true) then
 		favorite_icon.value = ""
 
@@ -809,9 +802,16 @@ local function configure_favorite_marker(mod, pass_template, text_left)
 				original_change_function(content, style, animations, dt)
 			end
 
-			local offset_y = equipped_icon_is_visible(content) and 33 or 7
+			-- The runtime grid synchronizer performs the integration callback only
+			-- when equipped/favorite generations change. Draw-time callbacks use
+			-- that cached result instead of issuing one protected call per card per
+			-- frame (which scales badly on large inventories).
+			local equipped_visible = content and (content.equipped == true or content.better_inventory_equipped_icon_visible == true)
+			local offset_y = equipped_visible and 33 or 7
 
-			style.offset[2] = offset_y
+			if style.offset[2] ~= offset_y then
+				style.offset[2] = offset_y
+			end
 
 			-- ViewElementGrid clones pass styles when it creates a widget. The
 			-- creation hook in BetterInventory.lua stores that real runtime hotspot
@@ -819,7 +819,7 @@ local function configure_favorite_marker(mod, pass_template, text_left)
 			-- reliably executes) to keep the click target on the visible marker.
 			local runtime_hotspot_style = content and content.better_inventory_myfavorites_hotspot_style
 
-			if runtime_hotspot_style and runtime_hotspot_style.offset then
+			if runtime_hotspot_style and runtime_hotspot_style.offset and runtime_hotspot_style.offset[2] ~= offset_y then
 				runtime_hotspot_style.offset[2] = offset_y
 			end
 		end
@@ -873,8 +873,11 @@ local function configure_equipped_highlight(mod, pass_template, card_width, card
 		0,
 		3,
 	}
+	-- Setting changes invalidate active view composition. Capture once per
+	-- blueprint instead of calling DMF once per card on every draw pass.
+	local highlight_enabled = setting(mod, "highlight_equipped_items", true)
 	highlight.visibility_function = function(content)
-		return setting(mod, "highlight_equipped_items", true) and content and content.equipped == true
+		return highlight_enabled and content and content.equipped == true
 	end
 end
 

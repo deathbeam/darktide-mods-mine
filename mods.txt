@@ -7,12 +7,12 @@ CombatStats 661 0.5.11
 EnemyStats 1054 0.3.3
 WeaponStats 999 0.2.9
 Alfs_DMF_Extensions 864 1.2.02
-AutoMark 736 2.3.0
+AutoMark 736 2.4.0
 BetterNameplate 827 1.0.7
-BetterInventory 1144 2.0.3
+BetterInventory 1144 2.1.2
 ChatBlock 68 26.08.05
 ConstantFov 91 1.9
-crosshair_remap 253 3.9.0
+crosshair_remap 253 3.10.0
 DisableScreenEffects 17 26.02.08-1
 DumpStatFinder 368 0.94.2
 DynamicCrosshair 110 1.7
@@ -29,7 +29,6 @@ enemies_improved 809 2.1.2
 guarantee_ability_activation 336 1.4.1
 guarantee_special_action 351 1.1.13
 guarantee_weapon_swap 331 1.4.4
-HavocQuickplay 1116 5
 ImprovedMeatGrinder 1013 1.6.0
 IconBrowser 820 1.0.3
 LetThereBeLight 1099 1.1.4
