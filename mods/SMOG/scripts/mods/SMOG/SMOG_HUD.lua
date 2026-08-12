@@ -6,6 +6,7 @@ local Color = Color
 local QuaternionBox = QuaternionBox
 local Vector2 = Vector2
 local Vector3 = Vector3
+local Vector3Box = Vector3Box
 local Rotation2D = Rotation2D
 local Matrix4x4Box = Matrix4x4Box
 local math = math
@@ -113,8 +114,10 @@ if owner._smog_analogue_sample_revision == revision then
 return
 end
 owner._smog_analogue_sample_revision = revision
-owner._smog_analogue_percent = Common.clamp(mod._smog_hud_sample_percent or 0,0,100)
-owner._smog_analogue_percent_text = string_format("%d%%",math_floor(owner._smog_analogue_percent + 0.5))
+local percent = Common.clamp(mod._smog_hud_sample_percent or 0,0,100)
+owner._smog_analogue_percent = percent
+owner._smog_analogue_percent_text = string_format("%d%%",math_floor(percent + 0.5))
+owner._smog_analogue_fill_percent,owner._smog_analogue_phase_color_box = phase_for_percent(percent)
 end
 local function update_line_geometry(target,normalized,cx,cy,radius,width)
 local next_index = 1
@@ -168,60 +171,73 @@ size.y = geometry[i + 2]
 Gui.rect_3d(gui,geometry[i]:unbox(),offset,layer,size,color)
 end
 end
-local function draw_circle(gui,cx,cy,radius,color_box,layer)
-if not Gui or not Gui.triangle or not Vector3 then
-return false
+local function update_circle_geometry(target,cx,cy,radius)
+local next_index = 1
+if Vector3Box and Vector3 then
+local centre = target[next_index]
+if centre then
+centre:store(cx,0,cy)
+else
+target[next_index] = Vector3Box(cx,0,cy)
 end
-local centre = Vector3(cx,0,cy)
-local last_x = cx + radius
-local last_y = cy
-for i = 1,circle_segments do
+next_index = next_index + 1
+for i = 0,circle_segments do
 local theta = i / circle_segments * math_pi * 2
 local x = cx + radius * math_cos(theta)
 local y = cy + radius * math_sin(theta)
-Gui.triangle(gui,centre,Vector3(last_x,0,last_y),Vector3(x,0,y),layer,color_box:unbox())
-last_x,last_y = x,y
+local point = target[next_index]
+if point then
+point:store(x,0,y)
+else
+target[next_index] = Vector3Box(x,0,y)
+end
+next_index = next_index + 1
+end
+end
+for i = next_index,#target do
+target[i] = nil
+end
+end
+local function ensure_hub_geometry(owner,cx,cy,scale)
+if owner._smog_analogue_hub_cx == cx and owner._smog_analogue_hub_cy == cy and owner._smog_analogue_hub_scale == scale then
+return
+end
+owner._smog_analogue_hub_cx = cx
+owner._smog_analogue_hub_cy = cy
+owner._smog_analogue_hub_scale = scale
+update_circle_geometry(owner._smog_analogue_hub_outer_geometry,cx,cy,14 * scale)
+update_circle_geometry(owner._smog_analogue_hub_inner_geometry,cx,cy,5 * scale)
+end
+local function draw_circle_geometry(gui,geometry,color_box,layer)
+if not geometry or #geometry < 3 or not Gui or not Gui.triangle then
+return false
+end
+local centre = geometry[1]:unbox()
+local color = color_box:unbox()
+for i = 2,#geometry - 1 do
+Gui.triangle(gui,centre,geometry[i]:unbox(),geometry[i + 1]:unbox(),layer,color)
 end
 return true
 end
-local function draw_hub(gui,cx,cy,scale,hub_color_box,hub_hole_box)
-if draw_circle(gui,cx,cy,14 * scale,hub_color_box,821) then
-draw_circle(gui,cx,cy,5 * scale,hub_hole_box,822)
+local function draw_hub(owner,gui,cx,cy,scale,hub_color_box,hole_color_box)
+ensure_hub_geometry(owner,cx,cy,scale)
+if draw_circle_geometry(gui,owner._smog_analogue_hub_outer_geometry,hub_color_box,821) then
+draw_circle_geometry(gui,owner._smog_analogue_hub_inner_geometry,hole_color_box,822)
 return
 end
 local outer = math_floor(25 * scale + 0.5)
 local inner = math_floor(10 * scale + 0.5)
 Gui.rect(gui,Vector3(cx - outer * 0.5,cy - outer * 0.5,821),Vector2(outer,outer),hub_color_box:unbox())
-Gui.rect(gui,Vector3(cx - inner * 0.5,cy - inner * 0.5,822),Vector2(inner,inner),hub_hole_box:unbox())
+Gui.rect(gui,Vector3(cx - inner * 0.5,cy - inner * 0.5,822),Vector2(inner,inner),hole_color_box:unbox())
 end
-function Renderer.init(owner)
-owner._smog_analogue_sample_revision = -1
-owner._smog_analogue_percent = 0
-owner._smog_analogue_percent_text = "0%"
-owner._smog_analogue_percent_layout = nil
-owner._smog_analogue_arc_cx = nil
-owner._smog_analogue_arc_cy = nil
-owner._smog_analogue_arc_radius = nil
-owner._smog_analogue_arc_width = nil
-owner._smog_analogue_arc_fill_percent = nil
-owner._smog_analogue_fill_geometry = {}
-owner._smog_analogue_remainder_geometry = {}
+local function ensure_needle_geometry(owner,cx,cy,scale,outer_radius,percent)
+if owner._smog_analogue_needle_cx == cx and owner._smog_analogue_needle_cy == cy and owner._smog_analogue_needle_scale == scale and owner._smog_analogue_needle_percent == percent then
+return
 end
-function Renderer.draw(owner,dt,gui,scale,screen_width,screen_height)
-sample(owner)
-local outer_radius = 72 * scale
-local inner_radius = 53 * scale
-local arc_radius = (outer_radius + inner_radius) * 0.5
-local arc_width = math_max(outer_radius - inner_radius,8 * scale)
-local cx,cy = Common.position(screen_width,screen_height,scale,outer_radius)
-local percent = Common.clamp(owner._smog_analogue_percent or 0,0,100)
-local percent_text = owner._smog_analogue_percent_text or string_format("%d%%",math_floor(percent + 0.5))
-local fill_percent,phase_color_box = phase_for_percent(percent)
-ensure_arc_geometry(owner,cx,cy,arc_radius,arc_width,fill_percent)
-draw_arc_geometry(gui,owner._smog_analogue_remainder_geometry,base_color_box,810)
-if fill_percent > 0 then
-draw_arc_geometry(gui,owner._smog_analogue_fill_geometry,phase_color_box,811)
-end
+owner._smog_analogue_needle_cx = cx
+owner._smog_analogue_needle_cy = cy
+owner._smog_analogue_needle_scale = scale
+owner._smog_analogue_needle_percent = percent
 local theta = math_pi - percent * 0.01 * math_pi
 local dx = math_cos(theta)
 local dy = -math_sin(theta)
@@ -232,54 +248,123 @@ local tip_y = cy + dy * (outer_radius - 8 * scale)
 local base_x = cx + dx * (15 * scale)
 local base_y = cy + dy * (15 * scale)
 local needle_half = 5.5 * scale
-if Gui and Gui.triangle and Vector3 then
-local p1 = Vector3(tip_x,0,tip_y)
-local p2 = Vector3(base_x + px * needle_half,0,base_y + py * needle_half)
-local p3 = Vector3(base_x - px * needle_half,0,base_y - py * needle_half)
-Gui.triangle(gui,p1,p2,p3,820,needle_color_box:unbox())
+owner._smog_analogue_needle_tip_x = tip_x
+owner._smog_analogue_needle_tip_y = tip_y
+if Vector3Box and Vector3 then
+local p1 = owner._smog_analogue_needle_p1
+local p2 = owner._smog_analogue_needle_p2
+local p3 = owner._smog_analogue_needle_p3
+if p1 then
+p1:store(tip_x,0,tip_y)
+p2:store(base_x + px * needle_half,0,base_y + py * needle_half)
+p3:store(base_x - px * needle_half,0,base_y - py * needle_half)
 else
-draw_line(gui,cx,cy,tip_x,tip_y,820,8 * scale,needle_color_box)
+owner._smog_analogue_needle_p1 = Vector3Box(tip_x,0,tip_y)
+owner._smog_analogue_needle_p2 = Vector3Box(base_x + px * needle_half,0,base_y + py * needle_half)
+owner._smog_analogue_needle_p3 = Vector3Box(base_x - px * needle_half,0,base_y - py * needle_half)
 end
-draw_hub(gui,cx,cy,scale,needle_color_box,hub_hole_box)
-local small_font = Common.font_path("proxima_nova_bold")
+end
+end
+local function analogue_layout(owner,gui,scale,cx,cy)
+local cached = owner._smog_analogue_layout
+if cached and cached.scale == scale and cached.cx == cx and cached.cy == cy then
+return cached
+end
+local small_font = owner._smog_analogue_font or Common.font_path("proxima_nova_bold")
 if not small_font then
-return
+return nil
 end
-local meter_font_size = math_floor(11 * scale + 0.5)
-if meter_font_size < 9 then
-meter_font_size = 9
-end
-local percent_font_size = math_floor(13 * scale + 0.5)
-if percent_font_size < 10 then
-percent_font_size = 10
-end
+owner._smog_analogue_font = small_font
+local outer_radius = 72 * scale
+local inner_radius = 53 * scale
+local arc_radius = (outer_radius + inner_radius) * 0.5
+local meter_font_size = math_max(9,math_floor(11 * scale + 0.5))
+local percent_font_size = math_max(10,math_floor(13 * scale + 0.5))
 local meter_width = meter_text_width_cache[meter_font_size]
 if not meter_width then
 meter_width = Common.text_width(gui,meter_text,small_font,meter_font_size)
 meter_text_width_cache[meter_font_size] = meter_width
 end
-local meter_x = cx - meter_width * 0.5
-local meter_y = cy + 25 * scale
+cached = cached or {}
+cached.scale = scale
+cached.cx = cx
+cached.cy = cy
+cached.font = small_font
+cached.outer_radius = outer_radius
+cached.arc_radius = arc_radius
+cached.arc_width = math_max(outer_radius - inner_radius,8 * scale)
+cached.meter_font_size = meter_font_size
+cached.percent_font_size = percent_font_size
+cached.meter_x = cx - meter_width * 0.5
+cached.meter_y = cy + 25 * scale
+owner._smog_analogue_layout = cached
+return cached
+end
+function Renderer.init(owner)
+owner._smog_analogue_sample_revision = -1
+owner._smog_analogue_percent = 0
+owner._smog_analogue_percent_text = "0%"
+owner._smog_analogue_fill_percent = 0
+owner._smog_analogue_phase_color_box = base_color_box
+owner._smog_analogue_percent_layout = nil
+owner._smog_analogue_layout = nil
+owner._smog_analogue_font = nil
+owner._smog_analogue_arc_cx = nil
+owner._smog_analogue_arc_cy = nil
+owner._smog_analogue_arc_radius = nil
+owner._smog_analogue_arc_width = nil
+owner._smog_analogue_arc_fill_percent = nil
+owner._smog_analogue_fill_geometry = {}
+owner._smog_analogue_remainder_geometry = {}
+owner._smog_analogue_hub_outer_geometry = {}
+owner._smog_analogue_hub_inner_geometry = {}
+end
+function Renderer.draw(owner,dt,gui,scale,screen_width,screen_height)
+sample(owner)
+local outer_radius = 72 * scale
+local cx,cy = Common.position(owner,screen_width,screen_height,scale,outer_radius)
+local current_layout = analogue_layout(owner,gui,scale,cx,cy)
+if not current_layout then
+return
+end
+local percent = owner._smog_analogue_percent or 0
+local percent_text = owner._smog_analogue_percent_text or "0%"
+local fill_percent = owner._smog_analogue_fill_percent or 0
+local phase_color_box = owner._smog_analogue_phase_color_box or base_color_box
+ensure_arc_geometry(owner,cx,cy,current_layout.arc_radius,current_layout.arc_width,fill_percent)
+draw_arc_geometry(gui,owner._smog_analogue_remainder_geometry,base_color_box,810)
+if fill_percent > 0 then
+draw_arc_geometry(gui,owner._smog_analogue_fill_geometry,phase_color_box,811)
+end
+ensure_needle_geometry(owner,cx,cy,scale,current_layout.outer_radius,percent)
+if Gui and Gui.triangle and owner._smog_analogue_needle_p1 then
+Gui.triangle(gui,owner._smog_analogue_needle_p1:unbox(),owner._smog_analogue_needle_p2:unbox(),owner._smog_analogue_needle_p3:unbox(),820,needle_color_box:unbox())
+else
+draw_line(gui,cx,cy,owner._smog_analogue_needle_tip_x,owner._smog_analogue_needle_tip_y,820,8 * scale,needle_color_box)
+end
+draw_hub(owner,gui,cx,cy,scale,needle_color_box,hub_hole_box)
 local percent_layout = owner._smog_analogue_percent_layout
-if not percent_layout or percent_layout.text ~= percent_text or percent_layout.font ~= small_font or percent_layout.font_size ~= percent_font_size or percent_layout.cx ~= cx or percent_layout.cy ~= cy or percent_layout.scale ~= scale then
-local percent_width = Common.text_width(gui,percent_text,small_font,percent_font_size)
+if not percent_layout or percent_layout.text ~= percent_text or percent_layout.font ~= current_layout.font or percent_layout.font_size ~= current_layout.percent_font_size or percent_layout.cx ~= cx or percent_layout.cy ~= cy or percent_layout.scale ~= scale then
+local percent_width = Common.text_width(gui,percent_text,current_layout.font,current_layout.percent_font_size)
 percent_layout = {
 text = percent_text,
-font = small_font,
-font_size = percent_font_size,
+font = current_layout.font,
+font_size = current_layout.percent_font_size,
 cx = cx,
 cy = cy,
 scale = scale,
 x = cx - percent_width * 0.5 + 2 * scale,
-y = cy - arc_radius - percent_font_size * 0.42 + 8 * scale,
+y = cy - current_layout.arc_radius - current_layout.percent_font_size * 0.42 + 8 * scale,
 }
 owner._smog_analogue_percent_layout = percent_layout
 end
-Common.draw_text(gui,meter_text,small_font,meter_font_size,meter_x,meter_y,825,meter_color_box:unbox())
-Common.draw_text(gui,percent_text,small_font,percent_font_size,percent_layout.x,percent_layout.y,825,percent_color_box:unbox())
+Common.draw_text(gui,meter_text,current_layout.font,current_layout.meter_font_size,current_layout.meter_x,current_layout.meter_y,825,meter_color_box:unbox())
+Common.draw_text(gui,percent_text,current_layout.font,current_layout.percent_font_size,percent_layout.x,percent_layout.y,825,percent_color_box:unbox())
 end
 function Renderer.destroy(owner)
 owner._smog_analogue_fill_geometry = nil
 owner._smog_analogue_remainder_geometry = nil
+owner._smog_analogue_hub_outer_geometry = nil
+owner._smog_analogue_hub_inner_geometry = nil
 end
 return Renderer

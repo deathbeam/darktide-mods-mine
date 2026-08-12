@@ -188,15 +188,19 @@ owner._smog_digital_heap_text = digit_symbols[0]
 owner._smog_digital_fps_text = digital_number(0,3)
 owner._smog_digital_layout = nil
 owner._smog_digital_layout_dirty = true
+owner._smog_digital_font = nil
+owner._smog_digital_mono_font = nil
 end
 function Renderer.draw(owner,dt,gui,scale,screen_width,screen_height)
 sample(owner,dt)
-local cx,cy = Common.position(screen_width,screen_height,scale,72 * scale)
-local digital_font = Common.font_path("darktide_custom_regular","mono_tide_regular")
-local mono_font = Common.font_path("mono_tide_regular","arial")
+local cx,cy = Common.position(owner,screen_width,screen_height,scale,72 * scale)
+local digital_font = owner._smog_digital_font or Common.font_path("darktide_custom_regular","mono_tide_regular")
+local mono_font = owner._smog_digital_mono_font or Common.font_path("mono_tide_regular","arial")
 if not digital_font or not mono_font then
 return
 end
+owner._smog_digital_font = digital_font
+owner._smog_digital_mono_font = mono_font
 local current_layout = layout(owner,gui,scale,cx,cy,digital_font,mono_font)
 local percent_text = owner._smog_digital_percent_text or digit_symbols[0]
 local heap_text = owner._smog_digital_heap_text or digit_symbols[0]

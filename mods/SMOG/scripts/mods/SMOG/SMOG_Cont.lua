@@ -59,10 +59,14 @@ end
 end
 return #fallback_text * font_size * 0.55
 end
-function Common.position(screen_width,screen_height,scale,outer_radius)
+function Common.position(owner,screen_width,screen_height,scale,outer_radius)
 local radius = outer_radius or 72 * scale
-local x_axis = Common.clamp(mod._smog_hud_x_axis or 5,0,100)
-local y_axis = Common.clamp(mod._smog_hud_y_axis or 65,0,100)
+local x_axis = Common.clamp(mod._smog_hud_x_axis or 10,0,100)
+local y_axis = Common.clamp(mod._smog_hud_y_axis or 30,0,100)
+local cached = owner._smog_position_cache
+if cached and cached.screen_width == screen_width and cached.screen_height == screen_height and cached.scale == scale and cached.radius == radius and cached.x_axis == x_axis and cached.y_axis == y_axis then
+return cached.cx,cached.cy
+end
 local horizontal_margin = radius + 18 * scale
 local top_margin = radius + 30 * scale
 local bottom_margin = 48 * scale
@@ -70,6 +74,16 @@ local available_x = math_max(screen_width - horizontal_margin * 2,0)
 local available_y = math_max(screen_height - top_margin - bottom_margin,0)
 local cx = horizontal_margin + available_x * x_axis * 0.01
 local cy = top_margin + available_y * y_axis * 0.01
+owner._smog_position_cache = {
+screen_width = screen_width,
+screen_height = screen_height,
+scale = scale,
+radius = radius,
+x_axis = x_axis,
+y_axis = y_axis,
+cx = cx,
+cy = cy,
+}
 return cx,cy
 end
 function Common.context_allowed()
@@ -88,6 +102,8 @@ local AnalogueRenderer = file_dofile("SMOG/scripts/mods/SMOG/SMOG_HUD")
 fassert(type(AnalogueRenderer) == "table", "`SMOG` failed to load SMOG_HUD.lua.")
 local DigitalRenderer = file_dofile("SMOG/scripts/mods/SMOG/SMOG_DHUD")
 fassert(type(DigitalRenderer) == "table", "`SMOG` failed to load SMOG_DHUD.lua.")
+local AdvancedDigitalRenderer = file_dofile("SMOG/scripts/mods/SMOG/SMOG_ADHUD")
+fassert(type(AdvancedDigitalRenderer) == "table", "`SMOG` failed to load SMOG_ADHUD.lua.")
 local Gui = Gui
 local Color = Color
 local Vector2 = Vector2
@@ -197,21 +213,29 @@ end
 local renderer_by_format = {
 analogue = AnalogueRenderer,
 digital = DigitalRenderer,
+advanced_digital = AdvancedDigitalRenderer,
 }
+local function renderer_format()
+local format = mod._smog_hud_format
+if renderer_by_format[format] then
+return format
+end
+return "analogue"
+end
 local function switch_renderer(previous_renderer,renderer,owner)
 previous_renderer.destroy(owner)
 renderer.init(owner)
 end
 function HudElementSMOGController:init(parent,draw_layer,start_scale)
 HudElementSMOGController.super.init(self,parent,draw_layer,start_scale,definitions)
-self._smog_renderer_format = mod._smog_hud_format == "digital" and "digital" or "analogue"
+self._smog_renderer_format = renderer_format()
 self._smog_renderer_draw_failed = false
 self._smog_notice_draw_failed = false
 self._smog_notice_layout = nil
 renderer_by_format[self._smog_renderer_format].init(self)
 end
 function HudElementSMOGController:_sync_renderer_format()
-local format = mod._smog_hud_format == "digital" and "digital" or "analogue"
+local format = renderer_format()
 local renderer = renderer_by_format[format]
 if self._smog_renderer_format == format then
 return format,renderer

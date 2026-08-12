@@ -11,6 +11,7 @@ local InventoryViewContentBlueprints
 local ItemBlueprintGenerator
 local Text
 local lantern_recommendations_active = function() return false end
+local release_runtime_caches = function() end
 local ensure_class_method
 local better_inventory_test
 local registered_character_overview_views = setmetatable({}, { __mode = "k" })
@@ -852,37 +853,17 @@ local function character_overview_curio_blueprint()
 			title_style.font_size = curio_name_font_size
 
 			if type(full_name) == "string" and full_name ~= "" and type(title_width) == "number" then
-				local minimum_font_size = 8
-				local wrapped_rows
+				local fitted_name, fitted_font_size = CharacterOverview.fit_title(full_name, curio_name_font_size, 6, curio_name_line_limit, function(value, font_size)
+					title_style.font_size = font_size
 
-				while title_style.font_size > minimum_font_size do
-					wrapped_rows = Text.word_wrap(ui_renderer, full_name, title_style, title_width)
+					return Text.word_wrap(ui_renderer, value, title_style, title_width)
+				end, function(value, font_size)
+					title_style.font_size = font_size
 
-					if not wrapped_rows or #wrapped_rows <= curio_name_line_limit then
-						break
-					end
+					return Text.crop_text_width(ui_renderer, value, title_style, title_width)
+				end)
 
-					title_style.font_size = title_style.font_size - 1
-				end
-
-				wrapped_rows = Text.word_wrap(ui_renderer, full_name, title_style, title_width)
-
-				local fitted_name
-
-				if wrapped_rows and #wrapped_rows <= curio_name_line_limit then
-					fitted_name = table.concat(wrapped_rows, "\n")
-				elseif curio_name_line_limit == 1 then
-					fitted_name = Text.crop_text_width(ui_renderer, full_name, title_style, title_width)
-				else
-					local fitted_rows = {}
-
-					for index = 1, curio_name_line_limit do
-						fitted_rows[index] = wrapped_rows and wrapped_rows[index] or ""
-					end
-
-					fitted_rows[curio_name_line_limit] = Text.crop_text_width(ui_renderer, fitted_rows[curio_name_line_limit] .. "…", title_style, title_width)
-					fitted_name = table.concat(fitted_rows, "\n")
-				end
+				title_style.font_size = fitted_font_size
 
 				content.display_name = fitted_name
 				content.better_inventory_fitted_curio_name = fitted_name
@@ -990,6 +971,13 @@ local function character_overview_curio_blueprint()
 		end
 
 		if not item_changed then
+			-- `init` can run before Darktide supplies a usable renderer. Retry the
+			-- bounded fit once from update; after initialization this remains the
+			-- unchanged-item fast path and performs no recurring text measurement.
+			if content and content.better_inventory_curio_fit_initialized ~= true then
+				fit_curio_text(widget, ui_renderer, false)
+			end
+
 			return
 		end
 
@@ -1287,6 +1275,7 @@ OverviewUI.configure = function(dependencies)
 	ItemBlueprintGenerator = dependencies.ItemBlueprintGenerator
 	Text = dependencies.Text
 	lantern_recommendations_active = dependencies.lantern_recommendations_active or function() return false end
+	release_runtime_caches = dependencies.release_runtime_caches or function() end
 	better_inventory_test = mod and rawget(mod, "_better_inventory_test")
 	CHARACTER_OVERVIEW_BLUEPRINTS = type(ItemBlueprintGenerator) == "function" and ItemBlueprintGenerator({
 		600,
@@ -1327,6 +1316,10 @@ OverviewUI.unregister_view = function(view)
 	view._better_inventory_reconcile_elapsed = nil
 	view._auto_crafter_status_overlay = nil
 
+	if registered and next(registered_character_overview_views) == nil then
+		pcall(release_runtime_caches)
+	end
+
 	return registered
 end
 
@@ -1354,6 +1347,16 @@ OverviewUI.registered_view_count = function()
 	return count
 end
 
+OverviewUI.needs_update = function()
+	return next(registered_character_overview_views) ~= nil
+end
+
+local function update_registered_view(view, dt)
+	refresh_character_overview_visual_layout_if_needed(view)
+	reconcile_character_overview_curio_widgets_if_needed(view, dt)
+	synchronize_character_overview_equipped_icons(view)
+end
+
 OverviewUI.update_registered_views = function(dt)
 	local updated = 0
 
@@ -1361,11 +1364,7 @@ OverviewUI.update_registered_views = function(dt)
 		if view._destroyed == true then
 			OverviewUI.unregister_view(view)
 		else
-			local update_ok, update_error = pcall(function()
-				refresh_character_overview_visual_layout_if_needed(view)
-				reconcile_character_overview_curio_widgets_if_needed(view, dt)
-				synchronize_character_overview_equipped_icons(view)
-			end)
+			local update_ok, update_error = pcall(update_registered_view, view, dt)
 
 			if update_ok then
 				updated = updated + 1

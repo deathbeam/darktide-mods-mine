@@ -16,6 +16,8 @@ local os_clock = os and os.clock
 local dmf = get_mod("DMF")
 local check_interval = 1
 local heap_sample_interval = 0.5
+local context_refresh_interval = 0.2
+local transient_frame_spike_multiplier = 1.5
 local interval_clean_time = 600
 local manual_clear_cooldown = 3
 local convenient_collect_cooldown_seconds = 5
@@ -46,8 +48,13 @@ local minimum_gc_frame_scale = 0.25
 local maximum_gc_frame_scale = 1.5
 local elapsed_time = 0
 local smoothed_frame_time = target_frame_seconds
+local incremental_gc_frame_blocked = false
 local accumulator = 0
 local heap_sample_accumulator = heap_sample_interval
+local context_refresh_accumulator = context_refresh_interval
+local idle_context_accumulator = 0
+local context_refresh_requested = false
+local immediate_context_blocked = false
 local interval_accumulator = 0
 local growth_accumulator = 0
 local scheduled_delays = {}
@@ -95,16 +102,29 @@ collection_allowed = true,
 exit_cinematic_active = false,
 debrief_active = false,
 }
+local refresh_context_snapshot
 local collection_context_was_blocked = false
 mod.cleaning_permitted = mod:get("cleaning_permitted") ~= false
 mod.convenient_moment_cleans = mod:get("auto_clean_on_start")
 mod.auto_clean_every_ten_minutes = mod:get("auto_clean_every_ten_minutes")
 mod.automatic_notifications = mod:get("notifications") ~= false
 mod._smog_hud_visible = mod._smog_hud_visible == true
-mod._smog_hud_format = mod:get("hud_format") == "digital" and "digital" or "analogue"
+local advanced = {
+process_sample_interval = 2,
+growth_sample_interval = 30,
+game_growth_threshold_mb_per_min = 256,
+}
+function advanced.read_hud_format()
+local format = mod:get("hud_format")
+if format == "digital" or format == "advanced_digital" then
+return format
+end
+return "analogue"
+end
+mod._smog_hud_format = advanced.read_hud_format()
 mod._smog_notification_active = false
-mod._smog_hud_x_axis = tonumber(mod:get("hud_x_axis")) or 5
-mod._smog_hud_y_axis = tonumber(mod:get("hud_y_axis")) or 65
+mod._smog_hud_x_axis = tonumber(mod:get("hud_x_axis")) or 10
+mod._smog_hud_y_axis = tonumber(mod:get("hud_y_axis")) or 30
 mod._smog_notification_y_axis = tonumber(mod:get("notification_y_axis")) or 85
 local function read_memory_usage_mb()
 local used_kb = collectgarbage("count") or 0
@@ -155,6 +175,122 @@ local current_heap_mb = read_memory_usage_mb()
 local current_heap_percent = detected_heap_mb > 0 and current_heap_mb / detected_heap_mb * 100 or 0
 local heap_sample_revision = 1
 local growth_sample_mb = current_heap_mb
+advanced.process_accumulator = advanced.process_sample_interval
+advanced.growth_accumulator = 0
+advanced.growth_elapsed = 0
+advanced.growth_lua_mb = current_heap_mb
+advanced.growth_process_mb = nil
+advanced.state = {
+revision = 1,
+process_mb = 0,
+process_peak_mb = 0,
+process_growth_mb_per_min = 0,
+lua_growth_mb_per_min = 0,
+lua_peak_mb = current_heap_mb,
+lua_share_percent = 0,
+pressure = "NORMAL",
+}
+mod._smog_advanced_hud_state = advanced.state
+function advanced.read_process_memory_mb()
+if not Memory or not Memory.usage then
+return nil
+end
+local ok,usage = pcall(Memory.usage,"B")
+if not ok or type(usage) ~= "table" then
+return nil
+end
+local used_bytes = tonumber(usage.used_memory)
+if not used_bytes or used_bytes < 0 then
+return nil
+end
+return used_bytes / 1048576
+end
+function advanced.update_pressure()
+local state = advanced.state
+local lua_pressure = pressure_state ~= "normal" or current_heap_percent >= 70
+local lua_positive_growth = math_max(state.lua_growth_mb_per_min or 0,0)
+local non_lua_growth = (state.process_growth_mb_per_min or 0) - lua_positive_growth
+local game_pressure = non_lua_growth >= advanced.game_growth_threshold_mb_per_min
+local pressure = "NORMAL"
+if lua_pressure and game_pressure then
+pressure = "MIXED"
+elseif lua_pressure then
+pressure = "LUA"
+elseif game_pressure then
+pressure = "GAME"
+end
+if state.pressure ~= pressure then
+state.pressure = pressure
+state.revision = state.revision + 1
+mod:set("_smog_last_pressure",pressure)
+if dmf and dmf.save_unsaved_settings_to_file then
+pcall(dmf.save_unsaved_settings_to_file)
+end
+end
+end
+function advanced.update(dt)
+if mod._smog_hud_format ~= "advanced_digital" then
+return
+end
+advanced.process_accumulator = advanced.process_accumulator + (dt or 0)
+advanced.growth_accumulator = advanced.growth_accumulator + (dt or 0)
+advanced.growth_elapsed = advanced.growth_elapsed + (dt or 0)
+local process_sampled = false
+if advanced.process_accumulator >= advanced.process_sample_interval then
+advanced.process_accumulator = advanced.process_accumulator - advanced.process_sample_interval
+local process_mb = advanced.read_process_memory_mb()
+if process_mb then
+process_sampled = true
+local state = advanced.state
+state.process_mb = process_mb
+if process_mb > state.process_peak_mb then
+state.process_peak_mb = process_mb
+end
+if advanced.growth_process_mb == nil then
+advanced.growth_process_mb = process_mb
+advanced.growth_lua_mb = current_heap_mb
+advanced.growth_elapsed = 0
+end
+if process_mb > 0 then
+state.lua_share_percent = current_heap_mb / process_mb * 100
+else
+state.lua_share_percent = 0
+end
+state.revision = state.revision + 1
+end
+end
+if advanced.growth_accumulator >= advanced.growth_sample_interval and advanced.growth_process_mb ~= nil and advanced.growth_elapsed > 0 then
+advanced.growth_accumulator = advanced.growth_accumulator - advanced.growth_sample_interval
+local state = advanced.state
+local elapsed = advanced.growth_elapsed
+local process_mb = state.process_mb
+state.lua_growth_mb_per_min = (current_heap_mb - advanced.growth_lua_mb) * 60 / elapsed
+state.process_growth_mb_per_min = (process_mb - advanced.growth_process_mb) * 60 / elapsed
+advanced.growth_lua_mb = current_heap_mb
+advanced.growth_process_mb = process_mb
+advanced.growth_elapsed = 0
+state.revision = state.revision + 1
+end
+if process_sampled then
+advanced.update_pressure()
+end
+end
+function advanced.reset_growth()
+advanced.process_accumulator = advanced.process_sample_interval
+advanced.growth_accumulator = 0
+advanced.growth_elapsed = 0
+advanced.growth_process_mb = nil
+advanced.growth_lua_mb = current_heap_mb
+local state = advanced.state
+state.process_growth_mb_per_min = 0
+state.lua_growth_mb_per_min = 0
+state.pressure = (pressure_state ~= "normal" or current_heap_percent >= 70) and "LUA" or "NORMAL"
+state.revision = state.revision + 1
+mod:set("_smog_last_pressure",state.pressure)
+if dmf and dmf.save_unsaved_settings_to_file then
+pcall(dmf.save_unsaved_settings_to_file)
+end
+end
 local function usage_percent(usage_mb)
 if detected_heap_mb <= 0 then
 return 0
@@ -168,6 +304,14 @@ heap_sample_revision = heap_sample_revision + 1
 mod._smog_hud_sample_mb = current_heap_mb
 mod._smog_hud_sample_percent = current_heap_percent
 mod._smog_hud_sample_revision = heap_sample_revision
+local state = advanced.state
+if sample_mb > state.lua_peak_mb then
+state.lua_peak_mb = sample_mb
+state.revision = state.revision + 1
+end
+if state.process_mb > 0 then
+state.lua_share_percent = sample_mb / state.process_mb * 100
+end
 return current_heap_mb
 end
 local function refresh_heap_sample()
@@ -191,17 +335,38 @@ last_persisted_heap_state = state
 mod:set("_smog_last_heap_percent",state)
 save_settings_now()
 end
+if mod._smog_hud_format ~= "advanced_digital" then
+local pressure = (pressure_state ~= "normal" or (percent or usage_percent()) >= 70) and "LUA" or "NORMAL"
+if mod:get("_smog_last_pressure") ~= pressure then
+mod:set("_smog_last_pressure",pressure)
+save_settings_now()
+end
+end
 end
 local function mark_unclean_start()
 local previous_clean = mod:get("_smog_clean_shutdown")
 local previous_percent = tonumber(mod:get("_smog_last_heap_percent")) or 0
-if previous_clean == false and previous_percent < live_memory_warning_percent then
+local previous_pressure = tostring(mod:get("_smog_last_pressure") or "")
+if previous_clean == false then
+if previous_pressure == "LUA" then
+mod:echo(mod:localize("unclean_shutdown_lua"))
+elseif previous_pressure == "GAME" then
+mod:echo(mod:localize("unclean_shutdown_game"))
+elseif previous_pressure == "MIXED" then
+mod:echo(mod:localize("unclean_shutdown_mixed"))
+elseif previous_pressure == "NORMAL" then
 mod:echo(mod:localize("unclean_shutdown"))
+elseif previous_percent >= live_memory_warning_percent then
+mod:echo(mod:localize("unclean_shutdown_lua"))
+else
+mod:echo(mod:localize("unclean_shutdown"))
+end
 end
 local state = heap_state(usage_percent(refresh_heap_sample()))
 last_persisted_heap_state = state
 mod:set("_smog_clean_shutdown",false)
 mod:set("_smog_last_heap_percent",state)
+mod:set("_smog_last_pressure",current_heap_percent >= 70 and "LUA" or "NORMAL")
 save_settings_now()
 end
 mark_unclean_start()
@@ -387,7 +552,10 @@ end
 local function gameplay_exit_collection_locked()
 return gameplay_exit_clean_pending and gameplay_exit_wait_for_debrief and not gameplay_exit_debrief_complete
 end
-local function perform_collect(notification_mode)
+local function perform_collect(notification_mode,context_current)
+if not context_current then
+refresh_context_snapshot()
+end
 if not context_snapshot.collection_allowed or gameplay_exit_collection_locked() then
 return current_heap_mb,current_heap_mb,0,false
 end
@@ -529,6 +697,9 @@ restore_gc_tuning()
 reset_high_threshold_cycle()
 end
 local function run_staged_gc_steps(step_kb,max_steps,budget_seconds)
+if incremental_gc_frame_blocked then
+return false
+end
 local start_time = os_clock and os_clock() or nil
 local steps = 0
 local wanted_step_kb = step_kb or staged_step_kb
@@ -633,7 +804,9 @@ end
 end
 return manager ~= nil,is_cinematic_active,cinematic_view,cutscene_view,loading_view,mission_intro_view,mission_outro_view,lobby_view,end_view,end_player_view,ui_state,name,state
 end
-local function refresh_context_snapshot()
+refresh_context_snapshot = function()
+context_refresh_accumulator = 0
+context_refresh_requested = false
 local ok,manager_present,is_cinematic_active,cinematic_view,cutscene_view,loading_view,mission_intro_view,mission_outro_view,lobby_view,end_view,end_player_view,ui_state,name,state = pcall(read_context_values)
 if not ok then
 context_snapshot.hud_allowed = false
@@ -656,6 +829,45 @@ end
 context_snapshot.exit_cinematic_active = is_cinematic_active or cinematic_view or cutscene_view or mission_outro_view
 context_snapshot.debrief_active = end_view or end_player_view
 context_snapshot.game_mode_name = name
+return context_snapshot
+end
+local function read_immediate_context_values()
+local cinematic = Managers and Managers.state and Managers.state.cinematic
+local is_cinematic_active = cinematic and cinematic.cinematic_active and cinematic:cinematic_active() == true or false
+local ui_manager = Managers and Managers.ui
+local ui_state = ui_manager and ui_manager.get_current_state_name and ui_manager:get_current_state_name() or nil
+local blocked = is_cinematic_active or ui_state == "StateLoading" or ui_state == "GameplayStateInit" or ui_state == "StateExitToMainMenu" or ui_state == "StateMissionServerExit" or hud_blocked_text(ui_state)
+local exit_cinematic_active = is_cinematic_active
+if gameplay_exit_clean_pending and ui_manager and ui_manager.view_active then
+local cinematic_view = ui_manager:view_active("cinematic_view") == true
+local cutscene_view = ui_manager:view_active("cutscene_view") == true
+local mission_outro_view = ui_manager:view_active("mission_outro_view") == true
+blocked = blocked or cinematic_view or cutscene_view or mission_outro_view
+exit_cinematic_active = exit_cinematic_active or cinematic_view or cutscene_view or mission_outro_view
+end
+return blocked,exit_cinematic_active
+end
+local function update_context_snapshot(dt)
+context_refresh_accumulator = math_min(context_refresh_accumulator + (dt or 0),context_refresh_interval)
+local ok,blocked,exit_cinematic_active = pcall(read_immediate_context_values)
+if not ok then
+blocked = true
+exit_cinematic_active = true
+end
+if immediate_context_blocked and not blocked then
+context_refresh_requested = true
+end
+immediate_context_blocked = blocked
+if context_refresh_requested or context_refresh_accumulator >= context_refresh_interval then
+refresh_context_snapshot()
+end
+if blocked then
+context_snapshot.hud_allowed = false
+context_snapshot.collection_allowed = false
+if exit_cinematic_active then
+context_snapshot.exit_cinematic_active = true
+end
+end
 return context_snapshot
 end
 refresh_context_snapshot()
@@ -683,6 +895,7 @@ end
 mod.toggle_hud = function()
 mod._smog_hud_visible = not mod._smog_hud_visible
 if mod._smog_hud_visible then
+refresh_context_snapshot()
 refresh_heap_sample()
 heap_sample_accumulator = 0
 else
@@ -1040,7 +1253,7 @@ ninety_collect_done = true
 pending_warning_return_delay = nil
 clear_threshold_notification()
 end
-local _,after_mb = perform_collect("manual")
+local _,after_mb = perform_collect("manual",true)
 update_pressure_state(after_mb,0,true,false)
 end
 mod:command("smog",mod:localize("command_clear_desc"),function()
@@ -1049,7 +1262,9 @@ end)
 mod.on_setting_changed = function(changed_setting)
 if changed_setting == "cleaning_permitted" then
 mod.cleaning_permitted = mod:get("cleaning_permitted") ~= false
-if not cleaning_allowed() then
+if cleaning_allowed() then
+context_refresh_requested = true
+else
 reset_pressure_controller()
 clear_scheduled_cleans()
 clear_gameplay_exit_clean()
@@ -1080,16 +1295,21 @@ clear_notification()
 end
 end
 elseif changed_setting == "hud_format" then
-mod._smog_hud_format = mod:get("hud_format") == "digital" and "digital" or "analogue"
+local previous_format = mod._smog_hud_format
+mod._smog_hud_format = advanced.read_hud_format()
+if mod._smog_hud_format == "advanced_digital" and previous_format ~= "advanced_digital" then
+advanced.reset_growth()
+end
 elseif changed_setting == "hud_x_axis" then
-mod._smog_hud_x_axis = tonumber(mod:get("hud_x_axis")) or 5
+mod._smog_hud_x_axis = tonumber(mod:get("hud_x_axis")) or 10
 elseif changed_setting == "hud_y_axis" then
-mod._smog_hud_y_axis = tonumber(mod:get("hud_y_axis")) or 65
+mod._smog_hud_y_axis = tonumber(mod:get("hud_y_axis")) or 30
 elseif changed_setting == "notification_y_axis" then
 mod._smog_notification_y_axis = tonumber(mod:get("notification_y_axis")) or 85
 end
 end
 mod.on_game_state_changed = function(status,state_name)
+refresh_context_snapshot()
 if status == "enter" then
 if state_name == "StateGameplay" then
 if gameplay_exit_collection_locked() then
@@ -1109,24 +1329,64 @@ if type(dt) ~= "number" or dt <= 0 then
 return
 end
 elapsed_time = elapsed_time + dt
+advanced.update(dt)
 heap_sample_accumulator = math_min(heap_sample_accumulator + dt,check_interval)
 local frame_dt = math_min(dt,0.1)
+incremental_gc_frame_blocked = frame_dt > math_max(smoothed_frame_time,0.001) * transient_frame_spike_multiplier
 smoothed_frame_time = smoothed_frame_time * 0.9 + frame_dt * 0.1
-refresh_context_snapshot()
-if gameplay_exit_clean_pending and gameplay_exit_wait_for_debrief and not gameplay_exit_debrief_complete then
-if context_snapshot.debrief_active then
-gameplay_exit_debrief_seen = true
-elseif gameplay_exit_debrief_seen then
-gameplay_exit_debrief_complete = true
+if not cleaning_allowed() and mod._smog_hud_visible ~= true and mod._smog_notification_active ~= true then
+idle_context_accumulator = 0
+context_refresh_accumulator = math_min(context_refresh_accumulator + dt,context_refresh_interval)
+if heap_sample_accumulator >= check_interval then
+refresh_heap_sample()
+heap_sample_accumulator = 0
 end
+accumulator = accumulator + dt
+if accumulator >= check_interval then
+accumulator = accumulator - check_interval
+persist_heap_state(current_heap_percent)
+end
+return
 end
 if not first_update_done then
+refresh_context_snapshot()
 first_update_done = true
 previous_game_mode_name = context_snapshot.game_mode_name
 previous_safe_zone_state = in_safe_zone()
 if is_hub_mode(previous_game_mode_name) then
 mourningstar_visit_state = "waiting"
 schedule_convenient_clean("mourningstar",mourningstar_clean_delay_seconds)
+end
+end
+local idle_normal = pressure_state == "normal" and mod._smog_hud_visible ~= true and mod._smog_notification_active ~= true and scheduled_count <= 0 and not gameplay_exit_clean_pending and not mod.auto_clean_every_ten_minutes and not context_refresh_requested
+if idle_normal then
+accumulator = 0
+idle_context_accumulator = idle_context_accumulator + dt
+if idle_context_accumulator < check_interval then
+return
+end
+idle_context_accumulator = idle_context_accumulator - check_interval
+refresh_context_snapshot()
+local collection_blocked = not context_snapshot.collection_allowed
+if collection_blocked then
+collection_context_was_blocked = true
+return
+end
+collection_context_was_blocked = false
+refresh_heap_sample()
+heap_sample_accumulator = 0
+persist_heap_state(current_heap_percent)
+check_convenient_transitions()
+run_pressure_controller(dt,true,false)
+return
+end
+idle_context_accumulator = 0
+update_context_snapshot(dt)
+if gameplay_exit_clean_pending and gameplay_exit_wait_for_debrief and not gameplay_exit_debrief_complete then
+if context_snapshot.debrief_active then
+gameplay_exit_debrief_seen = true
+elseif gameplay_exit_debrief_seen then
+gameplay_exit_debrief_complete = true
 end
 end
 local collection_blocked = not context_snapshot.collection_allowed or gameplay_exit_collection_locked()
@@ -1185,13 +1445,20 @@ tick_pending_warning_return(dt)
 if check_due then
 check_convenient_transitions()
 end
+if pressure_state ~= "normal" or check_due or gc_action_taken then
 run_pressure_controller(dt,check_due,gc_action_taken)
+end
 end
 local function clean_shutdown()
 local state = heap_state(usage_percent(refresh_heap_sample()))
 last_persisted_heap_state = state
 mod:set("_smog_clean_shutdown",true)
 mod:set("_smog_last_heap_percent",state)
+if mod._smog_hud_format == "advanced_digital" then
+mod:set("_smog_last_pressure",advanced.state.pressure)
+else
+mod:set("_smog_last_pressure",(pressure_state ~= "normal" or current_heap_percent >= 70) and "LUA" or "NORMAL")
+end
 save_settings_now()
 end
 local function cleanup_mod()
