@@ -8,6 +8,5 @@ return {
             mod_localization = "custom_hud/scripts/mods/custom_hud/custom_hud_localization",
         })
     end,
-    packages = {},
-    version = "2.1.6"
+    packages = {}
 }
