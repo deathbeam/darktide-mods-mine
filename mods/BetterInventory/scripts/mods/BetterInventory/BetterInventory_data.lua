@@ -1,4 +1,4 @@
-local MOD_VERSION = "2.1.4"
+local MOD_VERSION = "2.1.6"
 local mod = get_mod("BetterInventory")
 local DEFAULT_OPERATIVE_SLOT_CAPACITY = 10
 local MAX_REASONABLE_OPERATIVE_SLOT_CAPACITY = 64
@@ -657,6 +657,47 @@ return {
 							1,
 							100,
 						},
+					},
+					{
+						setting_id = "auto_crafter_custom_stats",
+						tooltip = "auto_crafter_custom_stats_tooltip",
+						type = "checkbox",
+						default_value = false,
+					},
+					{
+						setting_id = "auto_crafter_custom_stat_1",
+						tooltip = "auto_crafter_custom_stat_value_tooltip",
+						type = "numeric",
+						default_value = 76,
+						range = { 60, 80 },
+					},
+					{
+						setting_id = "auto_crafter_custom_stat_2",
+						tooltip = "auto_crafter_custom_stat_value_tooltip",
+						type = "numeric",
+						default_value = 76,
+						range = { 60, 80 },
+					},
+					{
+						setting_id = "auto_crafter_custom_stat_3",
+						tooltip = "auto_crafter_custom_stat_value_tooltip",
+						type = "numeric",
+						default_value = 76,
+						range = { 60, 80 },
+					},
+					{
+						setting_id = "auto_crafter_custom_stat_4",
+						tooltip = "auto_crafter_custom_stat_value_tooltip",
+						type = "numeric",
+						default_value = 76,
+						range = { 60, 80 },
+					},
+					{
+						setting_id = "auto_crafter_custom_stat_5",
+						tooltip = "auto_crafter_custom_stat_value_tooltip",
+						type = "numeric",
+						default_value = 76,
+						range = { 60, 80 },
 					},
 					{
 						setting_id = "auto_crafter_cap_by_dockets",
@@ -1500,6 +1541,12 @@ return {
 					{
 						setting_id = "append_mark_to_name",
 						tooltip = "append_mark_to_name_tooltip",
+						type = "checkbox",
+						default_value = true,
+					},
+					{
+						setting_id = "force_weapon_name_single_line",
+						tooltip = "force_weapon_name_single_line_tooltip",
 						type = "checkbox",
 						default_value = true,
 					},
