@@ -40,8 +40,9 @@ local digit_symbols = {
 "",
 }
 local blue_box = QuaternionBox(Color(245,55,190,255))
-local label_blue_box = QuaternionBox(Color(190,55,190,255))
-local title_blue_box = QuaternionBox(Color(205,55,190,255))
+local label_blue_box = QuaternionBox(Color(215,55,190,255))
+local title_blue_box = QuaternionBox(Color(225,55,190,255))
+local unit_blue_box = QuaternionBox(Color(190,55,190,255))
 local divider_blue_box = QuaternionBox(Color(95,55,190,255))
 local warning_red_box = QuaternionBox(Color(245,235,54,38))
 local fps_green_box = QuaternionBox(Color(195,95,255,115))
@@ -64,13 +65,17 @@ local rounded = math_floor(math_abs(value or 0) + 0.5)
 local sign = (value or 0) >= 0 and "+" or "-"
 return digital_text(sign .. tostring(rounded))
 end
-local function signed_parts(value)
-local rounded = math_floor(math_abs(value or 0) + 0.5)
-local sign = (value or 0) >= 0 and "+" or "-"
-return sign,digital_text(tostring(rounded))
-end
 local function decimal_number(value)
 return digital_text(string_format("%.1f",math_max(value or 0,0)))
+end
+local function process_growth_parts(value)
+local growth = value or 0
+local magnitude = math_abs(growth)
+local sign = growth >= 0 and "+" or "-"
+if magnitude >= 1024 then
+return sign,decimal_number(magnitude / 1024),"GB/min"
+end
+return sign,digital_number(math_floor(magnitude + 0.5)),"MB/min"
 end
 local function text_horizontal_bounds(gui,text,font,font_size)
 if Gui and Gui.slug_text_extents then
@@ -110,7 +115,7 @@ local state_revision = state and state.revision or 0
 if owner._smog_advanced_state_revision ~= state_revision then
 owner._smog_advanced_state_revision = state_revision
 owner._smog_advanced_process_text = decimal_number((state and state.process_mb or 0) / 1024)
-owner._smog_advanced_process_growth_sign,owner._smog_advanced_process_growth_magnitude_text = signed_parts(state and state.process_growth_mb_per_min or 0)
+owner._smog_advanced_process_growth_sign,owner._smog_advanced_process_growth_magnitude_text,owner._smog_advanced_process_growth_unit = process_growth_parts(state and state.process_growth_mb_per_min or 0)
 owner._smog_advanced_process_peak_text = decimal_number((state and state.process_peak_mb or 0) / 1024)
 owner._smog_advanced_lua_growth_text = signed_integer(state and state.lua_growth_mb_per_min or 0)
 owner._smog_advanced_lua_peak_text = digital_number(state and state.lua_peak_mb or 0)
@@ -329,7 +334,7 @@ owner._smog_advanced_percent_text = digit_symbols[0]
 owner._smog_advanced_heap_text = digit_symbols[0]
 owner._smog_advanced_fps_text = digital_number(0,3)
 owner._smog_advanced_process_text = decimal_number(0)
-owner._smog_advanced_process_growth_sign,owner._smog_advanced_process_growth_magnitude_text = signed_parts(0)
+owner._smog_advanced_process_growth_sign,owner._smog_advanced_process_growth_magnitude_text,owner._smog_advanced_process_growth_unit = process_growth_parts(0)
 owner._smog_advanced_process_peak_text = decimal_number(0)
 owner._smog_advanced_lua_growth_text = signed_integer(0)
 owner._smog_advanced_lua_peak_text = digital_number(0)
@@ -367,26 +372,26 @@ Common.draw_text(gui,owner._smog_advanced_percent_text or digit_symbols[0],digit
 Common.draw_text(gui,"%",mono_font,l.percent_symbol_size,l.percent_symbol_x,l.percent_symbol_y,825,percentage_box:unbox())
 Common.draw_text(gui,lua_total_title,mono_font,l.style_c_label,l.left_x,l.lua_total_label_y,825,label_blue_box:unbox())
 Common.draw_text(gui,owner._smog_advanced_heap_text or digit_symbols[0],digital_font,l.style_c,l.heap_x,l.lua_total_value_y,825,blue_box:unbox())
-Common.draw_text(gui,"MB",mono_font,l.style_c_unit,l.heap_unit_x,l.heap_unit_y,825,label_blue_box:unbox())
+Common.draw_text(gui,"MB",mono_font,l.style_c_unit,l.heap_unit_x,l.heap_unit_y,825,unit_blue_box:unbox())
 Common.draw_text(gui,lua_growth_title,mono_font,l.style_c_label,l.left_x,l.lua_growth_label_y,825,label_blue_box:unbox())
 Common.draw_text(gui,owner._smog_advanced_lua_growth_text,digital_font,l.style_c,l.lua_growth_x,l.lua_growth_value_y,825,blue_box:unbox())
-Common.draw_text(gui,"MB/min",mono_font,l.style_c_unit,l.lua_growth_unit_x,l.lua_growth_unit_y,825,label_blue_box:unbox())
+Common.draw_text(gui,"MB/min",mono_font,l.style_c_unit,l.lua_growth_unit_x,l.lua_growth_unit_y,825,unit_blue_box:unbox())
 Common.draw_text(gui,peak_lua_title,mono_font,l.style_c_label,l.left_x,l.peak_lua_label_y,825,label_blue_box:unbox())
 Common.draw_text(gui,owner._smog_advanced_lua_peak_text,digital_font,l.style_c,l.lua_peak_x,l.peak_lua_value_y,825,blue_box:unbox())
-Common.draw_text(gui,"MB",mono_font,l.style_c_unit,l.lua_peak_unit_x,l.lua_peak_unit_y,825,label_blue_box:unbox())
+Common.draw_text(gui,"MB",mono_font,l.style_c_unit,l.lua_peak_unit_x,l.lua_peak_unit_y,825,unit_blue_box:unbox())
 Common.draw_text(gui,lua_share_title,mono_font,l.style_c_label,l.left_x,l.lua_share_label_y,825,label_blue_box:unbox())
 Common.draw_text(gui,owner._smog_advanced_lua_share_text,digital_font,l.style_c,l.lua_share_x,l.lua_share_value_y,825,blue_box:unbox())
-Common.draw_text(gui,"%",mono_font,l.lua_share_percent_size,l.lua_share_unit_x,l.lua_share_unit_y,825,label_blue_box:unbox())
+Common.draw_text(gui,"%",mono_font,l.lua_share_percent_size,l.lua_share_unit_x,l.lua_share_unit_y,825,unit_blue_box:unbox())
 Common.draw_text(gui,process_total_title,mono_font,l.style_c_label,l.right_x,l.process_total_label_y,825,label_blue_box:unbox())
 Common.draw_text(gui,owner._smog_advanced_process_text,digital_font,l.style_b,l.process_x,l.process_total_value_y,825,blue_box:unbox())
-Common.draw_text(gui,"GB",mono_font,l.style_b_unit,l.process_unit_x,l.process_unit_y,825,label_blue_box:unbox())
+Common.draw_text(gui,"GB",mono_font,l.style_b_unit,l.process_unit_x,l.process_unit_y,825,unit_blue_box:unbox())
 Common.draw_text(gui,process_growth_title,mono_font,l.style_c_label,l.right_x,l.process_growth_label_y,825,label_blue_box:unbox())
 Common.draw_text(gui,owner._smog_advanced_process_growth_sign or "+",digital_font,l.process_growth_sign_size,l.process_growth_sign_x,l.process_growth_value_y + l.style_b - l.process_growth_sign_size,825,blue_box:unbox())
 Common.draw_text(gui,owner._smog_advanced_process_growth_magnitude_text or digital_number(0),digital_font,l.style_b,l.process_growth_magnitude_x,l.process_growth_value_y,825,blue_box:unbox())
-Common.draw_text(gui,"MB/min",mono_font,l.style_c_unit,l.process_growth_unit_x,l.process_growth_unit_y,825,label_blue_box:unbox())
+Common.draw_text(gui,owner._smog_advanced_process_growth_unit or "MB/min",mono_font,l.style_c_unit,l.process_growth_unit_x,l.process_growth_unit_y,825,unit_blue_box:unbox())
 Common.draw_text(gui,peak_process_title,mono_font,l.style_c_label,l.right_x,l.peak_process_label_y,825,label_blue_box:unbox())
 Common.draw_text(gui,owner._smog_advanced_process_peak_text,digital_font,l.style_b,l.process_peak_x,l.peak_process_value_y,825,blue_box:unbox())
-Common.draw_text(gui,"GB",mono_font,l.style_b_unit,l.process_peak_unit_x,l.process_peak_unit_y,825,label_blue_box:unbox())
+Common.draw_text(gui,"GB",mono_font,l.style_b_unit,l.process_peak_unit_x,l.process_peak_unit_y,825,unit_blue_box:unbox())
 Common.draw_text(gui,fps_title,mono_font,l.style_c_label,l.fps_label_x,l.fps_label_y,825,fps_green_box:unbox())
 Common.draw_text(gui,owner._smog_advanced_fps_text or digital_number(0,3),digital_font,l.style_c,l.fps_x,l.fps_value_y,825,fps_green_box:unbox())
 Common.draw_text(gui,memory_pressure_title,mono_font,l.style_a,l.left_x,l.memory_pressure_y,825,title_blue_box:unbox())
