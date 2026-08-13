@@ -892,10 +892,148 @@ local localization = {
 		en = "Clear horizontal gap in pixels between weapon blessing icons.",
 	},
 	highlight_equipped_items = {
-		en = "Highlight equipped items",
+		en = "Highlight mode",
 	},
 	highlight_equipped_items_tooltip = {
-		en = "Adds a soft white glow around equipped item cards while preserving Darktide's native equipped symbol.",
+		en = "Chooses how equipped item cards are highlighted while preserving Darktide's native equipped symbol. Pulsing animated dashes slowly fade from transparent to opaque and back.",
+	},
+	equipped_highlight_mode_off = {
+		en = "Off",
+	},
+	equipped_highlight_mode_soft_glow = {
+		en = "Soft glow",
+	},
+	equipped_highlight_mode_animated_dashes = {
+		en = "Animated dashed border",
+	},
+	equipped_highlight_mode_pulsing_dashes = {
+		en = "Pulsing animated dashed border",
+	},
+	equipped_highlight_mode_solid_border = {
+		en = "Solid border",
+	},
+	equipped_highlight_group = {
+		en = "Equipped item highlight",
+	},
+	equipped_highlight_glow_intensity = {
+		en = "Soft glow intensity (%%)",
+	},
+	equipped_highlight_glow_intensity_tooltip = {
+		en = "Controls soft-glow opacity from fully transparent at 0%% to full intensity at 100%%.",
+	},
+	equipped_highlight_animated_border_width = {
+		en = "Animated dashed border width",
+	},
+	equipped_highlight_animated_border_width_tooltip = {
+		en = "Thickens either animated dashed border mode with 1-5 bounded concentric layers. Layers are created only when card blueprints are rebuilt; no retained per-card animation state or per-frame allocation is used.",
+	},
+	equipped_highlight_solid_border_width = {
+		en = "Solid border width",
+	},
+	equipped_highlight_solid_border_width_tooltip = {
+		en = "Sets the solid equipped-card border width from 1-5 using Darktide's native frame materials and bounded concentric layers.",
+	},
+	equipped_highlight_color_preset = {
+		en = "Preset",
+	},
+	equipped_highlight_color_r = {
+		en = "Red",
+	},
+	equipped_highlight_color_g = {
+		en = "Green",
+	},
+	equipped_highlight_color_b = {
+		en = "Blue",
+	},
+	option_requires_equipped_highlight = {
+		en = "Select an equipped item highlight mode to use these colour controls.",
+	},
+	option_requires_equipped_highlight_soft_glow = {
+		en = "Select Soft glow to use this option.",
+	},
+	option_requires_equipped_highlight_animated_dashes = {
+		en = "Select either animated dashed border mode to use this option.",
+	},
+	option_requires_equipped_highlight_solid_border = {
+		en = "Select Solid border to use this option.",
+	},
+	new_item_highlight_group = {
+		en = "Newly acquired item highlight",
+	},
+	new_item_highlight_mode = {
+		en = "Highlight mode",
+	},
+	new_item_highlight_mode_tooltip = {
+		en = "Highlights items that Darktide still marks as newly acquired. Enhanced modes replace the small native dot with a whole-card effect; pulsing animated dashes slowly fade in and out.",
+	},
+	new_item_highlight_mode_native = {
+		en = "Native dot only",
+	},
+	new_item_highlight_mode_soft_glow = {
+		en = "Soft glow",
+	},
+	new_item_highlight_mode_animated_dashes = {
+		en = "Animated dashed border",
+	},
+	new_item_highlight_mode_pulsing_dashes = {
+		en = "Pulsing animated dashed border",
+	},
+	new_item_highlight_mode_solid_border = {
+		en = "Solid border",
+	},
+	new_item_acknowledge_mode = {
+		en = "Mark item as seen",
+	},
+	new_item_acknowledge_mode_tooltip = {
+		en = "Selection clears the new-item state only after the card is selected. Hover also clears it when the mouse enters the card or controller focus selects it. Both modes use Darktide's native saved new-item state.",
+	},
+	new_item_acknowledge_mode_select = {
+		en = "On selection",
+	},
+	new_item_acknowledge_mode_hover = {
+		en = "On hover or controller focus",
+	},
+	new_item_highlight_glow_intensity = {
+		en = "Soft glow intensity (%%)",
+	},
+	new_item_highlight_glow_intensity_tooltip = {
+		en = "Controls newly acquired item soft-glow opacity from fully transparent at 0%% to full intensity at 100%%.",
+	},
+	new_item_highlight_animated_border_width = {
+		en = "Animated dashed border width",
+	},
+	new_item_highlight_animated_border_width_tooltip = {
+		en = "Thickens either native animated dashed material with 1-5 bounded static layers. The pulsing mode uses Darktide's global UI clock without retained per-card timer state.",
+	},
+	new_item_highlight_solid_border_width = {
+		en = "Solid border width",
+	},
+	new_item_highlight_solid_border_width_tooltip = {
+		en = "Sets the newly acquired item border width from 1-5 using bounded native frame layers.",
+	},
+	new_item_highlight_color_preset = {
+		en = "Preset",
+	},
+	new_item_highlight_color_r = {
+		en = "Red",
+	},
+	new_item_highlight_color_g = {
+		en = "Green",
+	},
+	new_item_highlight_color_b = {
+		en = "Blue",
+	},
+	option_requires_new_item_enhanced_highlight = {
+		en = "Select a whole-card newly acquired item highlight mode to use these colour controls.",
+	},
+	option_requires_new_item_soft_glow = {
+		en = "Select Soft glow to use this option.",
+	},
+	option_requires_new_item_animated_dashes = {
+		en = "Select either animated dashed border mode to use this option.",
+	},
+	option_requires_new_item_solid_border = {
+		en = "Select Solid border to use this option.",
 	},
 	compact_favorite_marker = {
 		en = "Use compact favorite marker",
@@ -1101,6 +1239,9 @@ local localization = {
 	color_preset_yellow = {
 		en = "Yellow",
 	},
+	color_preset_gold = {
+		en = "Gold",
+	},
 	color_preset_green = {
 		en = "Green",
 	},
@@ -1110,11 +1251,17 @@ local localization = {
 	color_preset_terminal_green = {
 		en = "Terminal green",
 	},
+	color_preset_white = {
+		en = "White",
+	},
 	color_preset_neutral = {
 		en = "Neutral",
 	},
 	color_preset_custom = {
 		en = "Custom colour",
+	},
+	color_preset_mode_default = {
+		en = "Mode default",
 	},
 	curio_resistance_flamers = {
 		en = "Flamers Resistance",

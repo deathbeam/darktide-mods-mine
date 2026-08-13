@@ -49,6 +49,8 @@ local DEPENDENCY_REFRESH_SETTING_IDS = {
 	"weapon_blessing_display_mode",
 	"show_weapon_perks",
 	"show_weapon_perk_rank_symbols",
+	"highlight_equipped_items",
+	"new_item_highlight_mode",
 	"single_column_blessing_icons_on_right",
 	"curio_display_profile",
 	"enable_inventory_options_panel_prototype",
@@ -97,6 +99,7 @@ local MIGRATION_KEYS = {
 	show_curio_item_level = "_curio_heavy_default_v1_migrated",
 	custom_item_name_keybind = "_custom_item_name_keybind_v2_migrated",
 	weapon_blessing_display_mode = "_weapon_blessing_display_mode_v1_migrated",
+	highlight_equipped_items = "_equipped_highlight_mode_v1_migrated",
 }
 
 local function setting_owner(setting_id)
@@ -110,6 +113,9 @@ local function setting_owner(setting_id)
 		"weapon_", "weapons",
 		"blessing_", "weapons",
 		"curio_", "curios",
+		"equipped_highlight_", "markers",
+		"new_item_highlight_", "markers",
+		"new_item_acknowledge_", "markers",
 		"myfavorites_", "markers",
 		"debug_", "diagnostics",
 	}
@@ -150,17 +156,31 @@ end
 local active_ids = {}
 local active_entries = {}
 local duplicate_ids = {}
+local duplicate_id_set = {}
 local metadata_issues = {}
 local active_count = 0
 
-local function collect_setting_entries(entries)
+local function collect_setting_entries(entries, category_name, parent_owned)
 	for _, entry in ipairs(entries or {}) do
 		if type(entry) == "table" then
+			local entry_owned = category_name == nil
+
+			if category_name ~= nil then
+				if entry.category ~= nil then
+					entry_owned = entry.category == category_name
+				else
+					entry_owned = parent_owned == true
+				end
+			end
+
 			local setting_id = entry.setting_id
 
-			if type(setting_id) == "string" and setting_id ~= "" then
+			if entry_owned and type(setting_id) == "string" and setting_id ~= "" then
 				if active_ids[setting_id] then
-					duplicate_ids[#duplicate_ids + 1] = setting_id
+					if not duplicate_id_set[setting_id] then
+						duplicate_id_set[setting_id] = true
+						duplicate_ids[#duplicate_ids + 1] = setting_id
+					end
 				else
 					active_ids[setting_id] = true
 					active_count = active_count + 1
@@ -177,18 +197,31 @@ local function collect_setting_entries(entries)
 				end
 			end
 
-			collect_setting_entries(entry.sub_widgets)
+			collect_setting_entries(entry.sub_widgets, category_name, entry_owned)
 		end
 	end
 end
 
-Registry.register = function(settings)
+-- The runtime reaches these entry points through the guarded capability
+-- adapter, which binds the registry table as `self`. Keep direct calls used by
+-- tooling/tests compatible as well so the registry has one safe public API.
+Registry.register = function(registry_or_settings, bound_settings, bound_category_name)
+	local called_as_method = registry_or_settings == Registry
+	local settings = registry_or_settings
+	local category_name = bound_settings
+
+	if called_as_method then
+		settings = bound_settings
+		category_name = bound_category_name
+	end
+
 	active_ids = {}
 	active_entries = {}
 	duplicate_ids = {}
+	duplicate_id_set = {}
 	metadata_issues = {}
 	active_count = 0
-	collect_setting_entries(settings)
+	collect_setting_entries(settings, category_name, false)
 
 	return #duplicate_ids == 0, active_count, duplicate_ids
 end
@@ -289,7 +322,9 @@ Registry.is_visible = function(setting_id, context)
 	return false
 end
 
-Registry.should_refresh_dependencies = function(setting_id)
+Registry.should_refresh_dependencies = function(registry_or_setting_id, bound_setting_id)
+	local setting_id = registry_or_setting_id == Registry and bound_setting_id or registry_or_setting_id
+
 	if type(setting_id) ~= "string" then
 		return false
 	end
@@ -300,13 +335,11 @@ Registry.should_refresh_dependencies = function(setting_id)
 		return true
 	end
 
-	local entry = active_entries[setting_id]
-
-	if not entry then
-		return false
-	end
-
-	if entry.refresh_domains and entry.refresh_domains.dependencies then
+	-- Refresh ownership is declarative and must not depend on the most recent
+	-- rendered UI snapshot. Optional settings extensions may clone, omit, or
+	-- rewrite templates without changing which BetterInventory settings own
+	-- dependency state.
+	if dependency_refresh_metadata[setting_id] then
 		return true
 	end
 

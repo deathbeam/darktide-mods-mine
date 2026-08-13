@@ -20,6 +20,7 @@ local ItemGridViewBase
 local ItemGridViewBaseDefinitions
 local InventoryWeaponsView
 local ViewElementGrid
+local dmf_mod
 local synchronize_myfavorites_grid = function()
 	return 0
 end
@@ -234,6 +235,11 @@ local COLOR_PRESETS = {
 		205,
 		80,
 	},
+	gold = {
+		250,
+		189,
+		73,
+	},
 	green = {
 		105,
 		210,
@@ -249,6 +255,11 @@ local COLOR_PRESETS = {
 		126,
 		103,
 	},
+	white = {
+		255,
+		255,
+		255,
+	},
 	neutral = {
 		220,
 		230,
@@ -256,6 +267,24 @@ local COLOR_PRESETS = {
 	},
 }
 local COLOR_TARGETS = {
+	{
+		prefix = "new_item_highlight_color",
+		default_preset = "green",
+		mode_default_color = function()
+			local mode = mod:get("new_item_highlight_mode")
+
+			return (mode == "animated_dashes" or mode == "pulsing_dashes" or mode == "solid_border") and COLOR_PRESETS.gold or COLOR_PRESETS.white
+		end,
+	},
+	{
+		prefix = "equipped_highlight_color",
+		default_preset = "gold",
+		mode_default_color = function()
+			local mode = mod:get("highlight_equipped_items")
+
+			return (mode == "animated_dashes" or mode == "pulsing_dashes" or mode == "solid_border") and COLOR_PRESETS.gold or COLOR_PRESETS.white
+		end,
+	},
 	{
 		prefix = "weapon_perk_text_color",
 		default_preset = "light_green",
@@ -294,6 +323,8 @@ local COLOR_TARGETS = {
 	},
 }
 local color_target_by_setting_id = {}
+local equipped_highlight_color_target
+local new_item_highlight_color_target
 local option_dependency_entries = {}
 local CHARACTER_OVERVIEW_DUMP_STAT_STYLE_SETTING_IDS = {
 	character_overview_dump_stat_horizontal_offset = true,
@@ -303,9 +334,19 @@ local CHARACTER_OVERVIEW_DUMP_STAT_STYLE_SETTING_IDS = {
 	character_overview_dump_stat_color_g = true,
 	character_overview_dump_stat_color_b = true,
 }
+local HIGHLIGHT_MODE_SETTING_IDS = {
+	highlight_equipped_items = true,
+	new_item_highlight_mode = true,
+}
 
 for i = 1, #COLOR_TARGETS do
 	local target = COLOR_TARGETS[i]
+
+	if target.prefix == "equipped_highlight_color" then
+		equipped_highlight_color_target = target
+	elseif target.prefix == "new_item_highlight_color" then
+		new_item_highlight_color_target = target
+	end
 
 	target.preset_id = target.prefix .. "_preset"
 	target.channel_ids = {
@@ -328,7 +369,7 @@ end
 
 local function apply_color_preset(target)
 	local preset_id = mod:get(target.preset_id) or target.default_preset
-	local color = COLOR_PRESETS[preset_id]
+	local color = preset_id == "mode_default" and target.mode_default_color and target.mode_default_color() or COLOR_PRESETS[preset_id]
 
 	if not color then
 		return
@@ -381,6 +422,62 @@ local function bind_live_option_dependency(setting_id, entry)
 		apply_option_enabled(entry, enabled, reason)
 
 		return original_get_function(...)
+	end
+end
+
+local function refresh_highlight_option_dependencies(entries)
+	if type(entries) ~= "table" then
+		return
+	end
+
+	local equipped_mode = mod:get("highlight_equipped_items")
+	local equipped_enabled = equipped_mode ~= "off" and equipped_mode ~= false
+	local equipped_glow_enabled = equipped_mode == "soft_glow" or equipped_mode == true
+	local equipped_dashes_enabled = equipped_mode == "animated_dashes" or equipped_mode == "pulsing_dashes"
+	local equipped_solid_enabled = equipped_mode == "solid_border"
+	local equipped_reason = mod:localize("option_requires_equipped_highlight")
+
+	set_option_enabled(entries.equipped_highlight_color_preset, equipped_enabled, equipped_reason)
+	set_option_enabled(entries.equipped_highlight_color_r, equipped_enabled, equipped_reason)
+	set_option_enabled(entries.equipped_highlight_color_g, equipped_enabled, equipped_reason)
+	set_option_enabled(entries.equipped_highlight_color_b, equipped_enabled, equipped_reason)
+	set_option_enabled(entries.equipped_highlight_glow_intensity, equipped_glow_enabled, mod:localize("option_requires_equipped_highlight_soft_glow"))
+	set_option_enabled(entries.equipped_highlight_animated_border_width, equipped_dashes_enabled, mod:localize("option_requires_equipped_highlight_animated_dashes"))
+	set_option_enabled(entries.equipped_highlight_solid_border_width, equipped_solid_enabled, mod:localize("option_requires_equipped_highlight_solid_border"))
+
+	local new_item_mode = mod:get("new_item_highlight_mode")
+	local new_item_enhanced = new_item_mode ~= "native"
+	local new_item_glow_enabled = new_item_mode == "soft_glow"
+	local new_item_dashes_enabled = new_item_mode == "animated_dashes" or new_item_mode == "pulsing_dashes"
+	local new_item_solid_enabled = new_item_mode == "solid_border"
+	local new_item_reason = mod:localize("option_requires_new_item_enhanced_highlight")
+
+	set_option_enabled(entries.new_item_highlight_color_preset, new_item_enhanced, new_item_reason)
+	set_option_enabled(entries.new_item_highlight_color_r, new_item_enhanced, new_item_reason)
+	set_option_enabled(entries.new_item_highlight_color_g, new_item_enhanced, new_item_reason)
+	set_option_enabled(entries.new_item_highlight_color_b, new_item_enhanced, new_item_reason)
+	set_option_enabled(entries.new_item_highlight_glow_intensity, new_item_glow_enabled, mod:localize("option_requires_new_item_soft_glow"))
+	set_option_enabled(entries.new_item_highlight_animated_border_width, new_item_dashes_enabled, mod:localize("option_requires_new_item_animated_dashes"))
+	set_option_enabled(entries.new_item_highlight_solid_border_width, new_item_solid_enabled, mod:localize("option_requires_new_item_solid_border"))
+end
+
+local function bind_highlight_mode_dependency_refresh(setting_id, entry, entries)
+	if not HIGHLIGHT_MODE_SETTING_IDS[setting_id] or type(entry.on_activated) ~= "function" then
+		return
+	end
+
+	local original_on_activated = entry._better_inventory_original_on_activated or entry.on_activated
+
+	entry._better_inventory_original_on_activated = original_on_activated
+	entry.on_activated = function(...)
+		local result = original_on_activated(...)
+
+		-- DMF saves the dropdown value synchronously in the original callback.
+		-- Refresh this exact generated options tree once after the save so an
+		-- older live view is not coupled to a later cached tree.
+		refresh_highlight_option_dependencies(entries)
+
+		return result
 	end
 end
 
@@ -466,7 +563,6 @@ local function refresh_option_dependencies()
 	local weapon_modifier_lowest_color_reason = grid_enabled and quick_look_card_grid_reason or quick_look_card_single_column_reason
 	local quick_look_card_above_power = quick_look_card_grid_enabled and mod:get("quick_look_card_grid_stat_position") ~= "name_left" and mod:get("quick_look_card_grid_stat_position") ~= "name_right"
 	local quick_look_card_bottom_padding_reason = quick_look_card_grid_enabled and mod:localize("option_requires_quick_look_card_above_power") or quick_look_card_grid_reason
-
 	set_option_enabled(option_dependency_entries.expand_curio_inventory_window, window_expansion_enabled, expansion_reason)
 	set_option_enabled(option_dependency_entries.weapon_extra_width_column_threshold, window_expansion_enabled, expansion_reason)
 	set_option_enabled(option_dependency_entries.five_column_weapon_extra_width, weapon_extra_width_enabled, weapon_extra_width_reason)
@@ -518,6 +614,7 @@ local function refresh_option_dependencies()
 	set_option_enabled(option_dependency_entries.weapon_perk_text_color_b, weapon_perks_enabled, mod:localize("option_requires_weapon_perks"))
 	set_option_enabled(option_dependency_entries.weapon_perk_text_opacity, weapon_perks_enabled, mod:localize("option_requires_weapon_perks"))
 	set_option_enabled(option_dependency_entries.weapon_perk_vertical_spacing, weapon_perks_enabled, mod:localize("option_requires_weapon_perks"))
+	refresh_highlight_option_dependencies(option_dependency_entries)
 	set_option_enabled(option_dependency_entries.blessing_text_item_level_separation, weapon_blessing_text_enabled, mod:localize("option_requires_weapon_blessing_text"))
 	set_option_enabled(option_dependency_entries.auto_fit_long_blessing_names, weapon_blessing_text_enabled, mod:localize("option_requires_weapon_blessing_text"))
 	set_option_enabled(option_dependency_entries.truncate_long_blessing_names, weapon_blessing_text_enabled, mod:localize("option_requires_weapon_blessing_text"))
@@ -684,7 +781,30 @@ local function bind_option_dependencies(options_templates)
 		return
 	end
 
-	local registry_status, registry_valid, _, duplicate_ids = Capabilities.mutation(SettingsRegistry, "register", settings)
+	local category_name = mod:get_readable_name()
+	local canonical_settings
+
+	-- `options_templates.settings` is a shared rendered tree that optional DMF
+	-- extensions may rewrite or clone. Alf 1.2.02 resolves missing IDs from
+	-- non-unique localized labels, so repeated labels such as Highlight mode or
+	-- Image X offset can legitimately appear there with the same resolved ID.
+	-- Validate DMF's per-mod initialized schema instead; it retains the canonical
+	-- IDs produced directly from BetterInventory_data.lua.
+	for _, mod_widgets in ipairs(dmf_mod.options_widgets_data or {}) do
+		local header = type(mod_widgets) == "table" and mod_widgets[1]
+
+		if type(header) == "table" and header.mod_name == "BetterInventory" then
+			canonical_settings = mod_widgets
+
+			break
+		end
+	end
+
+	local registry_status, registry_valid, _, duplicate_ids = "unavailable", true, nil, nil
+
+	if canonical_settings then
+		registry_status, registry_valid, _, duplicate_ids = Capabilities.mutation(SettingsRegistry, "register", canonical_settings)
+	end
 
 	if registry_status == "ok" and not registry_valid and type(duplicate_ids) == "table" then
 
@@ -693,7 +813,6 @@ local function bind_option_dependencies(options_templates)
 		end
 	end
 
-	local category_name = mod:get_readable_name()
 	local setting_by_title = {}
 	local curio_buyer_subsection_titles = {
 		[mod:localize("automatic_curio_types_group")] = true,
@@ -760,6 +879,22 @@ local function bind_option_dependencies(options_templates)
 		"weapon_perk_text_color_b",
 		"weapon_perk_text_opacity",
 		"weapon_perk_vertical_spacing",
+		"highlight_equipped_items",
+		"equipped_highlight_color_preset",
+		"equipped_highlight_color_r",
+		"equipped_highlight_color_g",
+		"equipped_highlight_color_b",
+		"equipped_highlight_glow_intensity",
+		"equipped_highlight_animated_border_width",
+		"equipped_highlight_solid_border_width",
+		"new_item_highlight_mode",
+		"new_item_highlight_color_preset",
+		"new_item_highlight_color_r",
+		"new_item_highlight_color_g",
+		"new_item_highlight_color_b",
+		"new_item_highlight_glow_intensity",
+		"new_item_highlight_animated_border_width",
+		"new_item_highlight_solid_border_width",
 		"blessing_text_item_level_separation",
 		"auto_fit_long_blessing_names",
 		"truncate_long_blessing_names",
@@ -898,10 +1033,11 @@ local function bind_option_dependencies(options_templates)
 
 		if setting_id then
 			option_dependency_entries[setting_id] = entry
-			-- DMF caches generated option trees per view. Let each live child derive
-			-- its disabled state from saved settings while DMF polls its getter, so
-			-- neither an older nor newer tree can strand the opposite visual state.
+			-- Character Overview retains its established live getter behavior. The
+			-- two highlight dropdowns instead refresh this exact generated tree once
+			-- per activation, avoiding per-frame mode scans and allocations.
 			bind_live_option_dependency(setting_id, entry)
+			bind_highlight_mode_dependency_refresh(setting_id, entry, option_dependency_entries)
 		elseif type(entry) == "table" and entry._better_inventory_curio_character_slot_index then
 			option_dependency_entries.automatic_curio_character_entries[#option_dependency_entries.automatic_curio_character_entries + 1] = entry
 		end
@@ -1052,6 +1188,20 @@ function mod.on_enabled()
 		mod:set("_weapon_blessing_display_mode_v1_migrated", true)
 	end
 
+	-- Replace the equipped-card checkbox with a mode selector without changing
+	-- an existing user's enabled/disabled choice.
+	if not mod:get("_equipped_highlight_mode_v1_migrated") then
+		local previous_highlight = mod:get("highlight_equipped_items")
+
+		if previous_highlight == true then
+			mod:set("highlight_equipped_items", "animated_dashes")
+		elseif previous_highlight == false then
+			mod:set("highlight_equipped_items", "off")
+		end
+
+		mod:set("_equipped_highlight_mode_v1_migrated", true)
+	end
+
 	for i = 1, #COLOR_TARGETS do
 		apply_color_preset(COLOR_TARGETS[i])
 	end
@@ -1150,6 +1300,12 @@ function mod.on_setting_changed(setting_id)
 		else
 			mod:set(color_change.target.preset_id, "custom", false)
 		end
+	end
+
+	if setting_id == "highlight_equipped_items" and equipped_highlight_color_target and mod:get(equipped_highlight_color_target.preset_id) == "mode_default" then
+		apply_color_preset(equipped_highlight_color_target)
+	elseif setting_id == "new_item_highlight_mode" and new_item_highlight_color_target and mod:get(new_item_highlight_color_target.preset_id) == "mode_default" then
+		apply_color_preset(new_item_highlight_color_target)
 	end
 
 	local should_refresh_dependencies = Capabilities.registry_refresh_required(SettingsRegistry, "should_refresh_dependencies", setting_id)
@@ -1281,7 +1437,7 @@ function mod.on_disabled()
 	release_transient_item_caches()
 end
 
-local dmf_mod = get_mod("DMF")
+dmf_mod = get_mod("DMF")
 
 if dmf_mod and type(dmf_mod.create_mod_options_settings) == "function" then
 	mod:hook_safe(dmf_mod, "create_mod_options_settings", function(_, options_templates)
