@@ -872,24 +872,26 @@ end
 local EQUIPPED_HIGHLIGHT_STYLE_PREFIX = "better_inventory_equipped_highlight"
 local PULSING_DASH_ANGULAR_SPEED = math.pi * 0.5
 local PULSING_DASH_MIN_ALPHA = math.floor(255 * 0.15 + 0.5)
-local cached_pulsing_dash_time
-local cached_pulsing_dash_alpha = PULSING_DASH_MIN_ALPHA
 
 -- One complete 15% -> 100% -> 15% opacity cycle every four seconds. Darktide uses
--- this same global clock pattern for its native new-item marker, so no timer or
--- mutable animation state is retained by a card or view. A bounded two-scalar
--- module cache avoids repeating cosine work for every visible layer in a frame.
-local function update_pulsing_dash_alpha(_, style)
-	local time = Application.time_since_launch()
+-- this same global clock pattern for its native new-item marker. Store the bounded
+-- two-scalar cache on DMF's persistent mod object so card callbacks created before
+-- Ctrl+Shift+R and the newly loaded updater always share the same animation state.
+local function update_highlight_animation(mod)
+	local application = Application
+	local time_since_launch = application and application.time_since_launch
+	local time = type(time_since_launch) == "function" and time_since_launch()
 
-	if time ~= cached_pulsing_dash_time then
+	if type(mod) == "table" and type(time) == "number" and time ~= mod._better_inventory_pulsing_dash_time then
 		local pulse = (1 - math.cos(time * PULSING_DASH_ANGULAR_SPEED)) * 0.5
 
-		cached_pulsing_dash_time = time
-		cached_pulsing_dash_alpha = math.floor(PULSING_DASH_MIN_ALPHA + (255 - PULSING_DASH_MIN_ALPHA) * pulse + 0.5)
+		mod._better_inventory_pulsing_dash_time = time
+		mod._better_inventory_pulsing_dash_alpha = math.floor(PULSING_DASH_MIN_ALPHA + (255 - PULSING_DASH_MIN_ALPHA) * pulse + 0.5)
 	end
+end
 
-	style.color[1] = cached_pulsing_dash_alpha
+local function apply_pulsing_dash_alpha(mod, style)
+	style.color[1] = mod._better_inventory_pulsing_dash_alpha or PULSING_DASH_MIN_ALPHA
 end
 
 local function clear_equipped_highlight_passes(pass_template)
@@ -962,6 +964,13 @@ local function configure_equipped_highlight(mod, pass_template, card_width, card
 	local function equipped_visible(content)
 		return content and content.equipped == true
 	end
+	local pulsing_change_function
+
+	if mode == "pulsing_dashes" then
+		pulsing_change_function = function(_, style)
+			apply_pulsing_dash_alpha(mod, style)
+		end
+	end
 
 	for layer = 1, pass_count do
 		local size_addition = base_size_addition + (layer - 1) * layer_size_step
@@ -995,12 +1004,12 @@ local function configure_equipped_highlight(mod, pass_template, card_width, card
 				},
 			},
 			visibility_function = equipped_visible,
-			change_function = mode == "pulsing_dashes" and update_pulsing_dash_alpha or nil,
+			change_function = pulsing_change_function,
 		}
 	end
 
-	-- Static modes have no change callback. The pulsing mode reads only
-	-- Darktide's global clock and mutates the pass alpha in place.
+	-- Static modes have no change callback. The pulsing callback only applies
+	-- the alpha calculated once by the mod-owned frame update.
 end
 
 local NATIVE_NEW_ITEM_INDICATOR = "content/ui/materials/symbols/new_item_indicator"
@@ -1072,8 +1081,11 @@ local function configure_new_item_highlight(mod, pass_template, card_width, card
 	end
 
 	local function pulse_and_acknowledge_new_item(content, style)
-		update_pulsing_dash_alpha(content, style)
+		apply_pulsing_dash_alpha(mod, style)
 		acknowledge_new_item(content)
+	end
+	local function pulse_new_item(_, style)
+		apply_pulsing_dash_alpha(mod, style)
 	end
 
 	clear_new_item_highlight_passes(pass_template)
@@ -1143,7 +1155,7 @@ local function configure_new_item_highlight(mod, pass_template, card_width, card
 		local change_function
 
 		if mode == "pulsing_dashes" then
-			change_function = layer == 1 and pulse_and_acknowledge_new_item or update_pulsing_dash_alpha
+			change_function = layer == 1 and pulse_and_acknowledge_new_item or pulse_new_item
 		elseif layer == 1 then
 			change_function = acknowledge_new_item
 		end
@@ -1836,5 +1848,6 @@ Cards.configure_new_item_highlight = configure_new_item_highlight
 Cards.add_custom_content_passes = add_custom_content_passes
 Cards.grid_weapon_name_font_size = grid_weapon_name_font_size
 Cards.configure_card_content = configure_card_content
+Cards.update_highlight_animation = update_highlight_animation
 
 return Cards
