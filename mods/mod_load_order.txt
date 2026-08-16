@@ -57,6 +57,7 @@ RecolorBossHealthBars
 crosshair_remap
 ChatBlock
 MechanicusPowerSwordEnhanced
+Muzzle
 
 -- In Game overlays and stuff
 LetThereBeLight
