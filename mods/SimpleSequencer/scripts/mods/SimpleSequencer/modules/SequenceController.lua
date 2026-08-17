@@ -749,36 +749,36 @@ function SequenceController:handle_input(input)
 
     local current_action, start_t, action_settings = WeaponContext.action(context)
     local preserve_primary_hold = action_settings and action_settings.kind == 'vent_overheat'
+
+    -- Physical block held on a melee weapon: primary input feeds the manual block/push
+    -- flow, not the sequence. Otherwise a push follow-up consumes the first melee step.
+    local manual_push_input = context.kind == 'MELEE' and input.secondary_held
     local previous_primary_active = self.activation.primary
     local released_primary = false
 
     if action_name == 'action_one_hold' then
         self.activation.primary = preserve_primary_hold and not input.primary_held and previous_primary_active
-            or input.primary_held
+            or input.primary_held and not manual_push_input
         released_primary = previous_primary_active and not self.activation.primary
-    elseif input.primary_pressed then
-        local manual_push = context.kind == 'MELEE' and input.secondary_held
+    elseif input.primary_pressed and not manual_push_input then
+        if not previous_primary_active then
+            local goal = self:_goal()
+            local program = ActionSemantics.program_after(goal, 0)
+            local first_input = program and program[1]
+            local can_restart = current_action ~= 'idle'
+                and first_input
+                and WeaponContext.can_chain(action_settings, start_t, first_input, context)
 
-        if not manual_push then
-            if not previous_primary_active then
-                local goal = self:_goal()
-                local program = ActionSemantics.program_after(goal, 0)
-                local first_input = program and program[1]
-                local can_restart = current_action ~= 'idle'
-                    and first_input
-                    and WeaponContext.can_chain(action_settings, start_t, first_input, context)
-
-                if can_restart then
-                    self.sequence.program = {
-                        kind = 'chain',
-                        token = _action_token(current_action, start_t),
-                        inputs = program,
-                    }
-                end
+            if can_restart then
+                self.sequence.program = {
+                    kind = 'chain',
+                    token = _action_token(current_action, start_t),
+                    inputs = program,
+                }
             end
-
-            self.activation.primary = true
         end
+
+        self.activation.primary = true
     end
 
     if released_primary then

@@ -58,6 +58,8 @@ crosshair_remap
 ChatBlock
 MechanicusPowerSwordEnhanced
 Muzzle
+vaxis_physics_mod
+SuperImpact
 
 -- In Game overlays and stuff
 LetThereBeLight
