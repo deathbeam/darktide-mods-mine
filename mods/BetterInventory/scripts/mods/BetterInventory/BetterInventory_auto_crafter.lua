@@ -18,8 +18,11 @@ local hud_revision = 0
 local presentation_dirty = true
 local presentation_elapsed = 0
 local presentation_snapshot
+local completion_presentation_elapsed = 0
+local completion_presentation_key
 local controller_faulted = false
 local PRESENTATION_CLOCK_INTERVAL = 0.25
+local HudPolicy
 
 local function publish_hud_lines(lines)
 	lines = type(lines) == "table" and lines or {}
@@ -286,6 +289,12 @@ local function rebuild_hud_lines(snapshot)
 	local phase3 = snapshot and snapshot.phase3
 	local phase4 = snapshot and snapshot.phase4
 	local last_error = snapshot and snapshot.last_error
+	local completion_key = HudPolicy and HudPolicy.completion_key(snapshot) or nil
+
+	if completion_key ~= completion_presentation_key then
+		completion_presentation_key = completion_key
+		completion_presentation_elapsed = 0
+	end
 
 	if last_error then
 		lines[#lines + 1] = "AUTO CRAFTER FAILED: " .. tostring(last_error)
@@ -308,32 +317,34 @@ local function rebuild_hud_lines(snapshot)
 
 	if phase4 and phase4.running then
 		local item = phase4.current_item or {}
-		if phase4.consecrate and (tonumber(item.rarity) or 0) < 5 then
+		local status = HudPolicy and HudPolicy.phase4_status(snapshot)
+		if status == "final_reconcile" then
+			lines[#lines + 1] = "Verifying final crafted weapon"
+		elseif status == "switch_mark" then
+			lines[#lines + 1] = "Applying selected weapon mark"
+		elseif status == "consecrate" then
 			lines[#lines + 1] = "Consecrating weapon to Transcendent"
 		end
-		if phase4.expertise and (tonumber(item.expertise_level) or 0) < 500 then
+		if status == "expertise" then
 			lines[#lines + 1] = string.format("Upgrading weapon level to 500 (%s/500)", tostring(item.expertise_level or "?"))
 		end
 		local points_spent = tonumber(phase4.blessing_points_spent)
 		local points_total = tonumber(phase4.blessing_points_total)
 		local allocating_points = phase4.allocate_mastery and (points_total == nil or points_spent == nil or points_spent < points_total)
 
-		if allocating_points then
+		if status == "allocate_mastery" and allocating_points then
 			lines[#lines + 1] = points_spent and points_total and points_total > 0 and string.format("Allocating mastery blessing points (%d/%d)", points_spent, points_total) or "Allocating mastery blessing points"
-		elseif phase4.targets and (next(phase4.targets.perks or {}) ~= nil or next(phase4.targets.traits or {}) ~= nil) then
+		elseif status == "traits" then
 			lines[#lines + 1] = "Applying selected perks and blessings"
 		end
 	elseif phase4 and phase4.elapsed_seconds ~= nil then
-		local now = monotonic_now()
-		local recently_completed = not phase4.completed_at or not now or now - phase4.completed_at <= 12
-
-		if recently_completed then
+		if not HudPolicy or HudPolicy.completion_visible(snapshot, completion_presentation_elapsed) then
 			lines[#lines + 1] = "Crafting complete in " .. format_elapsed(phase4.elapsed_seconds)
 			lines[#lines + 1] = format_resource_costs(phase4.resource_costs or snapshot and snapshot.resource_costs)
 		end
 	end
 
-	local run_active = search and search.running or phase3 and phase3.running or phase4 and phase4.running or snapshot and snapshot.mastery and snapshot.mastery.running
+	local run_active = HudPolicy and HudPolicy.run_active(snapshot) or search and search.running or phase3 and phase3.running or phase4 and phase4.running or snapshot and snapshot.mastery and snapshot.mastery.running
 
 	if run_active then
 		lines[#lines + 1] = "Step: " .. tostring(snapshot and snapshot.phase or "unknown")
@@ -578,6 +589,13 @@ function AutoCrafter.configure(dependencies)
 	end
 
 	local ok_controller, Controller = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/core/controller")
+	local ok_hud_policy, loaded_hud_policy = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/core/hud_policy")
+	local ok_candidate_policy, CandidatePolicy = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/core/candidate_policy")
+	local ok_mastery_policy, MasteryPolicy = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/core/mastery_policy")
+	local ok_phase3_workflow, Phase3Workflow = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/core/phase3_workflow")
+	local ok_phase4_workflow, Phase4Workflow = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/core/phase4_workflow")
+	local ok_inventory_workflow, InventoryWorkflow = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/core/inventory_workflow")
+	local ok_imported_queue_workflow, ImportedQueueWorkflow = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/core/imported_queue_workflow")
 	local ok_planner, Planner = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/core/planner")
 	local ok_backend, Backend = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/darktide/backend")
 	local ok_context, Context = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/darktide/context")
@@ -592,11 +610,34 @@ function AutoCrafter.configure(dependencies)
 	local ok_games_lantern_transport_wine, GamesLanternTransportWine = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/games_lantern/transport_wine")
 	local ok_games_lantern_import, GamesLanternImport = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/games_lantern/import_controller")
 	local ok_panel, Panel = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/darktide/panel")
+	local ok_panel_blueprints, PanelBlueprints = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/darktide/panel_blueprints")
 	local ok_viewport_layout, ViewportLayout = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/auto_crafter/darktide/viewport_layout")
 	local ok_layout_content, LayoutContent = pcall(mod.io_dofile, mod, "BetterInventory/scripts/mods/BetterInventory/BetterInventory_layout_content")
 
 	if not ok_controller or type(Controller) ~= "table" or type(Controller.new) ~= "function" then
 		log("error", "Auto Crafter Helper controller unavailable; feature disabled.")
+
+		return false
+	end
+	if not ok_hud_policy or type(loaded_hud_policy) ~= "table" or type(loaded_hud_policy.presentation_needs_update) ~= "function" then
+		log("error", "Auto Crafter Helper HUD state policy unavailable; feature disabled.")
+
+		return false
+	end
+	HudPolicy = loaded_hud_policy
+
+	local controller_modules = {
+		candidate_policy = ok_candidate_policy and CandidatePolicy or nil,
+		imported_queue_workflow = ok_imported_queue_workflow and ImportedQueueWorkflow or nil,
+		inventory_workflow = ok_inventory_workflow and InventoryWorkflow or nil,
+		mastery_policy = ok_mastery_policy and MasteryPolicy or nil,
+		phase3_workflow = ok_phase3_workflow and Phase3Workflow or nil,
+		phase4_workflow = ok_phase4_workflow and Phase4Workflow or nil,
+	}
+	local controller_config_ok, controller_configured, controller_config_error = pcall(Controller.configure, controller_modules)
+
+	if not controller_config_ok or controller_configured ~= true then
+		log("error", "Auto Crafter Helper core modules unavailable; feature disabled: " .. tostring(controller_config_error or controller_configured))
 
 		return false
 	end
@@ -636,6 +677,14 @@ function AutoCrafter.configure(dependencies)
 	if not ok_panel or type(Panel) ~= "table" or type(Panel.new) ~= "function" then
 		log("error", "Auto Crafter Helper diagnostic panel unavailable; continuing without UI.")
 		Panel = nil
+	end
+	if Panel then
+		local panel_config_ok, panel_configured, panel_config_error = pcall(Panel.configure, ok_panel_blueprints and PanelBlueprints or nil)
+
+		if not panel_config_ok or panel_configured ~= true then
+			log("error", "Auto Crafter Helper panel blueprints unavailable; continuing without UI: " .. tostring(panel_config_error or panel_configured))
+			Panel = nil
+		end
 	end
 
 	if not ok_viewport_layout or type(ViewportLayout) ~= "table" or type(ViewportLayout.panel_pivot) ~= "function" then
@@ -1020,6 +1069,7 @@ function AutoCrafter.configure(dependencies)
 	end
 
 	panel = Panel and Panel.new({
+		blueprints = PanelBlueprints,
 		ViewElementGrid = dependencies.ViewElementGrid,
 		viewport_layout = ViewportLayout,
 		compact_perk_label = function(entry, label)
@@ -1174,9 +1224,11 @@ function AutoCrafter.configure(dependencies)
 		},
 	}) or nil
 
-	controller = Controller.new({
+	local controller_error
+	controller, controller_error = Controller.new({
 		account_operation = dependencies.account_operation,
 		backend = backend,
+		modules = controller_modules,
 		planner = Planner,
 		context = context,
 		get_selected_offer = dependencies.get_selected_offer,
@@ -1188,10 +1240,18 @@ function AutoCrafter.configure(dependencies)
 		settings = settings_adapter(),
 		clock = clock_adapter(),
 	})
+	if not controller then
+		panel = nil
+		log("error", "Auto Crafter Helper controller could not be composed; feature disabled: " .. tostring(controller_error))
+
+		return false
+	end
 	controller_faulted = false
 	presentation_dirty = true
 	presentation_elapsed = 0
 	presentation_snapshot = nil
+	completion_presentation_elapsed = 0
+	completion_presentation_key = nil
 
 	return true
 end
@@ -1359,10 +1419,12 @@ function AutoCrafter.update(dt)
 			end
 		end
 
-		presentation_elapsed = presentation_elapsed + math.max(tonumber(dt) or 0, 0)
+		local update_dt = math.max(tonumber(dt) or 0, 0)
+		presentation_elapsed = presentation_elapsed + update_dt
 		local cached = presentation_snapshot
-		local run_active = cached and (cached.search and cached.search.running or cached.phase3 and cached.phase3.running or cached.phase4 and cached.phase4.running or cached.mastery and cached.mastery.running)
-		local completion_visible = cached and not cached.last_error and cached.phase4 and not cached.phase4.running and cached.phase4.elapsed_seconds ~= nil and #hud_lines > 0
+		completion_presentation_elapsed = HudPolicy and HudPolicy.advance_completion_elapsed(cached, #hud_lines, completion_presentation_elapsed, update_dt) or completion_presentation_elapsed
+		local run_active = HudPolicy and HudPolicy.run_active(cached) or cached and (cached.search and cached.search.running or cached.phase3 and cached.phase3.running or cached.phase4 and cached.phase4.running or cached.mastery and cached.mastery.running)
+		local completion_visible = HudPolicy and HudPolicy.completion_pending(cached, #hud_lines) or cached and not cached.last_error and cached.phase4 and not cached.phase4.running and cached.phase4.elapsed_seconds ~= nil and #hud_lines > 0
 		local clock_due = presentation_elapsed >= PRESENTATION_CLOCK_INTERVAL and (run_active or completion_visible)
 
 		if presentation_dirty or cached == nil or clock_due then
@@ -1431,8 +1493,9 @@ function AutoCrafter.needs_update()
 	local queue_state = games_lantern_queue and games_lantern_queue:state()
 	local queue_needs_update = queue_state == "starting" or queue_state == "selecting" or queue_state == "preflighting" or queue_state == "dispatching" or queue_state == "running" or queue_state == "waiting_next" or queue_state == "stopping" or queue_state == "quarantined" or queue_state == "reconciliation_required"
 	local controller_needs_update = controller and type(controller.needs_update) == "function" and controller:needs_update() or controller and controller:is_busy() or false
+	local presentation_needs_update = controller ~= nil and (HudPolicy and HudPolicy.presentation_needs_update(presentation_snapshot, #hud_lines, presentation_dirty) or presentation_dirty == true)
 
-	return active_brunt_view ~= nil or import_needs_update or queue_needs_update or controller_needs_update
+	return active_brunt_view ~= nil or import_needs_update or queue_needs_update or controller_needs_update or presentation_needs_update
 end
 
 function AutoCrafter.interrupt_for_external_mutation(kind)
@@ -1457,6 +1520,8 @@ function AutoCrafter.shutdown()
 	presentation_dirty = true
 	presentation_elapsed = 0
 	presentation_snapshot = nil
+	completion_presentation_elapsed = 0
+	completion_presentation_key = nil
 	if games_lantern_selection then
 		pcall(games_lantern_selection.abandon, games_lantern_selection)
 	end
