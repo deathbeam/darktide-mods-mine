@@ -46,3 +46,7 @@ state_your_name 1068 1.3
 vfx_swapper 678 1.2.2
 pointer 767 1.4.3
 dmf 8 26.06.24
+
+BetterBots 745 1.2.3
+Pilgrimage 1167 1.3
+ChaosWastesAtHome 1163 0.3.2
