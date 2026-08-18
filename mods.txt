@@ -32,7 +32,6 @@ guarantee_ability_activation 336 1.4.1
 guarantee_special_action 351 1.1.13
 guarantee_weapon_swap 331 1.4.4
 ImprovedMeatGrinder 1013 1.6.0
-IconBrowser 820 1.0.3
 LetThereBeLight 1099 1.1.4
 LessDoT 521 1.0.3
 LoadoutPreviews 1038 1.5.5
@@ -47,5 +46,3 @@ state_your_name 1068 1.3
 vfx_swapper 678 1.2.2
 pointer 767 1.4.3
 dmf 8 26.06.24
-vaxis_physics_mod 1195 1
-SuperImpact 319 V1.1
