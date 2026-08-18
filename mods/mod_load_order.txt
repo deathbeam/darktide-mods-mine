@@ -4,6 +4,11 @@
 Alfs_DMF_Extensions
 SMOG
 
+-- Game modes
+BetterBots
+-- Pilgrimage
+ChaosWastesAtHome
+
 -- Simple mods
 SimpleSequencer
 SimpleActivate
