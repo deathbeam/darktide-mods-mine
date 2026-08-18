@@ -1,4 +1,4 @@
-local MOD_VERSION = "2.4.0"
+local MOD_VERSION = "2.7.0"
 local mod = get_mod("BetterInventory")
 local DEFAULT_OPERATIVE_SLOT_CAPACITY = 10
 local MAX_REASONABLE_OPERATIVE_SLOT_CAPACITY = 64
@@ -500,6 +500,38 @@ return {
 						default_value = true,
 					},
 					{
+						setting_id = "quick_discard_protect_health_roll_curios",
+						tooltip = "quick_discard_protect_health_roll_curios_tooltip",
+						type = "checkbox",
+						default_value = false,
+					},
+					{
+						setting_id = "quick_discard_curio_health_roll",
+						tooltip = "quick_discard_curio_health_roll_tooltip",
+						type = "numeric",
+						default_value = 21,
+						range = {
+							0,
+							21,
+						},
+					},
+					{
+						setting_id = "quick_discard_protect_toughness_roll_curios",
+						tooltip = "quick_discard_protect_toughness_roll_curios_tooltip",
+						type = "checkbox",
+						default_value = false,
+					},
+					{
+						setting_id = "quick_discard_curio_toughness_roll",
+						tooltip = "quick_discard_curio_toughness_roll_tooltip",
+						type = "numeric",
+						default_value = 17,
+						range = {
+							0,
+							17,
+						},
+					},
+					{
 						setting_id = "quick_discard_protect_high_level_curios",
 						tooltip = "quick_discard_protect_high_level_curios_tooltip",
 						type = "checkbox",
@@ -584,6 +616,12 @@ return {
 							{
 								setting_id = "automatic_curio_rescan_on_store_refresh",
 								tooltip = "automatic_curio_rescan_on_store_refresh_tooltip",
+								type = "checkbox",
+								default_value = false,
+							},
+							{
+								setting_id = "automatic_curio_favorite_purchased_curios",
+								tooltip = "automatic_curio_favorite_purchased_curios_tooltip",
 								type = "checkbox",
 								default_value = false,
 							},
@@ -796,6 +834,16 @@ return {
 						},
 					},
 					{
+						setting_id = "auto_crafter_dump_stat_comparison",
+						tooltip = "auto_crafter_dump_stat_comparison_tooltip",
+						type = "dropdown",
+						default_value = "exact",
+						options = {
+							{ text = "auto_crafter_dump_stat_comparison_exact", value = "exact" },
+							{ text = "auto_crafter_dump_stat_comparison_at_most", value = "at_most" },
+						},
+					},
+					{
 						setting_id = "auto_crafter_custom_stats",
 						tooltip = "auto_crafter_custom_stats_tooltip",
 						type = "checkbox",
@@ -899,7 +947,30 @@ return {
 						type = "group",
 						sub_widgets = {
 							{ setting_id = "auto_crafter_favorite_result", tooltip = "auto_crafter_favorite_result_tooltip", type = "checkbox", default_value = true },
-							{ setting_id = "auto_crafter_buy_until_target", tooltip = "auto_crafter_buy_until_target_tooltip", type = "checkbox", default_value = true },
+							{
+								setting_id = "auto_crafter_myfavorites_color",
+								tooltip = "auto_crafter_myfavorites_color_tooltip",
+								type = "dropdown",
+								default_value = 1,
+								options = {
+									{ text = "auto_crafter_myfavorites_color_1", value = 1 },
+									{ text = "auto_crafter_myfavorites_color_2", value = 2 },
+									{ text = "auto_crafter_myfavorites_color_3", value = 3 },
+									{ text = "auto_crafter_myfavorites_color_4", value = 4 },
+									{ text = "auto_crafter_myfavorites_color_5", value = 5 },
+								},
+							},
+							{
+								setting_id = "auto_crafter_buy_until_target",
+								tooltip = "auto_crafter_buy_until_target_tooltip",
+								type = "dropdown",
+								default_value = "target_search",
+								options = {
+									{ text = "auto_crafter_acquisition_disabled", value = "disabled" },
+									{ text = "auto_crafter_acquisition_first_weapon", value = "first_weapon" },
+									{ text = "auto_crafter_acquisition_target_search", value = "target_search" },
+								},
+							},
 							{ setting_id = "auto_crafter_defer_bad_weapon_processing", tooltip = "auto_crafter_defer_bad_weapon_processing_tooltip", type = "checkbox", default_value = true },
 							{ setting_id = "auto_crafter_level_mastery_20", tooltip = "auto_crafter_level_mastery_20_tooltip", type = "checkbox", default_value = true },
 							{ setting_id = "auto_crafter_allocate_mastery_points", tooltip = "auto_crafter_allocate_mastery_points_tooltip", type = "checkbox", default_value = true },
@@ -955,6 +1026,12 @@ return {
 						type = "group",
 						sub_widgets = {
 							{
+								setting_id = "armoury_auto_favorite_purchased_items",
+								tooltip = "armoury_auto_favorite_purchased_items_tooltip",
+								type = "checkbox",
+								default_value = false,
+							},
+							{
 								setting_id = "enable_armoury_requisition_grid",
 								tooltip = "enable_armoury_requisition_grid_tooltip",
 								type = "checkbox",
@@ -1004,10 +1081,28 @@ return {
 									230,
 								},
 							},
-									},
-								},
-								{
-									setting_id = "global_store_integration_group",
+						},
+					},
+					{
+						setting_id = "melk_views_group",
+						type = "group",
+						sub_widgets = {
+							{
+								setting_id = "melk_auto_favorite_purchased_items",
+								tooltip = "melk_auto_favorite_purchased_items_tooltip",
+								type = "checkbox",
+								default_value = false,
+							},
+							{
+								setting_id = "melk_mystery_auto_favorite_purchased_items",
+								tooltip = "melk_mystery_auto_favorite_purchased_items_tooltip",
+								type = "checkbox",
+								default_value = false,
+							},
+						},
+					},
+					{
+						setting_id = "global_store_integration_group",
 						type = "group",
 						sub_widgets = {
 							{
@@ -2329,10 +2424,31 @@ return {
 						type = "checkbox",
 						default_value = false,
 					},
+					{
+						setting_id = "curio_secondary_color_mode",
+						tooltip = "curio_secondary_color_mode_tooltip",
+						type = "dropdown",
+						default_value = "category",
+						options = {
+							{
+								text = "curio_secondary_color_mode_category",
+								value = "category",
+							},
+							{
+								text = "curio_secondary_color_mode_single",
+								value = "single",
+							},
+						},
+					},
 					color_group("curio_health_color_group", "curio_health_color", "red", 235, 85, 85),
 					color_group("curio_toughness_color_group", "curio_toughness_color", "light_blue", 105, 200, 235),
 					color_group("curio_wound_color_group", "curio_wound_color", "purple", 190, 105, 230),
 					color_group("curio_stamina_color_group", "curio_stamina_color", "yellow", 235, 205, 80),
+					color_group("curio_enemy_resistance_color_group", "curio_enemy_resistance_color", "pink", 255, 94, 132),
+					color_group("curio_corruption_resistance_color_group", "curio_corruption_resistance_color", "purple", 190, 105, 230),
+					color_group("curio_ability_regeneration_color_group", "curio_ability_regeneration_color", "green", 105, 210, 120),
+					color_group("curio_mission_rewards_color_group", "curio_mission_rewards_color", "custom", 250, 189, 142),
+					color_group("curio_revive_speed_color_group", "curio_revive_speed_color", "neutral", 220, 230, 210),
 					color_group("curio_secondary_text_color_group", "curio_secondary_text_color", "neutral", 220, 230, 210),
 				},
 			},
@@ -2356,6 +2472,16 @@ return {
 							{ text = "debug_weapon_options_button_count_5", value = 5 },
 							{ text = "debug_weapon_options_button_count_10", value = 10 },
 							{ text = "debug_weapon_options_button_count_20", value = 20 },
+						},
+					},
+					{
+						setting_id = "debug_weapon_kill_counter_kills",
+						tooltip = "debug_weapon_kill_counter_kills_tooltip",
+						type = "dropdown",
+						default_value = 0,
+						options = {
+							{ text = "debug_weapon_kill_counter_kills_off", value = 0 },
+							{ text = "debug_weapon_kill_counter_kills_1000", value = 1000 },
 						},
 					},
 					{

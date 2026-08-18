@@ -2,6 +2,7 @@ local Text = require("scripts/utilities/ui/text")
 local Items = require("scripts/utilities/items")
 local MasterItems = require("scripts/backend/master_items")
 local LayoutContent = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_layout_content")
+local WeaponKillCounter = get_mod("BetterInventory"):io_dofile("BetterInventory/scripts/mods/BetterInventory/BetterInventory_wkc_integration")
 
 local Cards = {}
 local content = LayoutContent
@@ -30,6 +31,7 @@ local item_from_content = content.item_from_content
 local is_curio = content.is_curio
 local is_weapon = content.is_weapon
 local curio_primary_color = content.curio_primary_color
+local curio_secondary_color = content.curio_secondary_color
 local compact_curio_description = content.compact_curio_description
 local configured_text_color = content.configured_text_color
 local single_line_text = content.single_line_text
@@ -390,6 +392,7 @@ local function populate_card_content(mod, widget, element, blessing_display_mode
 	for i = 1, 4 do
 		content["better_inventory_curio_stat_" .. i] = ""
 		content["better_inventory_full_curio_stat_" .. i] = nil
+		content["better_inventory_curio_stat_color_" .. i] = nil
 	end
 
 	for i = 1, 5 do
@@ -397,7 +400,6 @@ local function populate_card_content(mod, widget, element, blessing_display_mode
 		content[WEAPON_MODIFIER_VALUE_PREFIX .. i] = ""
 	end
 
-	content.better_inventory_curio_primary_color = nil
 	content.better_inventory_quick_look_card_dump_stat_visibility_resolved = nil
 	content.better_inventory_quick_look_card_dump_stat_parenthesized = nil
 
@@ -479,7 +481,7 @@ local function populate_card_content(mod, widget, element, blessing_display_mode
 		local primary_description = simplified_curio_description(primary_data, simplify_curio_stats)
 
 		content.better_inventory_curio_stat_1 = leading_plus_sign_description(primary_description, remove_plus_sign)
-		content.better_inventory_curio_primary_color = curio_primary_color(mod, primary_data.id)
+		content.better_inventory_curio_stat_color_1 = curio_primary_color(mod, primary_data.id)
 	end
 
 	local perks = item.perks
@@ -492,6 +494,7 @@ local function populate_card_content(mod, widget, element, blessing_display_mode
 			perk_description = simplified_curio_description(perk_data, simplify_curio_stats, perk_description)
 
 			content["better_inventory_curio_stat_" .. (i + 1)] = leading_plus_sign_description(perk_description, remove_plus_sign)
+			content["better_inventory_curio_stat_color_" .. (i + 1)] = curio_secondary_color(mod, perk_data.id)
 		end
 	end
 end
@@ -678,6 +681,8 @@ end
 
 local function add_curio_stat_pass(pass_template, index, options)
 	local content_id = "better_inventory_curio_stat_" .. index
+	local color_id = "better_inventory_curio_stat_color_" .. index
+	local fallback_color = index == 1 and DEFAULT_CURIO_PRIMARY_COLOR or DEFAULT_CURIO_SECONDARY_COLOR
 	local style = table.clone(options.base_style or {})
 
 	style.font_size = options.font_size
@@ -700,8 +705,8 @@ local function add_curio_stat_pass(pass_template, index, options)
 		visibility_function = function(content)
 			return content and content[content_id] ~= nil and content[content_id] ~= ""
 		end,
-		change_function = index == 1 and function(content, style)
-			local color = content and content.better_inventory_curio_primary_color or DEFAULT_CURIO_PRIMARY_COLOR
+		change_function = function(content, style)
+			local color = content and content[color_id] or fallback_color
 			local text_color = style.text_color
 
 			if text_color[1] ~= color[1] or text_color[2] ~= color[2] or text_color[3] ~= color[3] or text_color[4] ~= color[4] then
@@ -709,7 +714,7 @@ local function add_curio_stat_pass(pass_template, index, options)
 					text_color[channel] = color[channel]
 				end
 			end
-		end or nil,
+		end,
 	}
 end
 
@@ -1194,7 +1199,7 @@ local function configure_new_item_highlight(mod, pass_template, card_width, card
 	end
 end
 
-local function add_custom_content_passes(mod, pass_template, card_width, text_left, base_text_style, configuration)
+local function add_custom_content_passes(mod, pass_template, card_width, text_left, base_text_style, configuration, columns)
 	configuration = configuration or {}
 
 	local blessing_display_mode = weapon_blessing_display_mode(mod)
@@ -1435,6 +1440,8 @@ local function add_custom_content_passes(mod, pass_template, card_width, text_le
 			},
 		})
 	end
+
+	WeaponKillCounter.configure_passes(mod, pass_template, card_width, text_left, configuration, columns)
 end
 
 
@@ -1836,6 +1843,10 @@ local function configure_card_content(mod, item_blueprint, configuration)
 end
 
 Cards.configure_native_quick_look_card_passes = configure_native_quick_look_card_passes
+Cards.weapon_kill_counter_card_height_padding = WeaponKillCounter.compact_card_height_padding
+Cards.remove_weapon_stats_wkc_listing_overlays = WeaponKillCounter.remove_weapon_stats_listing_overlays
+Cards.cap_brunt_wkc_listing_overlay_sizes = WeaponKillCounter.cap_brunt_listing_overlay_sizes
+Cards.install_brunt_wkc_listing_hook = WeaponKillCounter.install_brunt_listing_hook
 Cards.disable_quick_look_card_passes = disable_quick_look_card_passes
 Cards.preserve_visibility = preserve_visibility
 Cards.set_visibility = set_visibility

@@ -4,7 +4,7 @@ local item_customization_provider
 
 local Items = require("scripts/utilities/items")
 local RankSettings = require("scripts/settings/item/rank_settings")
-local WeaponStats = require("scripts/utilities/weapon_stats")
+local WeaponTemplate = require("scripts/utilities/weapon/weapon_template")
 
 local BLESSING_MATERIAL = "content/ui/materials/icons/traits/traits_container"
 local DEFAULT_PERK_RANK_MATERIAL = "content/ui/materials/icons/perks/perk_level_01"
@@ -50,6 +50,8 @@ local MINIMUM_AUTO_FIT_BLESSING_FONT_SIZE = 8
 local QUICK_LOOK_CARD_DUMP_STAT_ID = "better_inventory_quick_look_card_dump_stat"
 local WEAPON_MODIFIER_TITLE_PREFIX = "better_inventory_weapon_modifier_title_"
 local WEAPON_MODIFIER_VALUE_PREFIX = "better_inventory_weapon_modifier_value_"
+local MAX_WEAPON_MODIFIER_COUNT = 5
+local MAX_WEAPON_MODIFIER_SOURCE_INDEX = 32
 
 local function global_store_character_photo_percent(mod)
 	local value = tonumber(mod:get("global_store_character_photo_size_percent")) or GLOBAL_STORE_CHARACTER_PHOTO_DEFAULT_PERCENT
@@ -195,6 +197,70 @@ local CURIO_PRIMARY_COLOR_DEFINITIONS = {
 			205,
 			80,
 		},
+	},
+}
+local CURIO_SECONDARY_COLOR_DEFINITIONS = {}
+
+local function register_curio_secondary_color(ids, prefix, default)
+	local definition = {
+		prefix = prefix,
+		default = default,
+	}
+
+	for i = 1, #ids do
+		CURIO_SECONDARY_COLOR_DEFINITIONS[ids[i]] = definition
+	end
+end
+
+register_curio_secondary_color({
+	"gadget_health_increase",
+	"gadget_innate_health_increase",
+}, "curio_health_color", { 235, 85, 85 })
+register_curio_secondary_color({
+	"gadget_toughness_increase",
+	"gadget_innate_toughness_increase",
+	"gadget_toughness_regen_delay",
+}, "curio_toughness_color", { 105, 200, 235 })
+register_curio_secondary_color({
+	"gadget_innate_max_wounds_increase",
+}, "curio_wound_color", { 190, 105, 230 })
+register_curio_secondary_color({
+	"gadget_stamina_increase",
+	"gadget_stamina_regeneration",
+	"gadget_sprint_cost_reduction",
+	"gadget_block_cost_reduction",
+}, "curio_stamina_color", { 235, 205, 80 })
+register_curio_secondary_color({
+	"gadget_damage_reduction_vs_flamers",
+	"gadget_damage_reduction_vs_snipers",
+	"gadget_damage_reduction_vs_grenadiers",
+	"gadget_damage_reduction_vs_hounds",
+	"gadget_damage_reduction_vs_mutants",
+	"gadget_damage_reduction_vs_gunners",
+	"gadget_damage_reduction_vs_bombers",
+}, "curio_enemy_resistance_color", { 255, 94, 132 })
+register_curio_secondary_color({
+	"gadget_corruption_resistance",
+	"gadget_permanent_damage_resistance",
+}, "curio_corruption_resistance_color", { 190, 105, 230 })
+register_curio_secondary_color({
+	"gadget_cooldown_reduction",
+}, "curio_ability_regeneration_color", { 105, 210, 120 })
+register_curio_secondary_color({
+	"gadget_mission_xp_increase",
+	"gadget_mission_credits_increase",
+	"gadget_mission_reward_gear_instead_of_weapon_increase",
+}, "curio_mission_rewards_color", { 250, 189, 142 })
+register_curio_secondary_color({
+	"gadget_revive_speed_increase",
+}, "curio_revive_speed_color", { 220, 230, 210 })
+
+local CURIO_SECONDARY_FALLBACK_COLOR_DEFINITION = {
+	prefix = "curio_secondary_text_color",
+	default = {
+		220,
+		230,
+		210,
 	},
 }
 local COMPACT_CURIO_LABELS = {
@@ -683,6 +749,34 @@ local function item_from_content(content)
 	return content and item_from_element(content.element)
 end
 
+local function is_compound_shield_weapon(item)
+	if type(item) ~= "table" then
+		return false
+	end
+
+	local gear = item.gear
+	local master_data = type(gear) == "table" and gear.masterDataInstance
+	local weapon_template = item.weapon_template
+	local identities = {
+		type(weapon_template) == "table" and weapon_template.name or weapon_template,
+		item.name,
+		type(master_data) == "table" and master_data.id or nil,
+		type(master_data) == "table" and master_data.name or nil,
+	}
+
+	-- Current compound weapons use shield-bearing template/master-item IDs:
+	-- Ogryn slabshield, Arbites powermaul_shield, and shotpistol_shield.
+	-- Checking the bounded identity fields also fails safe for future shield
+	-- families without inspecting localized display text or modifier records.
+	for _, identity in pairs(identities) do
+		if type(identity) == "string" and string.find(string.lower(identity), "shield", 1, true) then
+			return true
+		end
+	end
+
+	return false
+end
+
 local function is_curio(item)
 	return item and item.item_type == "GADGET"
 end
@@ -703,6 +797,23 @@ local function curio_primary_color(mod, trait_id)
 	if not definition then
 		return DEFAULT_CURIO_PRIMARY_COLOR
 	end
+
+	local prefix = definition.prefix
+	local defaults = definition.default
+
+	return {
+		255,
+		clamped_color_channel(mod, prefix .. "_r", defaults[1]),
+		clamped_color_channel(mod, prefix .. "_g", defaults[2]),
+		clamped_color_channel(mod, prefix .. "_b", defaults[3]),
+	}
+end
+
+local function curio_secondary_color(mod, trait_id)
+	local category_mode = setting(mod, "curio_secondary_color_mode", "category") == "category"
+	local definition = category_mode and CURIO_SECONDARY_COLOR_DEFINITIONS[trait_id] or nil
+
+	definition = definition or CURIO_SECONDARY_FALLBACK_COLOR_DEFINITION
 
 	local prefix = definition.prefix
 	local defaults = definition.default
@@ -974,36 +1085,97 @@ local function unique_weapon_modifier_label(label, used_labels)
 	return label
 end
 
+local function direct_weapon_comparing_stats(item)
+	local item_base_stats = item and item.base_stats
+
+	if type(item_base_stats) ~= "table" or type(WeaponTemplate) ~= "table" or type(WeaponTemplate.weapon_template_from_item) ~= "function" then
+		return
+	end
+
+	local template_ok, weapon_template = pcall(WeaponTemplate.weapon_template_from_item, item)
+	local template_base_stats = template_ok and type(weapon_template) == "table" and weapon_template.base_stats
+
+	if type(template_base_stats) ~= "table" then
+		return
+	end
+
+	local values = {}
+	local seen_names = {}
+
+	for key = 1, MAX_WEAPON_MODIFIER_SOURCE_INDEX do
+		local stat = item_base_stats[key]
+		local stat_name = type(stat) == "table" and stat.name
+		local stat_template = type(stat_name) == "string" and template_base_stats[stat_name]
+		local display_name = type(stat_template) == "table" and stat_template.display_name
+		local fraction = type(stat) == "table" and tonumber(stat.value)
+
+		if type(display_name) == "string" and display_name ~= "" and not seen_names[stat_name] and fraction then
+			seen_names[stat_name] = true
+			values[#values + 1] = {
+				current = fraction,
+				description = stat_template.description,
+				display_name = display_name,
+				fraction = fraction,
+				max = 1,
+				min = 0,
+				name = stat_name,
+				type = #values + 1,
+			}
+
+			if #values >= MAX_WEAPON_MODIFIER_COUNT then
+				break
+			end
+		end
+	end
+
+	return #values > 0 and values or nil
+end
+
+local function cache_projected_weapon_modifier_records(item, current_expertise, maximum_expertise, records, failed)
+	local cached_records = records or false
+
+	QUICK_LOOK_CARD_PROJECTED_VALUES_CACHE[item] = {
+		current_expertise = current_expertise,
+		failed = failed == true,
+		maximum_expertise = maximum_expertise,
+		records = cached_records,
+	}
+
+	return cached_records
+end
+
 local function projected_weapon_modifier_records(mod, item)
 	if type(Items.preview_stats_change) ~= "function" or type(Items.max_expertise_level) ~= "function" or type(Items.expertise_level) ~= "function" then
 		return
 	end
 
-	local current_expertise = Items.expertise_level(item, true)
-	local maximum_expertise = tonumber(Items.max_expertise_level())
+	local cached = QUICK_LOOK_CARD_PROJECTED_VALUES_CACHE[item]
 
-	current_expertise = tonumber(current_expertise)
-
-	if not current_expertise or not maximum_expertise then
-		return
+	-- A malformed or newly introduced weapon record must not be retried from a
+	-- visibility callback every draw. View teardown/settings refresh clears this
+	-- weak cache, so a transient backend replacement can still recover later.
+	if cached and cached.failed then
+		return cached.records
 	end
 
-	local cached = QUICK_LOOK_CARD_PROJECTED_VALUES_CACHE[item]
+	local current_ok, current_expertise = pcall(Items.expertise_level, item, true)
+	local maximum_ok, maximum_expertise = pcall(Items.max_expertise_level)
+
+	current_expertise = current_ok and tonumber(current_expertise) or nil
+	maximum_expertise = maximum_ok and tonumber(maximum_expertise) or nil
+
+	if not current_expertise or not maximum_expertise then
+		return cache_projected_weapon_modifier_records(item, current_expertise, maximum_expertise, nil, true)
+	end
 
 	if cached and cached.current_expertise == current_expertise and cached.maximum_expertise == maximum_expertise then
 		return cached.records
 	end
 
-	local stats_ok, weapon_stats = pcall(WeaponStats.new, WeaponStats, item)
+	local comparing_stats = direct_weapon_comparing_stats(item)
 
-	if not stats_ok or type(weapon_stats) ~= "table" or type(weapon_stats.get_comparing_stats) ~= "function" then
-		return
-	end
-
-	local comparing_ok, comparing_stats = pcall(weapon_stats.get_comparing_stats, weapon_stats)
-
-	if not comparing_ok or type(comparing_stats) ~= "table" or #comparing_stats < 1 then
-		return
+	if type(comparing_stats) ~= "table" or #comparing_stats < 1 then
+		return cache_projected_weapon_modifier_records(item, current_expertise, maximum_expertise, nil, true)
 	end
 
 	comparing_stats = table.clone(comparing_stats)
@@ -1011,7 +1183,7 @@ local function projected_weapon_modifier_records(mod, item)
 	local preview_ok, projected_stats = pcall(Items.preview_stats_change, item, math.max(0, maximum_expertise - current_expertise), comparing_stats)
 
 	if not preview_ok or type(projected_stats) ~= "table" then
-		return
+		return cache_projected_weapon_modifier_records(item, current_expertise, maximum_expertise, nil, true)
 	end
 
 	local projected_records = {}
@@ -1029,7 +1201,7 @@ local function projected_weapon_modifier_records(mod, item)
 		end
 
 		if not value or not target_index then
-			return
+			return cache_projected_weapon_modifier_records(item, current_expertise, maximum_expertise, nil, true)
 		end
 
 		local display_name = type(comparing_stat.display_name) == "string" and comparing_stat.display_name or type(comparing_stat.name) == "string" and comparing_stat.name or "stat_" .. index
@@ -1042,13 +1214,7 @@ local function projected_weapon_modifier_records(mod, item)
 		}
 	end
 
-	QUICK_LOOK_CARD_PROJECTED_VALUES_CACHE[item] = {
-		current_expertise = current_expertise,
-		maximum_expertise = maximum_expertise,
-		records = projected_records,
-	}
-
-	return projected_records
+	return cache_projected_weapon_modifier_records(item, current_expertise, maximum_expertise, projected_records)
 end
 
 local function populate_weapon_modifier_content(mod, content, item)
@@ -1603,9 +1769,15 @@ local function add_quick_look_card_grid_pass(mod, pass_template, card_width, tex
 		-- projection and label assembly are item-data work, so resolve them once
 		-- and invalidate only when the widget is rebound by populate_card_content.
 		if content.better_inventory_quick_look_card_dump_stat_visibility_resolved ~= true or content.better_inventory_quick_look_card_dump_stat_parenthesized ~= parenthesized then
-			content[QUICK_LOOK_CARD_DUMP_STAT_ID] = quick_look_card_lowest_stat_text(mod, content, parenthesized) or ""
+			local resolved, label = pcall(quick_look_card_lowest_stat_text, mod, content, parenthesized)
+
+			content[QUICK_LOOK_CARD_DUMP_STAT_ID] = resolved and label or ""
 			content.better_inventory_quick_look_card_dump_stat_visibility_resolved = true
 			content.better_inventory_quick_look_card_dump_stat_parenthesized = parenthesized
+
+			if not resolved and mod and type(mod.warning) == "function" then
+				pcall(mod.warning, mod, "Weapon modifier preview skipped after a card compatibility error: %s", tostring(label))
+			end
 		end
 
 		return content[QUICK_LOOK_CARD_DUMP_STAT_ID] ~= ""
@@ -1686,10 +1858,12 @@ Content.blessing_rank_name = blessing_rank_name
 Content.weapon_perk_rank_icon_size = weapon_perk_rank_icon_size
 Content.item_from_element = item_from_element
 Content.item_from_content = item_from_content
+Content.is_compound_shield_weapon = is_compound_shield_weapon
 Content.is_curio = is_curio
 Content.is_weapon = is_weapon
 Content.clamped_color_channel = clamped_color_channel
 Content.curio_primary_color = curio_primary_color
+Content.curio_secondary_color = curio_secondary_color
 Content.compact_curio_description = compact_curio_description
 Content.configured_text_color = configured_text_color
 Content.single_line_text = single_line_text
@@ -1705,6 +1879,7 @@ Content.fallback_weapon_modifier_label = fallback_weapon_modifier_label
 Content.compact_weapon_modifier_label = compact_weapon_modifier_label
 Content.localized_weapon_modifier_label = localized_weapon_modifier_label
 Content.unique_weapon_modifier_label = unique_weapon_modifier_label
+Content.direct_weapon_comparing_stats = direct_weapon_comparing_stats
 Content.projected_weapon_modifier_records = projected_weapon_modifier_records
 Content.populate_weapon_modifier_content = populate_weapon_modifier_content
 Content.quick_look_card_lowest_stat_text = quick_look_card_lowest_stat_text

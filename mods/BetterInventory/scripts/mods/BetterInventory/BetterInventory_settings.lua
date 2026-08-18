@@ -57,6 +57,8 @@ local DEPENDENCY_REFRESH_SETTING_IDS = {
 	"keep_lantern_curio_panel_separate",
 	"enable_experimental_quick_discard",
 	"quick_discard_mode",
+	"quick_discard_protect_health_roll_curios",
+	"quick_discard_protect_toughness_roll_curios",
 	"quick_discard_protect_high_level_curios",
 	"enable_automatic_curio_acquisition",
 	"enable_quick_look_card_single_column_integration",
@@ -72,6 +74,7 @@ local DEPENDENCY_REFRESH_SETTING_IDS = {
 	"auto_crafter_change_perks",
 	"auto_crafter_change_blessings",
 	"auto_crafter_show_status_hud",
+	"auto_crafter_favorite_result",
 }
 
 local dependency_refresh_metadata = {}
@@ -99,7 +102,45 @@ local MIGRATION_KEYS = {
 	custom_item_name_keybind = "_custom_item_name_keybind_v2_migrated",
 	weapon_blessing_display_mode = "_weapon_blessing_display_mode_v1_migrated",
 	highlight_equipped_items = "_equipped_highlight_mode_v1_migrated",
+	curio_enemy_resistance_color_preset = "_curio_secondary_palette_v4_migrated",
+	curio_corruption_resistance_color_preset = "_curio_secondary_palette_v4_migrated",
+	curio_mission_rewards_color_preset = "_curio_secondary_palette_v4_migrated",
+	curio_revive_speed_color_preset = "_curio_secondary_palette_v4_migrated",
 }
+
+local CURIO_PALETTE_V4_MIGRATIONS = {
+	{ "curio_enemy_resistance_color", "orange", 235, 155, 60, "pink", 255, 94, 132 },
+	{ "curio_corruption_resistance_color", "pink", 255, 94, 132, "purple", 190, 105, 230 },
+	{ "curio_mission_rewards_color", "gold", 250, 189, 73, "custom", 250, 189, 142 },
+	{ "curio_revive_speed_color", "sky_blue", 144, 213, 255, "neutral", 220, 230, 210 },
+}
+
+function Registry.migrate_curio_palette(mod)
+	if mod:get("_curio_secondary_palette_v4_migrated") == true then
+		return
+	end
+
+	local channels = { "_r", "_g", "_b" }
+
+	for _, migration in ipairs(CURIO_PALETTE_V4_MIGRATIONS) do
+		local prefix = migration[1]
+		local unchanged = mod:get(prefix .. "_preset") == migration[2]
+
+		for index = 1, 3 do
+			unchanged = unchanged and tonumber(mod:get(prefix .. channels[index])) == migration[index + 2]
+		end
+
+		if unchanged then
+			mod:set(prefix .. "_preset", migration[6], false)
+
+			for index = 1, 3 do
+				mod:set(prefix .. channels[index], migration[index + 6], false)
+			end
+		end
+	end
+
+	mod:set("_curio_secondary_palette_v4_migrated", true, false)
+end
 
 local function setting_owner(setting_id)
 	local owners = {
@@ -108,6 +149,8 @@ local function setting_owner(setting_id)
 		"character_overview_", "character_overview",
 		"global_store_", "global_store",
 		"armoury_", "armoury",
+		"melk_", "melk",
+		"auto_crafter_", "auto_crafter",
 		"custom_item_", "customization",
 		"weapon_", "weapons",
 		"blessing_", "weapons",

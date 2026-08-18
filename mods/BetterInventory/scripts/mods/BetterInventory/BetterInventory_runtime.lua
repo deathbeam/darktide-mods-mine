@@ -12,6 +12,7 @@ local AutoCrafter
 local Capabilities
 local CharacterOverviewUI
 local FeatureDomains
+local FavoriteIntegration
 local CraftingMechanicusModifyView
 local CreditsVendorView
 local MainMenuView
@@ -31,6 +32,13 @@ local synchronize_myfavorites_grid = function()
 	return 0
 end
 local CreditsGoodsVendorView = require("scripts/ui/views/credits_goods_vendor_view/credits_goods_vendor_view")
+local function optional_require(path)
+	local success, module = pcall(require, path)
+
+	return success and module or nil
+end
+local MarksVendorView = optional_require("scripts/ui/views/marks_vendor_view/marks_vendor_view")
+local MarksGoodsVendorView = optional_require("scripts/ui/views/marks_goods_vendor_view/marks_goods_vendor_view")
 
 local function configure_dependencies(dependencies)
 	mod = dependencies.mod
@@ -54,6 +62,7 @@ local function configure_dependencies(dependencies)
 	Capabilities = dependencies.Capabilities
 	CharacterOverviewUI = dependencies.CharacterOverviewUI
 	FeatureDomains = dependencies.FeatureDomains
+	FavoriteIntegration = dependencies.FavoriteIntegration
 	CraftingMechanicusModifyView = dependencies.CraftingMechanicusModifyView
 	CreditsVendorView = dependencies.CreditsVendorView
 	MainMenuView = dependencies.MainMenuView
@@ -80,6 +89,19 @@ end
 function Runtime.install()
 	if Layout and Layout.ImageLayout and type(Layout.ImageLayout.initialize_settings) == "function" then
 		Layout.ImageLayout.initialize_settings(mod)
+	end
+	if Layout and type(Layout.install_brunt_wkc_listing_hook) == "function" then
+		Layout.install_brunt_wkc_listing_hook(mod)
+	end
+
+	if FavoriteIntegration and type(FavoriteIntegration.install_manual_purchase_hooks) == "function" then
+		FavoriteIntegration.install_manual_purchase_hooks(mod, {
+			-- CreditsGoodsVendorView is Brunt's Armoury and is intentionally excluded.
+			-- Auto Crafter owns any favorite applied to its final accepted weapon.
+			armoury = CreditsVendorView,
+			melk_limited = MarksVendorView,
+			melk_mystery = MarksGoodsVendorView,
+		})
 	end
 
 	local unpack_values = table.unpack or unpack
@@ -182,9 +204,6 @@ local function align_quick_level_mastery_buttons(view)
 	view:_set_scenegraph_position("purchase_button", position[1] + delta, position[2], position[3])
 end
 
--- Darktide class tables can contain the exact same inherited function object.
--- Give each target class its own forwarder before DMF hooks it, preventing
--- duplicate-hook detection and keeping every view in the normal hook chain.
 local function ensure_class_method(class, method)
 	if type(class) ~= "table" then
 		return false
@@ -317,27 +336,17 @@ local COLOR_TARGETS = {
 		prefix = "character_overview_dump_stat_color",
 		default_preset = "pink",
 	},
-	{
-		prefix = "curio_secondary_text_color",
-		default_preset = "neutral",
-	},
-	{
-		prefix = "curio_health_color",
-		default_preset = "red",
-	},
-	{
-		prefix = "curio_toughness_color",
-		default_preset = "light_blue",
-	},
-	{
-		prefix = "curio_wound_color",
-		default_preset = "purple",
-	},
-	{
-		prefix = "curio_stamina_color",
-		default_preset = "yellow",
-	},
 }
+
+for prefix, preset in pairs({
+	curio_secondary_text_color="neutral",curio_health_color="red",curio_toughness_color="light_blue",
+	curio_wound_color="purple",curio_stamina_color="yellow",curio_enemy_resistance_color="pink",
+	curio_corruption_resistance_color="purple",curio_ability_regeneration_color="green",
+	curio_mission_rewards_color="custom",curio_revive_speed_color="neutral",
+}) do
+	COLOR_TARGETS[#COLOR_TARGETS + 1] = { prefix = prefix, default_preset = preset }
+end
+
 local color_target_by_setting_id = {}
 local equipped_highlight_color_target
 local new_item_highlight_color_target
@@ -589,6 +598,8 @@ local function refresh_option_dependencies()
 	local automatic_curio_characters_reason = automatic_curio_enabled and mod:localize("option_requires_automatic_curio_characters_mode") or automatic_curio_reason
 	local lantern_installed = get_mod("Lantern of the Omnissiah") ~= nil
 	local lantern_reason = mod:localize("option_requires_lantern_of_the_omnissiah")
+	local myfavorites_available = FavoriteIntegration and type(FavoriteIntegration.is_myfavorites_available) == "function" and FavoriteIntegration.is_myfavorites_available()
+	local myfavorites_reason = mod:localize("option_requires_myfavorites")
 	local quick_look_card_grid_enabled = grid_enabled and mod:get("enable_quick_look_card_grid_integration") ~= false
 	local quick_look_card_grid_reason = grid_enabled and mod:localize("option_requires_quick_look_card_grid_integration") or native_reason
 	local quick_look_card_single_column_enabled = single_column_enabled and mod:get("enable_quick_look_card_single_column_integration") ~= false
@@ -712,6 +723,7 @@ local function refresh_option_dependencies()
 	set_option_enabled(option_dependency_entries.auto_crafter_blessing_1_target, auto_crafter_blessings_enabled, auto_crafter_mastery_enabled and mod:localize("option_requires_auto_crafter_blessing_workflow") or mastery_reason)
 	set_option_enabled(option_dependency_entries.auto_crafter_blessing_2_target, auto_crafter_blessings_enabled, auto_crafter_mastery_enabled and mod:localize("option_requires_auto_crafter_blessing_workflow") or mastery_reason)
 	set_option_enabled(option_dependency_entries.auto_crafter_show_blessing_grid, auto_crafter_blessings_enabled, auto_crafter_mastery_enabled and mod:localize("option_requires_auto_crafter_blessing_workflow") or mastery_reason)
+	set_option_enabled(option_dependency_entries.auto_crafter_myfavorites_color, myfavorites_available and mod:get("auto_crafter_favorite_result") ~= false, myfavorites_available and mod:localize("option_requires_auto_crafter_myfavorites_color") or myfavorites_reason)
 
 	for _, setting_id in ipairs({
 		"inventory_options_controller_focus_keybind",
@@ -740,6 +752,8 @@ local function refresh_option_dependencies()
 		"quick_discard_include_ranged",
 		"quick_discard_include_curios",
 		"quick_discard_protect_perfect_weapons",
+		"quick_discard_protect_health_roll_curios",
+		"quick_discard_protect_toughness_roll_curios",
 		"quick_discard_protect_high_level_curios",
 		"quick_discard_keep_health_curios",
 		"quick_discard_keep_toughness_curios",
@@ -758,13 +772,18 @@ local function refresh_option_dependencies()
 	set_option_enabled(option_dependency_entries.quick_discard_disable_no_eligible_notification, automatic_discard_enabled, automatic_discard_reason)
 
 	local curio_protection_enabled = quick_discard_enabled and mod:get("quick_discard_protect_high_level_curios") ~= false
+	local health_roll_protection_enabled = quick_discard_enabled and mod:get("quick_discard_protect_health_roll_curios") == true
+	local toughness_roll_protection_enabled = quick_discard_enabled and mod:get("quick_discard_protect_toughness_roll_curios") == true
 
 	set_option_enabled(option_dependency_entries.quick_discard_curio_protection_level, curio_protection_enabled, quick_discard_enabled and mod:localize("option_requires_curio_discard_protection") or quick_discard_reason)
+	set_option_enabled(option_dependency_entries.quick_discard_curio_health_roll, health_roll_protection_enabled, quick_discard_enabled and mod:localize("option_requires_curio_health_roll_protection") or quick_discard_reason)
+	set_option_enabled(option_dependency_entries.quick_discard_curio_toughness_roll, toughness_roll_protection_enabled, quick_discard_enabled and mod:localize("option_requires_curio_toughness_roll_protection") or quick_discard_reason)
 
 	for _, setting_id in ipairs({
 		"automatic_curio_scan_operative_selection",
 		"automatic_curio_once_per_store_rotation",
 		"automatic_curio_rescan_on_store_refresh",
+		"automatic_curio_favorite_purchased_curios",
 		"automatic_curio_min_item_level",
 		"automatic_curio_min_health",
 		"automatic_curio_min_toughness",
@@ -970,6 +989,10 @@ local function bind_option_dependencies(options_templates)
 		"quick_discard_include_ranged",
 		"quick_discard_include_curios",
 		"quick_discard_protect_perfect_weapons",
+		"quick_discard_protect_health_roll_curios",
+		"quick_discard_curio_health_roll",
+		"quick_discard_protect_toughness_roll_curios",
+		"quick_discard_curio_toughness_roll",
 		"quick_discard_protect_high_level_curios",
 		"quick_discard_curio_protection_level",
 		"quick_discard_keep_health_curios",
@@ -982,6 +1005,7 @@ local function bind_option_dependencies(options_templates)
 		"automatic_curio_scan_operative_selection",
 		"automatic_curio_once_per_store_rotation",
 		"automatic_curio_rescan_on_store_refresh",
+		"automatic_curio_favorite_purchased_curios",
 		"automatic_curio_min_item_level",
 		"automatic_curio_min_health",
 		"automatic_curio_min_toughness",
@@ -999,6 +1023,7 @@ local function bind_option_dependencies(options_templates)
 		"automatic_curio_class_adamant",
 		"automatic_curio_class_broker",
 		"automatic_curio_class_cryptic",
+		"auto_crafter_myfavorites_color",
 	}) do
 		local title = mod:localize(setting_id)
 		local existing = setting_by_title[title]
@@ -1056,13 +1081,22 @@ local function bind_option_dependencies(options_templates)
 		end
 	end
 
-	-- Keep the final DMF template and rendered-widget arrays structurally
-	-- identical. Alf's generalized tabs pair them by numeric index, so hiding
+	-- Keep DMF template and rendered-widget arrays structurally identical; hiding
 	-- mode-dependent entries through validation functions shifts every later
 	-- section. PlayerAssist uses the stable pattern too: keep entries present and
 	-- express dependencies exclusively through disabled state.
 	option_dependency_entries.automatic_curio_classes_group = class_group_entry
 	option_dependency_entries.automatic_curio_characters_group = character_group_entry
+
+	local myfavorites_color_entry = option_dependency_entries.auto_crafter_myfavorites_color
+
+	if type(myfavorites_color_entry) == "table" and type(myfavorites_color_entry.options) == "table" and FavoriteIntegration and type(FavoriteIntegration.color_preview) == "function" then
+		for index, option in ipairs(myfavorites_color_entry.options) do
+			if type(option) == "table" then
+				option.display_name = FavoriteIntegration.color_preview(mod, tonumber(option.value) or index)
+			end
+		end
+	end
 
 	refresh_option_dependencies()
 end
@@ -1093,10 +1127,6 @@ local function migrate_grid_column_settings()
 			end
 		end
 
-		-- A legacy profile has no way to express per-category values. Preserve
-		-- its old global choice only when all three new controls still have their
-		-- defaults; once any slider is customized, leave every dedicated value
-		-- untouched.
 		if not has_dedicated_customization then
 			for _, setting_id in ipairs(dedicated_setting_ids) do
 				mod:set(setting_id, legacy_columns, false)
@@ -1119,9 +1149,6 @@ function mod.on_enabled()
 		Diagnostics.configure(mod)
 	end
 
-	-- DMF requires unique setting IDs. Keep Curio content's mirror row aligned
-	-- with the established Name It setting, which remains authoritative across
-	-- upgrades and preserves the user's existing choice.
 	local name_it_curio_name_value = mod:get("name_it_force_curio_name_in_detailed_mode")
 
 	if name_it_curio_name_value == nil then
@@ -1132,9 +1159,6 @@ function mod.on_enabled()
 		mod:set("curio_content_name_it_curio_name", name_it_curio_name_value, false)
 	end
 
-	-- DMF preserves saved values when a default changes. Apply the new compact
-	-- card defaults once for installs that already initialized the old values;
-	-- all three settings remain freely configurable afterward.
 	if not mod:get("_compact_card_defaults_v1_migrated") then
 		mod:set("append_mark_to_name", true)
 		mod:set("show_pattern_mark", false)
@@ -1144,8 +1168,18 @@ function mod.on_enabled()
 
 	migrate_grid_column_settings()
 
-	-- Replace the unreleased Curio-name checkboxes with one mode selector while
-	-- preserving the currently enabled one-line presentation for test profiles.
+	if mod:get("_auto_crafter_acquisition_mode_v1_migrated") ~= true then
+		local legacy_acquisition = mod:get("auto_crafter_buy_until_target")
+
+		if legacy_acquisition == true then
+			mod:set("auto_crafter_buy_until_target", "target_search", false)
+		elseif legacy_acquisition == false then
+			mod:set("auto_crafter_buy_until_target", "disabled", false)
+		end
+
+		mod:set("_auto_crafter_acquisition_mode_v1_migrated", true, false)
+	end
+
 	if not mod:get("_character_overview_curio_name_mode_v1_migrated") then
 		if mod:get("character_overview_show_curio_names") == true then
 			mod:set("character_overview_curio_name_mode", "one_line")
@@ -1166,8 +1200,6 @@ function mod.on_enabled()
 		mod:set("_curio_compression_mode_v1_migrated", true)
 	end
 
-	-- Heavy Compression supersedes Compression as the default. Preserve an
-	-- explicit No compression choice while upgrading the former default once.
 	if not mod:get("_curio_heavy_default_v1_migrated") then
 		local compression_mode = mod:get("curio_stat_compression")
 
@@ -1178,8 +1210,6 @@ function mod.on_enabled()
 		mod:set("_curio_heavy_default_v1_migrated", true)
 	end
 
-	-- Move only the former defaults so deliberately customized icon sizes stay
-	-- untouched on existing installations.
 	if not mod:get("_inventory_icon_size_defaults_v2_migrated") then
 		local blessing_size = mod:get("blessing_icon_size")
 		local perk_rank_size = mod:get("weapon_perk_rank_icon_size")
@@ -1195,8 +1225,6 @@ function mod.on_enabled()
 		mod:set("_inventory_icon_size_defaults_v2_migrated", true)
 	end
 
-	-- Replace the former blessing checkbox with a configurable display mode while
-	-- preserving an explicit disabled choice from existing installations.
 	if not mod:get("_weapon_blessing_display_mode_v1_migrated") then
 		local previous_show_blessings = mod:get("show_weapon_blessings")
 
@@ -1207,8 +1235,6 @@ function mod.on_enabled()
 		mod:set("_weapon_blessing_display_mode_v1_migrated", true)
 	end
 
-	-- Replace the equipped-card checkbox with a mode selector without changing
-	-- an existing user's enabled/disabled choice.
 	if not mod:get("_equipped_highlight_mode_v1_migrated") then
 		local previous_highlight = mod:get("highlight_equipped_items")
 
@@ -1220,6 +1246,8 @@ function mod.on_enabled()
 
 		mod:set("_equipped_highlight_mode_v1_migrated", true)
 	end
+
+	if SettingsRegistry and type(SettingsRegistry.migrate_curio_palette) == "function" then SettingsRegistry.migrate_curio_palette(mod) end
 
 	for i = 1, #COLOR_TARGETS do
 		apply_color_preset(COLOR_TARGETS[i])
@@ -1474,10 +1502,28 @@ if dmf_mod and type(dmf_mod.create_mod_options_settings) == "function" then
 	end)
 end
 
+local function arm_equipped_compound_shield_guard(view, context)
+	if not Layout.equipped_compound_shield_requires_cap(mod, view, context) then
+		return false
+	end
+
+	view._better_inventory_compound_shield_column_cap = true
+
+	if type(mod.info) == "function" then
+		mod:info("Compound shield detected before inventory initialization; using the safe three-column view.")
+	end
+
+	return true
+end
+
 mod:hook(ItemGridViewBase, "init", function(func, view, definitions, settings, context)
 	active_highlight_views[view] = true
 
 	if view.__class_name == "InventoryWeaponsView" then
+		-- InventoryWeaponsView assigns its slot and loadout before this base init;
+		-- guard them before expanded definitions can observe dense geometry.
+		arm_equipped_compound_shield_guard(view, context)
+
 		local adjusted_definitions = Features.add_inventory_sort_toggle_definition(mod, Layout, definitions, view)
 		local expansion = 0
 
@@ -1814,6 +1860,10 @@ if ensure_class_method(InventoryWeaponsView, "present_grid_layout") then
 		-- including changes made by compatible sorting or information mods.
 		local configuration = table.clone(INVENTORY_GRID_CONFIGURATION)
 		configuration.slot_kind = Layout.slot_kind(view)
+		local safe_maximum_columns, compound_shield_cap = Layout.safe_inventory_maximum_columns(mod, configuration.maximum_columns, configuration.slot_kind, layout, view._better_inventory_compound_shield_column_cap)
+
+		configuration.maximum_columns = safe_maximum_columns
+		view._better_inventory_compound_shield_column_cap = compound_shield_cap or nil
 
 		return present_grid_with_configuration(func, view, layout, on_present_callback, configuration)
 	end)

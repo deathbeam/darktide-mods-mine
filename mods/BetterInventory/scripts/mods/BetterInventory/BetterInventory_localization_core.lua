@@ -32,6 +32,18 @@ local localization = {
 	debug_weapon_options_button_count_20 = {
 		en = "20 buttons",
 	},
+	debug_weapon_kill_counter_kills = {
+		en = "Weapon Kill Counter test kills",
+	},
+	debug_weapon_kill_counter_kills_tooltip = {
+		en = "Presentation-only. When Weapon Kill Counter is installed and its card overlay is enabled, shows 1,000 kills on every weapon card without changing WKC's saved statistics.",
+	},
+	debug_weapon_kill_counter_kills_off = {
+		en = "Off",
+	},
+	debug_weapon_kill_counter_kills_1000 = {
+		en = "1,000 kills",
+	},
 	debug_expand_armoury_requisition_window_30_percent = {
 		en = "Increase Armoury Exchange store width",
 	},
@@ -184,6 +196,9 @@ local localization = {
 	},
 	armoury_exchange_views_group = {
 		en = "Armoury Exchange",
+	},
+	melk_views_group = {
+		en = "Sire Melk's Requisitorium",
 	},
 	character_overview_group = {
 		en = "Character overview",
@@ -379,6 +394,24 @@ local localization = {
 	},
 	enable_armoury_requisition_grid = {
 		en = "Armoury: Requisition Weapons & Curios",
+	},
+	armoury_auto_favorite_purchased_items = {
+		en = "Automatically favorite purchased items",
+	},
+	armoury_auto_favorite_purchased_items_tooltip = {
+		en = "Favorites items after a manual Armoury Exchange purchase is confirmed. If GlobalStore is installed, this also covers Armoury Multi-Operative Supply purchases. Brunt's Armoury, Auto Crafter, and Automatic Curio Buyer purchases are excluded. Disabled by default.",
+	},
+	melk_auto_favorite_purchased_items = {
+		en = "Automatically favorite Limited Time Acquisitions",
+	},
+	melk_auto_favorite_purchased_items_tooltip = {
+		en = "Favorites items after a Limited Time Acquisitions purchase is confirmed. If GlobalStore is installed, this also covers Sire Melk Multi-Operative Supply purchases. Mystery Acquisitions are controlled separately, and Auto Crafter purchases are excluded. Disabled by default.",
+	},
+	melk_mystery_auto_favorite_purchased_items = {
+		en = "Automatically favorite Mystery Acquisitions",
+	},
+	melk_mystery_auto_favorite_purchased_items_tooltip = {
+		en = "Favorites items after a Mystery Acquisitions purchase is confirmed. Limited Time Acquisitions are controlled separately, and Auto Crafter purchases are excluded. Disabled by default.",
 	},
 	enable_armoury_requisition_grid_tooltip = {
 		en = "Uses Better Inventory cards in Requisition Weapons & Curios. The effective layout is capped at three columns; Brunt's Armoury and Multi-Operative Supply are not changed.",
@@ -1152,8 +1185,20 @@ local localization = {
 	remove_curio_stat_plus_signs_tooltip = {
 		en = "Removes the leading + sign from every stat line on BetterInventory Curio cards. Disabled by default.",
 	},
+	curio_secondary_color_mode = {
+		en = "Secondary Curio line colour mode",
+	},
+	curio_secondary_color_mode_tooltip = {
+		en = "Perk category colours (default): groups related secondary Curio perks and gives each group its own customisable colour. Single colour: uses one colour for every secondary line. Unknown future perks use the single-colour fallback.",
+	},
+	curio_secondary_color_mode_category = {
+		en = "Perk category colours",
+	},
+	curio_secondary_color_mode_single = {
+		en = "Single colour",
+	},
 	curio_secondary_text_color_group = {
-		en = "Secondary Curio line colour",
+		en = "Single-colour and unknown-perk fallback",
 	},
 	curio_secondary_text_color_preset = {
 		en = "Preset",
@@ -1168,7 +1213,7 @@ local localization = {
 		en = "Blue",
 	},
 	curio_health_color_group = {
-		en = "Max Health line colour",
+		en = "Health Curio lines colour",
 	},
 	curio_health_color_preset = {
 		en = "Preset",
@@ -1183,7 +1228,7 @@ local localization = {
 		en = "Blue",
 	},
 	curio_toughness_color_group = {
-		en = "Max Toughness line colour",
+		en = "Toughness Curio lines colour",
 	},
 	curio_toughness_color_preset = {
 		en = "Preset",
@@ -1198,7 +1243,7 @@ local localization = {
 		en = "Blue",
 	},
 	curio_wound_color_group = {
-		en = "Wound line colour",
+		en = "Wound Curio lines colour",
 	},
 	curio_wound_color_preset = {
 		en = "Preset",
@@ -1213,7 +1258,7 @@ local localization = {
 		en = "Blue",
 	},
 	curio_stamina_color_group = {
-		en = "Max Stamina line colour",
+		en = "Stamina and efficiency lines colour",
 	},
 	curio_stamina_color_preset = {
 		en = "Preset",
@@ -1225,6 +1270,81 @@ local localization = {
 		en = "Green",
 	},
 	curio_stamina_color_b = {
+		en = "Blue",
+	},
+	curio_enemy_resistance_color_group = {
+		en = "Enemy damage resistance lines colour",
+	},
+	curio_enemy_resistance_color_preset = {
+		en = "Preset",
+	},
+	curio_enemy_resistance_color_r = {
+		en = "Red",
+	},
+	curio_enemy_resistance_color_g = {
+		en = "Green",
+	},
+	curio_enemy_resistance_color_b = {
+		en = "Blue",
+	},
+	curio_corruption_resistance_color_group = {
+		en = "Corruption resistance lines colour",
+	},
+	curio_corruption_resistance_color_preset = {
+		en = "Preset",
+	},
+	curio_corruption_resistance_color_r = {
+		en = "Red",
+	},
+	curio_corruption_resistance_color_g = {
+		en = "Green",
+	},
+	curio_corruption_resistance_color_b = {
+		en = "Blue",
+	},
+	curio_ability_regeneration_color_group = {
+		en = "Ability regeneration lines colour",
+	},
+	curio_ability_regeneration_color_preset = {
+		en = "Preset",
+	},
+	curio_ability_regeneration_color_r = {
+		en = "Red",
+	},
+	curio_ability_regeneration_color_g = {
+		en = "Green",
+	},
+	curio_ability_regeneration_color_b = {
+		en = "Blue",
+	},
+	curio_mission_rewards_color_group = {
+		en = "Mission reward lines colour",
+	},
+	curio_mission_rewards_color_preset = {
+		en = "Preset",
+	},
+	curio_mission_rewards_color_r = {
+		en = "Red",
+	},
+	curio_mission_rewards_color_g = {
+		en = "Green",
+	},
+	curio_mission_rewards_color_b = {
+		en = "Blue",
+	},
+	curio_revive_speed_color_group = {
+		en = "Revive speed lines colour",
+	},
+	curio_revive_speed_color_preset = {
+		en = "Preset",
+	},
+	curio_revive_speed_color_r = {
+		en = "Red",
+	},
+	curio_revive_speed_color_g = {
+		en = "Green",
+	},
+	curio_revive_speed_color_b = {
 		en = "Blue",
 	},
 	color_preset_red = {

@@ -385,6 +385,8 @@ function Panel.new(dependencies)
 	local self = {
 		_get_selected_offer = dependencies.get_selected_offer,
 		_select_offer = dependencies.select_offer,
+		_is_myfavorites_available = dependencies.is_myfavorites_available,
+		_myfavorites_color_preview = dependencies.myfavorites_color_preview,
 		_select_manual_mark = dependencies.select_manual_mark,
 		_get_selected_manual_mark = dependencies.get_selected_manual_mark,
 		_preview_plan = dependencies.preview_plan,
@@ -499,6 +501,7 @@ function Panel.new(dependencies)
 		local entry = {
 			initial_content = {
 				checked = options.checked == true,
+				comparison_detail = options.comparison_detail or "",
 				detail = detail or "",
 				enabled = options.enabled ~= false,
 				hotspot = {
@@ -586,6 +589,16 @@ function Panel.new(dependencies)
 				end
 				if widget.content.increase_hotspot then
 					widget.content.increase_hotspot.pressed_callback = options.increase
+				end
+			end
+		end
+
+		if options.toggle_comparison then
+			local previous_bind = entry.bind
+			entry.bind = function(widget)
+				if previous_bind then previous_bind(widget) end
+				if widget.content.comparison_hotspot then
+					widget.content.comparison_hotspot.pressed_callback = options.toggle_comparison
 				end
 			end
 		end
@@ -1097,6 +1110,69 @@ function Panel.new(dependencies)
 		self:_set_setting(setting_id, values[next_index])
 	end
 
+	function self:_acquisition_mode()
+		local value = self:_setting("auto_crafter_buy_until_target", "target_search")
+
+		if value == true then return "target_search" end
+		if value == false then return "disabled" end
+		if value == "disabled" or value == "first_weapon" or value == "target_search" then return value end
+
+		return "target_search"
+	end
+
+	function self:_acquisition_mode_text()
+		local mode = self:_acquisition_mode()
+		local fallbacks = {
+			disabled = "Disabled",
+			first_weapon = "Automatically buy first weapon and proceed",
+			target_search = "Automatically buy until target stats weapon is found",
+		}
+
+		return localize("auto_crafter_acquisition_" .. mode, fallbacks[mode])
+	end
+
+	function self:_step_acquisition_mode(direction)
+		local values = { "disabled", "first_weapon", "target_search" }
+		local current = self:_acquisition_mode()
+		local current_index = 1
+
+		for index, value in ipairs(values) do
+			if value == current then current_index = index break end
+		end
+
+		return self:_set_setting("auto_crafter_buy_until_target", values[(current_index - 1 + direction) % #values + 1])
+	end
+
+	function self:_dump_comparison()
+		return self:_setting("auto_crafter_dump_stat_comparison", "exact") == "at_most" and "at_most" or "exact"
+	end
+
+	function self:_dump_comparison_text()
+		local comparison = self:_dump_comparison()
+		return localize("auto_crafter_dump_stat_comparison_" .. comparison, comparison == "at_most" and "is lower or equal to" or "exactly matches")
+	end
+
+	function self:_toggle_dump_comparison()
+		return self:_set_setting("auto_crafter_dump_stat_comparison", self:_dump_comparison() == "exact" and "at_most" or "exact")
+	end
+
+	function self:_myfavorites_available()
+		local ok, available = safe_call(self._is_myfavorites_available)
+
+		return ok and available == true
+	end
+
+	function self:_myfavorites_color_text()
+		local color_index = math.max(1, math.min(5, math.floor(tonumber(self:_setting("auto_crafter_myfavorites_color", 1)) or 1)))
+		local ok, preview = safe_call(self._myfavorites_color_preview, color_index)
+
+		if ok and type(preview) == "string" and preview ~= "" then
+			return preview
+		end
+
+		return localize("auto_crafter_myfavorites_color_" .. tostring(color_index), "Color " .. tostring(color_index)) .. "  ■"
+	end
+
 	function self:_planner_target_text()
 		local _, current_weapon = self:_selected_offers(self._snapshot)
 
@@ -1546,7 +1622,7 @@ function Panel.new(dependencies)
 				end,
 			}),
 			self:_entry(localize("auto_crafter_panel_active_queue", "Active Queue"), imported and imported.state or queue and queue.state or "manual", {
-				selectable = false,
+				selectable = true,
 				section_header = true,
 				section_id = SECTION_QUEUE,
 				variant = "section",
@@ -1771,17 +1847,25 @@ function Panel.new(dependencies)
 					}))
 				end
 				table.insert(entries, self:_entry(localize("auto_crafter_panel_dump_target", "Dump target"), integer_text(self:_setting("auto_crafter_dump_stat_target", 60)), {
+					comparison_detail = self:_dump_comparison_text(),
 					enabled = not queue_owned,
 					selectable = not queue_owned,
-					variant = "stepper",
+					variant = "dump_target_stepper",
 					decrease = function()
 						self:_adjust_numeric_setting("auto_crafter_dump_stat_target", 60, 1, 100, -1)
 					end,
 					increase = function()
 						self:_adjust_numeric_setting("auto_crafter_dump_stat_target", 60, 1, 100, 1)
 					end,
+					toggle_comparison = function()
+						if not queue_owned then self:_toggle_dump_comparison() end
+					end,
 					refresh = function(widget)
 						widget.content.detail = integer_text(self:_setting("auto_crafter_dump_stat_target", 60))
+						widget.content.comparison_detail = self:_dump_comparison_text()
+						if widget.content.comparison_hotspot then widget.content.comparison_hotspot.disabled = queue_owned end
+						if widget.content.decrease_hotspot then widget.content.decrease_hotspot.disabled = queue_owned end
+						if widget.content.increase_hotspot then widget.content.increase_hotspot.disabled = queue_owned end
 					end,
 				}))
 			end
@@ -1950,8 +2034,44 @@ function Panel.new(dependencies)
 		}))
 
 		if not self._section_collapsed[SECTION_WORKFLOW] then
-			add_checkbox("auto_crafter_favorite_result", "auto_crafter_favorite_result", "Automatically favorite crafted weapon", true)
-			add_checkbox("auto_crafter_buy_until_target", "auto_crafter_buy_until_target", "Automatically buy until dump stat target weapon is found", true, nil, nil, 44)
+			add_checkbox("auto_crafter_favorite_result", "auto_crafter_favorite_result", "Automatically favorite crafted weapon", true, nil, true)
+			if self:_setting("auto_crafter_favorite_result", true) == true and self:_myfavorites_available() then
+				local color_values = { 1, 2, 3, 4, 5 }
+				local color_enabled = not queue_active
+
+				table.insert(entries, self:_entry(localize("auto_crafter_myfavorites_color", "MyFavorites color"), self:_myfavorites_color_text(), {
+					enabled = color_enabled,
+					selectable = color_enabled,
+					variant = "stepper",
+					decrease = function()
+						if not queue_active then self:_step_enum_setting("auto_crafter_myfavorites_color", color_values, 1, -1) end
+					end,
+					increase = function()
+						if not queue_active then self:_step_enum_setting("auto_crafter_myfavorites_color", color_values, 1, 1) end
+					end,
+					refresh = function(widget)
+						widget.content.detail = self:_myfavorites_color_text()
+						if widget.content.decrease_hotspot then widget.content.decrease_hotspot.disabled = queue_active end
+						if widget.content.increase_hotspot then widget.content.increase_hotspot.disabled = queue_active end
+					end,
+				}))
+			end
+			table.insert(entries, self:_entry(localize("auto_crafter_buy_until_target", "Base weapon acquisition"), self:_acquisition_mode_text(), {
+				height = 50,
+				selectable = not queue_active,
+				variant = "acquisition_stepper",
+				decrease = function()
+					if not queue_active then self:_step_acquisition_mode(-1) end
+				end,
+				increase = function()
+					if not queue_active then self:_step_acquisition_mode(1) end
+				end,
+				refresh = function(widget)
+					widget.content.detail = self:_acquisition_mode_text()
+					if widget.content.decrease_hotspot then widget.content.decrease_hotspot.disabled = queue_active end
+					if widget.content.increase_hotspot then widget.content.increase_hotspot.disabled = queue_active end
+				end,
+			}))
 			add_checkbox("auto_crafter_defer_bad_weapon_processing", "auto_crafter_defer_bad_weapon_processing", "Only process bad weapons after finding perfect-rolled weapon", true, function()
 				return self:_setting("auto_crafter_level_mastery_20", true) == true
 			end, nil, 44)

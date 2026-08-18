@@ -193,6 +193,51 @@ end
 
 Geometry.columns = content.columns
 
+Geometry.is_compound_shield_weapon = content.is_compound_shield_weapon
+
+Geometry.equipped_compound_shield_requires_cap = function(mod, view, context)
+	local selected_slot = view and view._selected_slot
+	local slot_name = selected_slot and selected_slot.name
+	local preview_items = context and context.preview_profile_equipped_items or view and view._preview_profile_equipped_items
+	local equipped_item = slot_name and preview_items and preview_items[slot_name]
+
+	equipped_item = equipped_item and (equipped_item.real_item or equipped_item.item or equipped_item)
+
+	return Geometry.columns(mod, nil, slot_name) >= 4 and content.is_compound_shield_weapon(equipped_item)
+end
+
+Geometry.layout_contains_compound_shield = function(layout)
+	if type(layout) ~= "table" then
+		return false
+	end
+
+	for _, entry in pairs(layout) do
+		if type(entry) == "table" and entry.is_external ~= true and content.is_compound_shield_weapon(content.item_from_element(entry)) then
+			return true
+		end
+	end
+
+	return false
+end
+
+Geometry.safe_inventory_maximum_columns = function(mod, maximum_columns, slot_kind, layout, guard_already_armed)
+	local requested_columns = Geometry.columns(mod, maximum_columns, slot_kind)
+
+	if requested_columns < 4 then
+		return maximum_columns, false
+	end
+
+	if guard_already_armed == true or Geometry.layout_contains_compound_shield(layout) then
+		-- The selected equipped item is consulted before ItemGridViewBase.init,
+		-- while the fetched layout supplies a second check for unequipped shields.
+		-- Capping here alone is too late for an equipped compound weapon because
+		-- Darktide constructs preview state before presenting the fetched grid.
+		return 3, true
+	end
+
+	return maximum_columns, false
+end
+
 local function weapon_extra_width_applies(mod, columns)
 	local threshold = setting(mod, "weapon_extra_width_column_threshold", "four_plus")
 
@@ -374,6 +419,12 @@ Geometry.expanded_view_definitions = function(mod, definitions, view)
 		return definitions, 0
 	end
 
+	if view and view._better_inventory_compound_shield_column_cap == true then
+		-- Keep every scenegraph node on native three-column geometry when the
+		-- equipped shield armed the guard before ItemGridViewBase.init.
+		return definitions, 0
+	end
+
 	local slot_kind = Geometry.slot_kind(view)
 	local requested_expansion = Geometry.grid_expansion(mod, current_grid_width, slot_kind)
 	local safe_expansion = maximum_safe_inventory_expansion(definitions, slot_kind)
@@ -523,7 +574,8 @@ Geometry.item_size = function(mod, grid_width, maximum_columns, configuration)
 
 	local columns = Geometry.columns(mod, maximum_columns, slot_kind)
 	local spacing = numeric_setting(mod, "grid_spacing", 10, 0, 40)
-	local height = Geometry.card_height(mod, configuration)
+	local wkc_padding = Cards.weapon_kill_counter_card_height_padding(mod, configuration, columns)
+	local height = math.min(240, Geometry.card_height(mod, configuration) + wkc_padding)
 	local width = math.floor((grid_width - spacing * (columns - 1)) / columns)
 
 	return {

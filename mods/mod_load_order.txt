@@ -65,7 +65,7 @@ LoadoutPreviews
 DumpStatFinder
 -- M:368:0.94.2
 BetterInventory
--- M:1144:2.4.0
+-- M:1144:2.7.0
 
 -- Performance
 SMOG
