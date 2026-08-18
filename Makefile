@@ -3,7 +3,7 @@
 DARKTIDE_SETTINGS_DIR ?= $(HOME)/.local/share/Steam/steamapps/common/Warhammer 40,000 DARKTIDE/bundle/application_settings
 export DARKTIDE_SETTINGS_DIR
 
-# Sync mods from Nexus Mods: download anything outdated in mods.txt.
+# Sync mods from Nexus Mods: download anything outdated in mods/mod_load_order.txt.
 sync:
 	python3 scripts/sync_mods.py
 

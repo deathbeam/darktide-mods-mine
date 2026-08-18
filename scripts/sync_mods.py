@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """Sync Darktide mods from Nexus Mods.
 
-Reads ``mods.txt`` (a lockfile of ``folder mod_id version`` lines), fetches each
-mod's current MAIN file from the Nexus Mods API, and downloads + extracts
-anything missing or out of date. Handles both ``.zip`` and ``.7z`` archives.
+Reads ``mods/mod_load_order.txt`` — the same load-order file the game reads —
+and keeps in sync every entry whose following line is ``-- M:<mod_id>[:<version>]``.
+Fetches each such mod's current MAIN file from the Nexus Mods API and downloads
++ extracts anything missing or out of date. Handles both ``.zip`` and ``.7z``.
+
+That file is the single source of truth: a live ``Folder`` with an ``-- M:``
+line below it is loaded AND synced; a commented ``-- Folder`` with an ``-- M:``
+line is synced but not loaded (e.g. ``dmf``, which mod_manager auto-inserts); a
+live entry with no ``-- M:`` line is loaded but not synced. All other ``--``
+comments (section headers, the modeline) are preserved verbatim.
 
 Usage:
     python3 scripts/sync_mods.py             # download outdated mods
@@ -35,12 +42,13 @@ USER_AGENT = "deathbeam/darktide-mods sync script"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MODS_DIR = REPO_ROOT / "mods"
-LOCKFILE = REPO_ROOT / "mods.txt"
+LOAD_ORDER = MODS_DIR / "mod_load_order.txt"
 
 # 1=MAIN, 2=UPDATED, 3=OPTIONAL, 4=OLD_VERSION, 5=MISCELLANEOUS,
 # 6=ARCHIVED, 7=REMOVED. Only the first three are live.
 DEAD_CATEGORIES = {4, 6, 7}
 VERSION_RE = re.compile(r"\bversion\s*=\s*[\"']([^\"']+)[\"']")
+META_RE = re.compile(r"^--\s*M:(\d+)(?::(.*))?$")
 USE_COLOR = sys.stderr.isatty()
 
 
@@ -103,68 +111,59 @@ class NexusAPI:
                         f.write(chunk)
 
 
-class LockEntry:
-    __slots__ = ("folder", "mod_id", "version")
+class ModEntry:
+    __slots__ = ("folder", "mod_id", "version", "active", "meta_index")
 
-    def __init__(self, folder: str, mod_id: str, version: str):
+    def __init__(self, folder: str, mod_id: str, version: str, active: bool, meta_index: int):
         self.folder = folder
         self.mod_id = mod_id
         self.version = version
+        self.active = active
+        self.meta_index = meta_index
 
 
-def read_lockfile(path: Path) -> list[LockEntry]:
-    """Parse ``mods.txt`` into ordered entries (comments/blank lines skipped)."""
+def read_load_order(path: Path) -> list[ModEntry]:
+    """Parse ``mod_load_order.txt`` into syncable entries.
+
+    An entry is a line (live ``Folder`` or commented ``-- Folder``) whose next
+    line is ``-- M:<mod_id>[:<version>]``. Live entries are loaded by the game;
+    commented ones are synced but not loaded. Everything else — section
+    comments, blank lines, the modeline, live entries without an ``-- M:`` line
+    — is left for ``write_load_order`` to preserve verbatim."""
     if not path.exists():
         return []
-    entries: list[LockEntry] = []
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split()
-        if len(parts) < 2:
-            print(f"Warning: skipping malformed lockfile line: {raw!r}", file=sys.stderr)
-            continue
-        entries.append(LockEntry(parts[0], parts[1], parts[2] if len(parts) >= 3 else ""))
+    lines = path.read_text(encoding="utf-8").splitlines()
+    entries: list[ModEntry] = []
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+        if stripped and i + 1 < len(lines):
+            m = META_RE.match(lines[i + 1].strip())
+            if m:
+                is_comment = stripped.startswith("--")
+                folder_raw = stripped[2:].strip() if is_comment else stripped
+                tokens = folder_raw.split()
+                folder = tokens[0] if tokens else ""
+                if folder:
+                    entries.append(ModEntry(folder, m.group(1), (m.group(2) or "").strip(), not is_comment, i + 1))
+                    i += 2
+                    continue
+        i += 1
     return entries
 
 
-def write_lockfile(path: Path, entries: list[LockEntry]) -> None:
-    """Rewrite ``mods.txt`` preserving comments/blank lines and entry order,
-    only touching the version column. Writes the header once on a new file."""
-    header = (
-        "# Darktide mod lockfile.\n"
-        "# Each line: <folder> <mod_id> <version>\n"
-        "#   folder  - install folder under mods/ (usually the mod name)\n"
-        "#   mod_id  - Nexus Mods mod id (the number in the mod's URL)\n"
-        "#   version - currently installed version (auto-updated by sync)\n"
-    )
-    by_key = {(e.folder, e.mod_id): e.version for e in entries}
-
+def write_load_order(path: Path, entries: list[ModEntry]) -> None:
+    """Rewrite only the ``-- M:`` line below each entry with its current
+    version. Every other line — entries, section comments, blanks, the
+    modeline, live entries without metadata — is preserved verbatim."""
     if not path.exists():
-        lines_out = [header.rstrip("\n")]
-        for e in entries:
-            lines_out.append(f"{e.folder} {e.mod_id} {e.version}".strip())
-        path.write_text("\n".join(lines_out) + "\n", encoding="utf-8")
         return
-
-    lines_out = []
-    present = set()
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        stripped = raw.strip()
-        if not stripped or stripped.startswith("#"):
-            lines_out.append(raw)
-            continue
-        parts = stripped.split()
-        if len(parts) >= 2 and (parts[0], parts[1]) in by_key:
-            present.add((parts[0], parts[1]))
-            lines_out.append(f"{parts[0]} {parts[1]} {by_key[(parts[0], parts[1])]}".strip())
-        else:
-            lines_out.append(raw)
+    lines = path.read_text(encoding="utf-8").splitlines()
     for e in entries:
-        if (e.folder, e.mod_id) not in present:
-            lines_out.append(f"{e.folder} {e.mod_id} {e.version}".strip())
-    path.write_text("\n".join(lines_out) + "\n", encoding="utf-8")
+        if e.mod_id:
+            ver = f":{e.version}" if e.version else ""
+            lines[e.meta_index] = f"-- M:{e.mod_id}{ver}"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def read_local_version(folder: str) -> str | None:
@@ -274,18 +273,16 @@ def extract_mod(archive_path: Path, folder: str) -> None:
 
 
 def cmd_sync(api: NexusAPI, args: argparse.Namespace) -> int:
-    entries = read_lockfile(LOCKFILE)
+    entries = read_load_order(LOAD_ORDER)
     log_section(f"{'Checking' if args.status else 'Syncing'} {len(entries)} mod(s)")
 
     updated: list[str] = []
     skipped: list[str] = []
     failed: list[str] = []
-    changed_entries: list[LockEntry] = []
 
-    def mark_failed(entry: LockEntry, msg: str) -> None:
+    def mark_failed(entry: ModEntry, msg: str) -> None:
         log_fail(msg)
         failed.append(entry.folder)
-        changed_entries.append(entry)
 
     for e in entries:
         effective = e.version if e.version else read_local_version(e.folder)
@@ -314,7 +311,7 @@ def cmd_sync(api: NexusAPI, args: argparse.Namespace) -> int:
         if is_current and not args.force:
             log_skip(f"{e.folder}: {cur} (up to date)")
             skipped.append(e.folder)
-            changed_entries.append(LockEntry(e.folder, e.mod_id, pub_version))
+            e.version = pub_version
             continue
 
         log_info(f"{e.folder}: {cur} -> {pub} (downloading)")
@@ -345,7 +342,7 @@ def cmd_sync(api: NexusAPI, args: argparse.Namespace) -> int:
 
         log_ok(f"{e.folder}: updated to {pub}")
         updated.append(e.folder)
-        changed_entries.append(LockEntry(e.folder, e.mod_id, pub_version))
+        e.version = pub_version
 
     if not args.status:
         log_section("Summary")
@@ -359,9 +356,10 @@ def cmd_sync(api: NexusAPI, args: argparse.Namespace) -> int:
             log_fail(f"failed {len(failed)} mod(s): {', '.join(failed)}")
 
     if not args.status:
-        write_lockfile(LOCKFILE, changed_entries)
+        write_load_order(LOAD_ORDER, entries)
 
     return 1 if failed else 0
+
 
 
 def main() -> int:

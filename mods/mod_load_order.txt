@@ -1,69 +1,119 @@
 -- vim: set filetype=lua :
 
+-- dmf
+-- M:8:26.06.24
+
 -- Base
 Alfs_DMF_Extensions
+-- M:864:1.2.02
 
 -- Game modes
 BetterBots
+-- M:745:1.2.3
 ChaosWastesAtHome
+-- M:1163:0.3.2
 
 -- Simple mods
 SimpleSequencer
+-- M:1160:0.0.12
 SimpleActivate
+-- M:1145:0.0.4
 SimpleMovement
+-- M:1146:0.0.3
 SimpleCharging
+-- M:1141:0.0.9
 
 -- Stats mods
 CharacterStats
+-- M:1093:0.2.10
 CombatStats
+-- M:661:0.5.11
 EnemyStats
+-- M:1054:0.3.3
 WeaponStats
+-- M:999:0.2.9
 
 -- Gameplay
 AutoMark
+-- M:736:2.4.0
 guarantee_weapon_swap
+-- M:331:1.4.4
 guarantee_special_action
+-- M:351:1.1.13
 guarantee_ability_activation
+-- M:336:1.4.1
 
 -- Debugging
 LocalizationExport
+-- M:975:2
 controlled_chaos
+-- M:953:1.2
 ImprovedMeatGrinder
+-- M:1013:1.6.1
 
 -- General HUD
 custom_hud
+-- M:1091:2.1.6
 Enhanced_descriptions
+-- M:210:6.0.0b
 modular_menu_buttons
+-- M:166:1.2.9
 state_your_name
+-- M:1068:1.3
 LoadoutPreviews
+-- M:1038:1.5.5
 DumpStatFinder
+-- M:368:0.94.2
 BetterInventory
+-- M:1144:2.4.0
 
 -- Performance
 SMOG
+-- M:847:3.1
 vfx_swapper
+-- M:678:1.2.3
 DisableScreenEffects
+-- M:17:26.02.08-1
 LessDoT
+-- M:521:1.0.3
 
 -- Game improvements
 ConstantFov
+-- M:91:1.9
 markers_aio
+-- M:447:2.14.2
 DynamicCrosshair
+-- M:110:1.7
 stamina_dodge_bars
+-- M:915:1.3
 BetterNameplate
+-- M:827:1.0.7
 RemoveTagSkulls
+-- M:423:1.2.1
 GetOutOfTheWay
+-- M:967:1.9
 ForTheEmperor
+-- M:135:1.6.3
 pointer
+-- M:767:1.4.3
 RecolorBossHealthBars
+-- M:314:2.4
 crosshair_remap
+-- M:253:3.10.0
 ChatBlock
+-- M:68:26.08.05
 MechanicusPowerSwordEnhanced
+-- M:1009:1.0.1
 Muzzle
+-- M:1136:1.0
 
 -- In Game overlays and stuff
 LetThereBeLight
+-- M:1099:1.2.0
 crosshair_hud
 PlayerOutlines
+-- M:734:0.0.4
 enemies_improved
+-- M:809:2.1.4
 danger_zone
+-- M:440:1.1.1

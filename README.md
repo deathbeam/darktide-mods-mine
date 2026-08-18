@@ -4,10 +4,13 @@ Mods that I use + some of my own mods
 
 ## Syncing mods
 
-Mods are tracked in [`mods.txt`](mods.txt), a lockfile with one line per mod:
+Mods are tracked in [`mods/mod_load_order.txt`](mods/mod_load_order.txt) — the
+same load-order file the game reads. Each entry is a mod folder on its own line,
+followed by a Nexus metadata comment on the next line:
 
 ```
-folder mod_id version
+FolderName
+-- M:<mod_id>[:<version>]
 ```
 
 Requires `NEXUSMODS_APIKEY` in the environment (Premium is needed for direct
@@ -22,8 +25,9 @@ make clean   # delete leftover Nexus download archives from mods/
 ```
 
 To add a new mod: find its mod_id (the number in its
-`nexusmods.com/.../mods/<id>` URL), add a line `folder mod_id` to `mods.txt`,
-then `make sync`.
+`nexusmods.com/.../mods/<id>` URL), then add it to `mods/mod_load_order.txt` —
+the folder on its own line, with a `-- M:<mod_id>` line below it — and run
+`make sync` (the version is filled in automatically).
 
 Extracted folders are normalised to `0o755`/`0o644` so they stay writable and
 re-syncable, regardless of the perms the author shipped in the archive.
