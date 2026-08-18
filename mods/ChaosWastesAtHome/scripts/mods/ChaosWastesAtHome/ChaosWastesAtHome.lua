@@ -438,7 +438,8 @@ end)
 -- The card UI is registered for every in_mission session and its package is
 -- loaded at UIManager init, so the only thing keeping it off screen here is
 -- this game-mode check. Everything below it is driven by generic events.
--- Holds the choice countdown while the world is paused.
+-- Holds the choice card's timers while the world is paused or before the
+-- card is on screen.
 --
 -- The card's timer is not gameplay time. StateGame feeds Managers.ui the raw
 -- frame dt rather than the gameplay timer -- which is exactly what makes the
@@ -447,24 +448,48 @@ end)
 -- behind it. In solo there is nothing to race: the timer exists so a
 -- four-player game is not held hostage by one person reading a card.
 --
--- Only _texts_timer is held. The original still runs, so the buff and blur
--- timers keep driving their animations; the countdown is simply put back to
--- where it was. Freezing the lot would stall the card's own presentation.
+-- Two timers are held, and only one of them is the one you can see.
 --
--- Scoped by pause.is_paused(), which is only true while an unresolved choice is
--- up, so notifications and post-choice states are untouched. With "Pause while
--- choosing" off, the stock 30-second auto-pick behaves exactly as before.
+-- _texts_timer is the number printed on the card. _buffs_timer looks like a
+-- presentation timer and is not: _update_buffs_state treats it running out as
+-- the auto-pick deadline and calls _force_choice_resolution, which picks a
+-- random card (constant_element_mission_buffs.lua:628). Holding only the
+-- visible one gave a frozen number over a countdown that was still running --
+-- the card would sit there apparently paused and then choose for you.
+--
+-- Safe to hold both because _update_timers_state runs immediately before
+-- _update_buffs_state in the same _update_view_state pass (line 441), so the
+-- restore lands before the state machine ever reads the value. _blur_timer is
+-- left alone; that one really is presentation.
+--
+-- The unresolved test is made here rather than relying on pause.is_paused()
+-- alone. That flag is recomputed once per frame from mod.update, so on the
+-- frame the player actually picks it can still read true -- and restoring
+-- _buffs_timer after _handle_choice_resolution had cleared it would leave the
+-- card unable to close.
+--
+-- With "Pause while choosing" off the pause never engages, but the timers
+-- are still held while the card is off screen; once it appears the stock
+-- 30-second auto-pick behaves exactly as before.
 mod:hook(ConstantElementMissionBuffs, "_update_timers_state", function (func, self, dt, ui_renderer)
-	local held = pause.is_paused() and self._texts_timer
+	local context = self._context
+	local unresolved = context and context.is_choice and not context.buff_chosen
+	local hold = unresolved and (pause.is_paused() or not self:should_draw())
+	local held_texts = hold and self._texts_timer
+	local held_buffs = hold and self._buffs_timer
 
 	func(self, dt, ui_renderer)
 
-	if held then
-		self._texts_timer = held
+	if held_texts then
+		self._texts_timer = held_texts
 		-- Kept in step with the current value: the pair is compared to detect
 		-- the countdown crossing a whole second, and leaving them apart would
 		-- re-fire that every frame.
-		self._previous_texts_timer = held
+		self._previous_texts_timer = held_texts
+	end
+
+	if held_buffs then
+		self._buffs_timer = held_buffs
 	end
 end)
 
