@@ -2,11 +2,9 @@
 
 -- Base
 Alfs_DMF_Extensions
-SMOG
 
 -- Game modes
 BetterBots
--- Pilgrimage
 ChaosWastesAtHome
 
 -- Simple mods
@@ -42,10 +40,10 @@ DumpStatFinder
 BetterInventory
 
 -- Performance
+SMOG
 vfx_swapper
 DisableScreenEffects
 LessDoT
-FXLimiter
 
 -- Game improvements
 ConstantFov

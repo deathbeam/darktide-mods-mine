@@ -45,7 +45,7 @@ return {
 	},	
 	replace_broker_tox_grenade = {
 		en = "Replace Chem Grenade",
-		["zh-cn"] = "替换化学手雷特效",
+		["zh-cn"] = "替换兴奋剂炸弹特效",
 	},
 	replace_fire_barrel_vfx = {
 		en = "Replace Fire Barrel",
@@ -54,6 +54,18 @@ return {
 	fire_barrel_vfx_default = {
 		en = "Default",
 		["zh-cn"] = "默认",
+	},
+	replace_smoke_grenade_vfx = {
+		en = "Replace Smoke Grenade",
+		["zh-cn"] = "替换烟雾弹特效",
+	},
+	smoke_grenade_vfx_default = {
+		en = "Default",
+		["zh-cn"] = "默认",
+	},
+	smoke_grenade_tt = {
+		en = "More will be added as good candidates are found.",
+		["zh-cn"] = "随着更多合适的特效被发现，将会添加更多选项。",
 	},
 	zealot_grenade = {
 		en = "Zealot Grenade",
@@ -115,13 +127,25 @@ return {
 		en = "Voltaic Mine",
 		["zh-cn"] = "电磁雷"
 	},
+	SMOKE = {
+		en = "Short Gray Smoke",
+		["zh-cn"] = "短灰色烟雾",
+	},
 	rotten_vfx_default = {
 		en = "Default",
 		["zh-cn"] = "默认",
 	},
+	kill_flamer_vfx = {
+		en = "Remove Flamer/Flame Staff Effects",
+		["zh-cn"] = "移除燃烧瓶/火焰杖特效",
+	},
+	kill_flamer_tt = {
+		en = "Only applies to the streaming fire effects (not enemies being on fire)",
+		["zh-cn"] = "仅对持续火焰特效生效（不包括着火的敌人）",
+	},
 	flamer_vfx_default = {
 		en = "Default",
-		["zh-cn"] = "默认",
+		["zh-cn"] = "默认（不要选会崩溃）",
 	},
 	grenade_vfx_default = {
 		en = "Default",
@@ -193,11 +217,11 @@ return {
 	},	
 	chemnade_indicators_group = {
 		en = "Chem Grenade Indicators",
-		["zh-cn"] = "化学手雷指示器",
+		["zh-cn"] = "兴奋剂炸弹指示器",
 	},
 	chemnade_circle_enabled = {
 		en = "Chem Grenade Circle",
-		["zh-cn"] = "化学手雷圆形范围指示器",
+		["zh-cn"] = "兴奋剂炸弹圆形范围指示器",
 	},
 	chemnade_circle_red = {
 		en = "Red",
@@ -249,11 +273,11 @@ return {
 	},
 	circle_count_group = {
 		en = "'Circle Only' Count",
-		["zh-cn"] = "'仅圆圈' 数量",
+		["zh-cn"] = "'仅圆形' 数量",
 	},
 	havoc_toggle_group = {
 		en = "Havoc Specific Toggles - {#color(255, 35, 5)}RESTART after changing these.",
-		["zh-cn"] = "浩劫特定切换 - {#color(255, 35, 5)}修改后需重启。",
+		["zh-cn"] = "浩劫特定切换 - {#color(255, 35, 5)}重启。",
 	},
 	havoc_tt = {
 		en = "DO NOT CHANGE THIS IN THE MIDDLE OF A MISSION. Restart required. This is done for performance reasons and also author laziness.",
@@ -261,11 +285,11 @@ return {
 	},
 	disable_toughened_skin = {
 		en = "Disable Pus-Hardened Skin",
-		["zh-cn"] = "禁用硬化皮肤特效",
+		["zh-cn"] = "脓硬化的皮肤",
 	},
 	disable_rotten_armor_stages = {
 		en = "Disable Rotten Armor Passive VFX",
-		["zh-cn"] = "禁用腐化装甲被动特效",
+		["zh-cn"] = "禁用腐化装甲 '泄漏' 特效",
 	},
 	disable_corrupted_enemies_vfx = {
 		en = "Disable Blight Spreads Passive VFX*",
@@ -289,7 +313,7 @@ return {
 	},
 	curroptor_goo = {
 		en = "Curroptor Goo",
-		["zh-cn"] = "腐化粘液",
+		["zh-cn"] = "腐化者粘液",
 	},	
 	charge_tip = {
 		en = "{#color(255, 35, 5)}EXPERIMENTAL!{#color(208, 208, 208)}\nAdds the 'lightning charge' ground effect (from Expeditions) as an additional indicator to show remaining duration of the effect.",
@@ -297,19 +321,19 @@ return {
 	},
 	staff_circle_tip = {
 		en = "{#color(255, 35, 5)}EXPERIMENTAL!{#color(208, 208, 208)}\nAdds the ground targeting indicator from Trauma Staff to show remaining duration of the effect.",
-		["zh-cn"] = "{#color(255, 35, 5)}*实验性质！{#color(208, 208, 208)}\n添加了“虚空爆破立场杖目标指示器”，作为显示效果剩余持续时间的附加指示器。",
+		["zh-cn"] = "{#color(255, 35, 5)}*实验性质！{#color(208, 208, 208)}\n添加了“震荡杖目标指示器”，作为显示效果剩余持续时间的附加指示器。",
 	},
 	toxin_death_tip = {
 		en = "Includes explosions from grenades, and certain needler alt fire modes.",
-		["zh-cn"] = "包括来自手榴弹和某些针刺手枪附属射击模式的爆炸。",
+		["zh-cn"] = "包括来自手榴弹和某些针刺器替代射击模式的爆炸。",
 	},
 	rampaging_tip = {
 		en = "{#color(255, 35, 5)}*Turning this setting off requires restart. {#color(208, 208, 208)}\nIncludes orange glow FX and shockwave on death. Enemies will still grow.",
-		["zh-cn"] = "{#color(255, 35, 5)}*关闭此选项需要重启。{#color(208, 208, 208)}\n包括死亡时的橙色光辉特效和冲击波。敌人仍然会变大。",
+		["zh-cn"] = "包括死亡时的橙色光辉特效和冲击波。敌人仍然会变大。",
 	},
 	corrupted_vfx_tip = {
 		en = "{#color(255, 35, 5)}*Turning this setting off requires restart. {#color(208, 208, 208)}\nDisables Green Flies effect on Blight Spreads enemies.",
-		["zh-cn"] = "{#color(255, 35, 5)}*关闭此选项需要重启。{#color(208, 208, 208)}\n禁用瘟疫扩散敌人的绿色苍蝇特效。",
+		["zh-cn"] = "禁用瘟疫扩散敌人的绿色苍蝇特效。关闭此选项需要重启。",
 	},
 	disable_death_vfx = {
 		en = "Disable Havoc Death-splosions",
@@ -337,7 +361,7 @@ return {
 	},
 	disable_toxic_gas_tip = {
 		en = "Disables the green cloud particles (looks like cultist gas grenade).",
-		["zh-cn"] = "禁用绿色云雾粒子（看起来像渣滓毒雷）。",
+		["zh-cn"] = "禁用绿色云雾粒子（看起来像邪教徒毒气手雷）。",
 	},
 	disable_toxic_fog_tip = {
 		en = "Disables the volumetric fog (green haze effect).",
@@ -348,8 +372,8 @@ return {
 		["zh-cn"] = "禁用喷泉/珊瑚喷出的毒气。",
 	},
 	vfx_limiter_group = {
-		en = "OG VFX Limiter Options",
-		["zh-cn"] = "原版特效限制器选项",
+		en = "Misc. Effect Toggles",
+		["zh-cn"] = "杂项特效切换",
 	},
 	frag_grenade_vfx = {
 		en = "Disable Shredder Frag/Rumbler/Arbites Grenades VFX",
@@ -377,11 +401,11 @@ return {
 	},
 	net_electric_vfx = {
 		en = "Disable Trapper's net lightning effect",
-		["zh-cn"] = "禁用血痂陷阱手的电网效果",
+		["zh-cn"] = "禁用陷阱兵的電網效果",
 	},
 	netgunner_vfx = {
 		en = "Disable Netgunner muzzle flash",
-		["zh-cn"] = "禁用血痂陷阱手的开火特效",
+		["zh-cn"] = "禁用网枪开火特效",
 	},
 	voidstrike_explosion_vfx = {
 		en = "Disable Voidstrike Staff explosion effect",
@@ -391,6 +415,10 @@ return {
 		en = "Disable Heinous Ritual effects",
 		["zh-cn"] = "禁用邪恶仪式特效",
 	},
+	ritual_vfx_tt = {
+		en = "Disables 2 of the ritual effects. Specifically the ones that get bugged and become attached to players. Note that this does make Rituals harder to see at a distance.",
+		["zh-cn"] = "禁用两个仪式特效。特别是那些会出现bug并附着在玩家身上的特效。请注意，这确实会使远处的仪式更难以看清。",
+	},
 	scum_stimm_screen = {
 		en = "Disable Scum's Stimm Smoke screen effect",
 		["zh-cn"] = "禁用兴奋剂烟雾屏幕特效",
@@ -399,52 +427,83 @@ return {
 		en = "Disable Scum's Rampage screen effect",
 		["zh-cn"] = "禁用狂暴状态屏幕特效",
 	},
-	galvanic_vfx = {
-		en = "Disable Galvanic Rifle Muzzle VFX",
-		["zh-cn"] = "禁用流电步枪开火特效",
-	},
 	lasgun_vfx = {
 		en = "Disable Lasgun Muzzle VFX",
 		["zh-cn"] = "禁用激光枪特效",
 	},
 	arc_vfx = {
 		en = "Disable Arc Rifle Lightning VFX",
-		["zh-cn"] = "禁用电弧步枪闪电特效",
+		["zh-cn"] = "禁用电击枪闪电特效",
 	},
 	purgator_vfx = {
 		en = "Simple Purgator VFX",
-		["zh-cn"] = "简化洗罪者火焰特效",
+		["zh-cn"] = "简单教长特效",
 	},
 	purg_tt = {
 		en = "Replaces Purgator flamer with a mild, hazeless flamer effect",
-		["zh-cn"] = "用一种温和、无烟雾的火焰特效替换洗罪者伺服头骨的火焰特效",
+		["zh-cn"] = "用一种温和、无烟雾的火焰特效替换教长的火焰特效",
 	},
 	arc_tt = {
 		en = "Removes the lightning and black smoke effects",
-		["zh-cn"] = "移除电弧闪电与黑烟特效",
+		["zh-cn"] = "",
 	},
-	gal_vfx = {
+	galv_vfx = {
 		en = "Disable Galvanic Rifle Muzzle Flash",
-		["zh-cn"] = "禁用流电步枪开火特效",
+		["zh-cn"] = "禁用加尔文步枪开火特效",
 	},
 	poxwalker_vfx = {
-		en = "Disable minion death effects",
+		en = "Disable basic minion death effects",
 		["zh-cn"] = "禁用杂兵死亡特效"
+	},
+	poxwalker_vfx_tt = {
+		en = "Effects like bloodballs, exploding guts, and other particle heavy effects - gibbing is untouched",
+		["zh-cn"] = "特效如血球、内脏爆裂等粒子效果繁多 - 肢解不受影响"
 	},
 	disable_bon_death = {
 		en = "Disable Beast of Nurgle death explosion",
-		["zh-cn"] = "禁用纳垢兽死亡特效",
+		["zh-cn"] = "禁用污秽兽死亡特效",
 	},
 	disable_burster_death = {
 		en = "Disable Burster explosions",
-		["zh-cn"] = "禁用瘟疫爆破手爆炸",
+		["zh-cn"] = "禁用爆弹虫爆炸",
 	},
 	simple_havoc_color_vfx = {
 		en = "Simple Havoc Color VFX",
-		["zh-cn"] = "简化浩劫颜色特效",
+		["zh-cn"] = "简单浩劫颜色特效",
 	},
 	simple_hav_tt = {
 		en = "Removes particle effects from Final Toll and Encroaching Garden while maintaining color. Requires restart.",
-		["zh-cn"] = "在保持颜色的同时移除最后的钟声和花园蔓生的粒子特效。需要重启。",
+		["zh-cn"] = "在保持颜色的同时移除Final Toll和Encroaching Garden的粒子特效。需要重启。",
+	},
+	--new
+	autogun_vfx = {
+		en = "Disable Autogun Muzzle VFX",
+		["zh-cn"] = "禁用自动步枪开火特效",
+	},
+	autogun_tt = {
+		en = "Disables muzzle flash effects for 1st and 3rd person (allies), for infantry, braced, and vigilant autoguns",
+		["zh-cn"] = "禁用第一人称和第三人称（队友）的开火特效，针对步枪、狂战士和警惕自动步枪。",
+	},
+	plasma_vfx = {
+		en = "Disable Plasma Gun Impact/Explosion",
+		["zh-cn"] = "禁用等离子枪命中/爆炸特效",
+	},
+	plasma_muzzle = {
+		en = "Disable Plasma Muzzle VFX",
+		["zh-cn"] = "禁用等离子枪开火特效",
+	},
+	plasma_beam = {
+		en = "Disable Plasma beam's lingering effect",
+		["zh-cn"] = "禁用等离子枪激光束残留特效",
+	},
+	impact_fx = {
+		en = "Disable Player Impact VFX",
+		["zh-cn"] = "禁用玩家命中特效",
+	},
+	network_impact = {
+		en = "Disable Teammate Impact VFX",
+		["zh-cn"] = "禁用队友命中特效",
 	},
 }
+	
+
