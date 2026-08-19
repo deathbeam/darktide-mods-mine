@@ -78,7 +78,11 @@ refresh_blocked_vfx_cache()
 
 mod:hook("World", "create_particles", function(func, world, particle_name, ...)
 	if _any_blocked and blocked_vfx_active[particle_name] then
-        return
+        -- Must return a valid particle ID; returning nil causes the engine to
+        -- dereference a null pointer when it later manipulates the particle.
+        local id = func(world, particle_name, ...)
+        World.stop_spawning_particles(world, id)
+        return id
     end
 
 	return func(world, particle_name, ...)

@@ -70,7 +70,7 @@ BetterInventory
 SMOG
 -- M:847:3.1
 vfx_swapper
--- M:678:1.2.5
+-- M:678:1.2.6
 DisableScreenEffects
 -- M:17:26.02.08-1
 LessDoT

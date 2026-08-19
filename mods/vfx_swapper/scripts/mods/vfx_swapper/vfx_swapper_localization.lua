@@ -135,6 +135,10 @@ return {
 		en = "Default",
 		["zh-cn"] = "默认",
 	},
+	flamer_swap = {
+		en = "Yeatloaf's Blue Zealot Flamer",
+		["zh-cn"] = "Yeatloaf的蓝色狂信火焰效果",
+	},
 	kill_flamer_vfx = {
 		en = "Remove Flamer/Flame Staff Effects",
 		["zh-cn"] = "移除燃烧瓶/火焰杖特效",

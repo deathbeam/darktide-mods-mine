@@ -89,40 +89,40 @@ end
 -- _original_values.inferno_stream_stream_name_3p = inferno_stream_fx.stream_effect.name_3p
 -- _original_values.inferno_stream_impact         = inferno_stream_fx.impact_effect
 
-mod.swap_flamer_vfx = function()
-    if mod:get("flamer_swap") then
-        flamer_burst_fx.stream_effect.name     = _original_values.inferno_burst_stream_name
-        flamer_burst_fx.stream_effect.name_3p  = _original_values.inferno_burst_stream_name_3p
-        flamer_burst_fx.impact_effect          = _original_values.inferno_burst_impact
-        flamer_stream_fx.stream_effect.name    = _original_values.inferno_stream_stream_name
-        flamer_stream_fx.stream_effect.name_3p = _original_values.inferno_stream_stream_name_3p
-        flamer_stream_fx.impact_effect         = _original_values.inferno_stream_impact
-    else
-        flamer_burst_fx.stream_effect.name     = _original_values.flamer_burst_stream_name
-        flamer_burst_fx.stream_effect.name_3p  = _original_values.flamer_burst_stream_name_3p
-        flamer_burst_fx.impact_effect          = _original_values.flamer_burst_impact
-        flamer_stream_fx.stream_effect.name    = _original_values.flamer_stream_stream_name
-        flamer_stream_fx.stream_effect.name_3p = _original_values.flamer_stream_stream_name_3p
-        flamer_stream_fx.impact_effect         = _original_values.flamer_stream_impact
-    end
-end
-mod.swap_inferno_vfx = function()
-    if _replace_zealot_flamer_vfx then
-        inferno_burst_fx.stream_effect.name     = _original_values.flamer_burst_stream_name
-        inferno_burst_fx.stream_effect.name_3p  = _original_values.flamer_burst_stream_name_3p
-        inferno_burst_fx.impact_effect          = _original_values.flamer_burst_impact
-        inferno_stream_fx.stream_effect.name    = _original_values.flamer_stream_stream_name
-        inferno_stream_fx.stream_effect.name_3p = _original_values.flamer_stream_stream_name_3p
-        inferno_stream_fx.impact_effect         = _original_values.flamer_stream_impact
-    else
-        inferno_burst_fx.impact_effect          = _original_values.inferno_burst_impact
-        inferno_burst_fx.stream_effect.name     = _original_values.inferno_burst_stream_name
-        inferno_burst_fx.stream_effect.name_3p  = _original_values.inferno_burst_stream_name_3p
-        inferno_stream_fx.impact_effect         = _original_values.inferno_stream_impact
-        inferno_stream_fx.stream_effect.name    = _original_values.inferno_stream_stream_name
-        inferno_stream_fx.stream_effect.name_3p = _original_values.inferno_stream_stream_name_3p
-    end
-end
+-- mod.swap_flamer_vfx = function()
+--     if _replace_zealot_flamer_vfx then
+--         flamer_burst_fx.stream_effect.name     = _original_values.inferno_burst_stream_name
+--         flamer_burst_fx.stream_effect.name_3p  = _original_values.inferno_burst_stream_name_3p
+--         flamer_burst_fx.impact_effect          = _original_values.inferno_burst_impact
+--         flamer_stream_fx.stream_effect.name    = _original_values.inferno_stream_stream_name
+--         flamer_stream_fx.stream_effect.name_3p = _original_values.inferno_stream_stream_name_3p
+--         flamer_stream_fx.impact_effect         = _original_values.inferno_stream_impact
+--     else
+--         flamer_burst_fx.stream_effect.name     = _original_values.flamer_burst_stream_name
+--         flamer_burst_fx.stream_effect.name_3p  = _original_values.flamer_burst_stream_name_3p
+--         flamer_burst_fx.impact_effect          = _original_values.flamer_burst_impact
+--         flamer_stream_fx.stream_effect.name    = _original_values.flamer_stream_stream_name
+--         flamer_stream_fx.stream_effect.name_3p = _original_values.flamer_stream_stream_name_3p
+--         flamer_stream_fx.impact_effect         = _original_values.flamer_stream_impact
+--     end
+-- end
+-- mod.swap_inferno_vfx = function()
+--     if _replace_zealot_flamer_vfx then
+--         inferno_burst_fx.stream_effect.name     = _original_values.flamer_burst_stream_name
+--         inferno_burst_fx.stream_effect.name_3p  = _original_values.flamer_burst_stream_name_3p
+--         inferno_burst_fx.impact_effect          = _original_values.flamer_burst_impact
+--         inferno_stream_fx.stream_effect.name    = _original_values.flamer_stream_stream_name
+--         inferno_stream_fx.stream_effect.name_3p = _original_values.flamer_stream_stream_name_3p
+--         inferno_stream_fx.impact_effect         = _original_values.flamer_stream_impact
+--     else
+--         inferno_burst_fx.impact_effect          = _original_values.inferno_burst_impact
+--         inferno_burst_fx.stream_effect.name     = _original_values.inferno_burst_stream_name
+--         inferno_burst_fx.stream_effect.name_3p  = _original_values.inferno_burst_stream_name_3p
+--         inferno_stream_fx.impact_effect         = _original_values.inferno_stream_impact
+--         inferno_stream_fx.stream_effect.name    = _original_values.inferno_stream_stream_name
+--         inferno_stream_fx.stream_effect.name_3p = _original_values.inferno_stream_stream_name_3p
+--     end
+-- end
 
 -- mod.swap_inferno_vfx()
 -- mod.swap_flamer_vfx()
@@ -132,49 +132,6 @@ end
 
 
 local Action = require("scripts/utilities/action/action")
--- local function swap_flamer(self, dt, t)
---     -- if not _replace_zealot_flamer_vfx then 
---     --     return 
---     -- end
---     local weapon_action_component = self._weapon_action_component
---     local action_settings = ActionAction.current_action_settings_from_component(weapon_action_component, self._weapon_actions)
---     if not action_settings then 
---         return 
---     end
---     local has_fire_configuration = action_settings and (action_settings.fire_configurations or action_settings.fire_configuration)
---     if has_fire_configuration then
---         -- if not _replace_zealot_flamer_vfx then 
---         -- if mod:get("kill_flamer_vfx") then
---         --     self:_destroy_effects(true, rotation)
---         --     self:_update_moving_lingering_effects(dt, t)
---         --     self:_update_impact_effects(dt, t)
---         --     return 
---         -- end
---         if mod:get("kill_flamer_vfx") then
---             self:_destroy_effects(true, rotation)
---             self:_update_moving_lingering_effects(dt, t)
---             self:_update_impact_effects(dt, t)
---             self._stop_looping_sfx_event
---             return 
---         end
---         -- else
---         --     local effects = action_settings.fx
---         --     if effects and effects.stream_effect then
---         --         local stream_effect = effects.stream_effect
---         --         if stream_effect.name_3p == "content/fx/particles/weapons/rifles/player_flamer/flamer_code_control_3p" then
---         --             stream_effect.name_3p = "content/fx/particles/weapons/flame_staff/psyker_flame_staff_code_control_3p"
---         --         end
---         --         if stream_effect.name == "content/fx/particles/weapons/rifles/player_flamer/flamer_code_control" then
---         --             stream_effect.name = "content/fx/particles/weapons/flame_staff/psyker_flame_staff_code_control"
---         --         end
---         --     end
---         -- end
---     else
--- 		self:_destroy_effects(true, rotation)
--- 	end
--- 	self:_update_moving_lingering_effects(dt, t)
--- 	self:_update_impact_effects(dt, t)
--- end
 mod:hook("FlamerGasEffects", "_update_effects", function(func, self, dt, t)
     if not _kill_flamer_vfx then
         return func(self, dt, t)
