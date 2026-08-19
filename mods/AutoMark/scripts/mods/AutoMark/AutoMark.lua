@@ -29,8 +29,11 @@ local mod_settings         = {
     companion_mark_keybind                    = mod:get("companion_mark_keybind") or {},
     companion_mark_ignore_unaggroed           = mod:get("companion_mark_ignore_unaggroed") or false,
     companion_range_limitation                = mod:get("companion_range_limitation") or 0,
+    companion_mark_max_distance               = mod:get("companion_mark_max_distance") or 0,
+    companion_mark_threat_priority            = mod:get("companion_mark_threat_priority") or false,
     execution_order_priority                  = mod:get("execution_order_priority") or false,
     execution_order_force_mark                = mod:get("execution_order_force_mark") or false,
+    companion_mark_tagged_always_visible      = mod:get("companion_mark_tagged_always_visible") or false,
     companion_mark_sticky_targeting           = mod:get("companion_mark_sticky_targeting") or false,
     companion_mark_sticky_targeting_elite     = mod:get("companion_mark_sticky_targeting_elite") or false,
     companion_mark_sticky_targeting_special   = mod:get("companion_mark_sticky_targeting_special") or false,
@@ -44,6 +47,7 @@ local mod_settings         = {
     servo_skull_mark_keybind                  = mod:get("servo_skull_mark_keybind") or {},
     servo_skull_mark_ignore_unaggroed         = mod:get("servo_skull_mark_ignore_unaggroed") or false,
     servo_skull_range_limitation              = mod:get("servo_skull_range_limitation") or 0,
+    servo_skull_mark_threat_priority          = mod:get("servo_skull_mark_threat_priority") or false,
     hack_mark_keybind                         = mod:get("hack_mark_keybind") or {},
     auto_hack                                 = mod:get("auto_hack") or false,
     disable_auto_hack_for_noospheric_command  = mod:get("disable_auto_hack_for_noospheric_command") or false,
@@ -109,6 +113,7 @@ local DEFAULT_CLASS_SETTINGS = {
     toggle_class     = true,
     cooldown         = 25,
     reset_cooldown   = true,
+    interval         = 1,
     mark_limit       = true,
     min_range        = 0,
     max_range        = 100,
@@ -122,7 +127,7 @@ local DEFAULT_CLASS_SETTINGS = {
     breed_priorities = {},
 }
 for breed_name, breed_data in pairs(breeds) do
-    if Breed.is_minion(breed_data) and breed_data.smart_tag_target_type == "breed" then
+    if Breed.is_minion(breed_data) and breed_data.unit_template_name == "minion" and breed_data.smart_tag_target_type == "breed" and breed_data.faction_name ~= "imperium" then
         if breed_data.tags.elite then
             DEFAULT_CLASS_SETTINGS.breed_priorities[breed_name] = 0
         elseif breed_data.tags.special then
@@ -132,7 +137,7 @@ for breed_name, breed_data in pairs(breeds) do
             if breed_data.tags.witch then
                 DEFAULT_CLASS_SETTINGS.breed_priorities[breed_name .. "_passive"] = 1
             end
-        elseif breed_data.faction_name ~= "imperium" then
+        else
             DEFAULT_CLASS_SETTINGS.breed_priorities[breed_name] = 1
         end
     end
@@ -148,6 +153,7 @@ local context                            = {
     class_name                         = nil,
     talent_resource_component          = nil,
     disabled_character_state_component = nil,
+    locomotion_component               = nil,
     has_companion                      = false,
     has_execution_order                = false,
     has_focus_target                   = false,
@@ -182,6 +188,8 @@ local mark_context                       = {
         cooldown                 = 0,
         priority_switch_cooldown = 0,
         delay                    = 0,
+        delay_times              = 0,
+        interval                 = 0,
         manual_unit              = nil,
         manual_unit_expired_time = nil,
         is_manual                = false,
@@ -191,6 +199,8 @@ local mark_context                       = {
         cooldown                 = 0,
         priority_switch_cooldown = 0,
         delay                    = 0,
+        delay_times              = 0,
+        interval                 = 0,
         manual_unit              = nil,
         manual_unit_expired_time = nil,
         is_manual                = false,
@@ -206,6 +216,8 @@ local mark_context                       = {
         cooldown                 = 0,
         priority_switch_cooldown = 0,
         delay                    = 0,
+        delay_times              = 0,
+        interval                 = 0,
         manual_unit              = nil,
         manual_unit_expired_time = nil,
         is_manual                = false,
@@ -219,9 +231,12 @@ local mark_context                       = {
         cooldown                     = 0,
         priority_switch_cooldown     = 0,
         delay                        = 0,
+        delay_times                  = 0,
+        interval                     = 0,
         manual_unit                  = nil,
         manual_unit_expired_time     = nil,
         is_manual                    = false,
+        shoot_start_time             = nil,
         noospheric_command_next_time = math.huge,
         servo_skull_lose_sight_time  = nil,
         canceled_units               = setmetatable({}, { __mode = "k" }),
@@ -267,6 +282,8 @@ local function reset_context()
         tag_context.cooldown = 0
         tag_context.priority_switch_cooldown = 0
         tag_context.delay = 0
+        tag_context.delay_times = 0
+        tag_context.interval = 0
         tag_context.manual_unit = nil
         tag_context.manual_unit_expired_time = nil
         tag_context.is_manual = false
@@ -284,6 +301,7 @@ local function reset_context()
     table_clear(companion_tag_context.canceled_units)
     table_clear(companion_tag_context.removed_units)
     local servo_skull_tag_context = mark_context[TAG_NAMES.SERVO_SKULL_TAG]
+    servo_skull_tag_context.shoot_start_time = nil
     servo_skull_tag_context.noospheric_command_next_time = math.huge
     servo_skull_tag_context.servo_skull_lose_sight_time = nil
     table_clear(servo_skull_tag_context.canceled_units)
@@ -294,6 +312,7 @@ local function destroy_references()
     context.player                             = nil
     context.talent_resource_component          = nil
     context.disabled_character_state_component = nil
+    context.locomotion_component               = nil
     context.smart_targeting_extension          = nil
     context.companion_spawner_extension        = nil
     context.player_ability_extension           = nil
@@ -495,7 +514,12 @@ mod.on_setting_changed        = function(setting_id)
         if DEFAULT_CLASS_SETTINGS[setting_id] ~= nil then
             class_settings[setting_id] = result
         elseif DEFAULT_CLASS_SETTINGS.breed_priorities[setting_id] ~= nil then
-            class_settings.breed_priorities[setting_id] = result
+            if (class_name == "adamant_companion" or class_name == "cryptic_servo_skull") and setting_id == "chaos_poxwalker_bomber" then
+                class_settings.breed_priorities[setting_id] = 0
+                mod:set_menu_settings(class_name)
+            else
+                class_settings.breed_priorities[setting_id] = result
+            end
         end
         mod:set("auto_mark_settings", auto_mark_settings, false)
     end
@@ -520,9 +544,13 @@ local function can_noospheric_command_boost()
     return player_ability_extension:has_enough_ability_capacitance("combat_ability", cryptic_talent_settings.servo_skull_shooting_tagging.minimum_capacitance)
 end
 
-local function is_sticky_targeting(tag_name, marked_tag)
+local function is_sticky_targeting(tag_name, marked_tag, tag_context)
     if tag_name == TAG_NAMES.COMPANION_TAG then
         if not mod_settings.companion_mark_sticky_targeting then
+            return false
+        end
+
+        if not tag_context.pounce_start_time then
             return false
         end
 
@@ -551,6 +579,10 @@ local function is_sticky_targeting(tag_name, marked_tag)
             return false
         end
 
+        if not tag_context.shoot_start_time then
+            return false
+        end
+
         local marked_unit = marked_tag._target_unit
         local unit_data_extension = ScriptUnit_extension(marked_unit, "unit_data_system")
         local breed_data = unit_data_extension and unit_data_extension._breed
@@ -576,10 +608,17 @@ local function is_sticky_targeting(tag_name, marked_tag)
     end
 end
 
+local function is_player_in_platform()
+    local locomotion_component = context.locomotion_component
+    local locomotion_parent_unit = locomotion_component and locomotion_component.parent_unit
+
+    return locomotion_parent_unit and ScriptUnit_extension(locomotion_parent_unit, "moveable_platform_system")
+end
+
 -- Check if Tag is Valid for Current Class
 local function is_tag_valid(tag_name)
     if tag_name == TAG_NAMES.COMPANION_TAG then
-        return context.class_name == "adamant" and context.has_companion
+        return context.class_name == "adamant" and context.has_companion and not is_player_in_platform()
     elseif tag_name == TAG_NAMES.VETERAN_TAG then
         return context.class_name == "veteran" and context.has_focus_target
     elseif tag_name == TAG_NAMES.ENEMY_TAG then
@@ -590,7 +629,6 @@ local function is_tag_valid(tag_name)
     return false
 end
 
-local disabled_mark_interval = 0
 -- Auto-Mark Target Unit with the Tag
 local function auto_mark_by_tag(tag_name, t, fixed_frame)
     if not is_tag_valid(tag_name) then
@@ -598,20 +636,19 @@ local function auto_mark_by_tag(tag_name, t, fixed_frame)
     end
 
     local tag_context = mark_context[tag_name]
+    if tag_context.interval > 0 then
+        return false
+    end
+
     local marked_tag = tag_context.tag
     local marked_tag_is_manual = tag_context.is_manual
     local disabled_character_state_component = context.disabled_character_state_component
     local is_character_disabled = disabled_character_state_component and disabled_character_state_component.is_disabled and DISABLING_TYPES[disabled_character_state_component.disabling_type]
-    if not is_character_disabled then
-        disabled_mark_interval = 0
-    end
-
     local target_unit, target_tag, target_is_dormant_daemonhost
     if (tag_name == TAG_NAMES.COMPANION_TAG or tag_name == TAG_NAMES.SERVO_SKULL_TAG) and is_character_disabled then
         local disabling_unit = disabled_character_state_component and disabled_character_state_component.disabling_unit
         if disabling_unit and (not marked_tag or marked_tag._target_unit ~= disabling_unit) then
             mod:print_debug("Auto Mark Disabling Unit")
-            disabled_mark_interval = 3
             target_unit = disabling_unit
         end
     else
@@ -620,13 +657,11 @@ local function auto_mark_by_tag(tag_name, t, fixed_frame)
         local is_cooldown_ready = tag_context.cooldown <= 0 and (not class_settings.mark_limit or not marked_tag)
         -- mark when priority switch is on
         local is_priority_switch = class_settings.priority_switch and marked_tag
-        -- mark when execution order priority is on
-        local is_execution_order_priority = mod_settings.execution_order_priority and tag_name == TAG_NAMES.COMPANION_TAG and context.has_execution_order
         if class_settings.toggle_class and (class_settings.override_manual or not marked_tag_is_manual) then
             if is_cooldown_ready then
-                target_unit, target_tag, target_is_dormant_daemonhost = mod:find_target_unit_custom("auto", class_settings.min_range, class_settings.max_range, class_settings.max_angle, tag_name, tag_context, class_settings, is_execution_order_priority)
-            elseif tag_context.priority_switch_cooldown <= 0 and (is_priority_switch or is_execution_order_priority and marked_tag) and not is_sticky_targeting(tag_name, marked_tag) then
-                target_unit, target_tag, target_is_dormant_daemonhost = mod:find_target_unit_custom("auto", class_settings.min_range, class_settings.max_range, class_settings.max_angle, tag_name, tag_context, class_settings, is_execution_order_priority, marked_tag)
+                target_unit, target_tag, target_is_dormant_daemonhost = mod:find_auto_mark_target_unit(class_settings.min_range, class_settings.max_range, class_settings.max_angle, tag_name, tag_context, class_settings)
+            elseif tag_context.priority_switch_cooldown <= 0 and is_priority_switch and not is_sticky_targeting(tag_name, marked_tag, tag_context) then
+                target_unit, target_tag, target_is_dormant_daemonhost = mod:find_auto_mark_target_unit(class_settings.min_range, class_settings.max_range, class_settings.max_angle, tag_name, tag_context, class_settings, marked_tag)
             end
         end
     end
@@ -645,6 +680,11 @@ local function auto_mark_by_tag(tag_name, t, fixed_frame)
             local marked_unit = marked_tag._target_unit
             if not mod:is_dormant_daemonhost(marked_unit) and mod:can_focus_target_overwrite(marked_unit, marked_tag) then
                 mod:print_debug("Focus Target Overwrite")
+                if tag_context.is_switch_melee then
+                    tag_context.switch_melee_unit = marked_unit
+                elseif tag_context.is_switch_range then
+                    tag_context.switch_range_unit = marked_unit
+                end
                 if marked_tag_is_manual then
                     mod:set_manual_mark(tag_name, marked_unit, target_tag)
                 else
@@ -657,9 +697,12 @@ local function auto_mark_by_tag(tag_name, t, fixed_frame)
     elseif tag_name == TAG_NAMES.SERVO_SKULL_TAG then
         if mod_settings.noospheric_command_boost and context.has_noospheric_command and marked_tag and t >= tag_context.noospheric_command_next_time and can_noospheric_command_boost() then
             local marked_unit = marked_tag._target_unit
-            local unit_data_extension = ScriptUnit_extension(marked_unit, "unit_data_system")
-            local breed_data = unit_data_extension and unit_data_extension._breed
-            if is_character_disabled or mod:is_noospheric_command_boost_breed_valid(marked_unit) and mod:is_target_valid(tag_name, nil, marked_unit, breed_data) and mod:is_servo_skull_target_visible(marked_unit, fixed_frame, true) then
+            if is_character_disabled
+                or not mod:is_dormant_daemonhost(marked_unit)
+                and mod:is_noospheric_command_boost_breed_valid(marked_unit)
+                and mod:has_enough_capacitance(marked_unit)
+                and mod:is_servo_skull_target_visible(marked_unit, fixed_frame, true)
+            then
                 mod:print_debug("Noospheric Command Boost")
                 if marked_tag_is_manual then
                     mod:set_manual_mark(tag_name, marked_unit, target_tag)
@@ -682,10 +725,20 @@ local function auto_mark(dt, t, fixed_frame)
         mark_context.auto_mark_interval = mark_context.auto_mark_interval - dt
     end
     -- calculate cooldown and delay for all tags
+    local skip = false
     for _, tag_name in pairs(TAG_NAMES) do
         local tag_context = mark_context[tag_name]
         if tag_context.delay > 0 then
             tag_context.delay = tag_context.delay - dt
+            if tag_context.delay <= 0 then
+                tag_context.delay = 0
+                tag_context.delay_times = 0
+            else
+                skip = true
+            end
+        end
+        if tag_context.interval > 0 then
+            tag_context.interval = tag_context.interval - dt
         end
         if tag_context.cooldown > 0 then
             tag_context.cooldown = tag_context.cooldown - dt
@@ -694,25 +747,11 @@ local function auto_mark(dt, t, fixed_frame)
             tag_context.priority_switch_cooldown = tag_context.priority_switch_cooldown - dt
         end
     end
-    if disabled_mark_interval > 0 then
-        disabled_mark_interval = disabled_mark_interval - dt
-    end
-    -- skip if auto mark is disabled
-    if not mod_settings.toggle_mod then
-        return
-    end
     -- pause auto mark for a period of time after it is executed.
-    if mark_context.auto_mark_interval > 0 then
+    if mark_context.auto_mark_interval > 0 or skip then
         return
     end
-    for _, tag_name in pairs(TAG_NAMES) do
-        local tag_context = mark_context[tag_name]
-        if tag_context.delay > 0 then
-            return
-        end
-    end
-
-    -- three kinds of tag to mark
+    -- all kinds of tag to mark
     if auto_mark_by_tag(TAG_NAMES.COMPANION_TAG, t, fixed_frame) then
         return
     end
@@ -731,7 +770,7 @@ local function auto_mark(dt, t, fixed_frame)
 end
 
 local function clean_visibility_cache(fixed_frame)
-    if fixed_frame % 3120 == 0 then
+    if fixed_frame % 20 == 0 then
         local frame_threshold = fixed_frame - 5
         for cached_unit, check_frame in pairs(visibility_check_frame) do
             if check_frame < frame_threshold then
@@ -763,7 +802,7 @@ local function clean_expired_units(t)
         local canceled_units = tag_context.canceled_units
         if canceled_units then
             for unit, expired_time in pairs(canceled_units) do
-                if t >= expired_time or not HEALTH_ALIVE[unit] then
+                if t >= expired_time then
                     canceled_units[unit] = nil
                 end
             end
@@ -786,7 +825,7 @@ mod:hook_safe(CLASS.PlayerUnitSmartTargetingExtension, "fixed_update",
             return
         end
 
-        if context.game_mode_valid then
+        if mod_settings.toggle_mod and context.game_mode_valid then
             mod.num_visibility_checks_this_frame = 0
             clean_expired_units(t)
             clean_visibility_cache(fixed_frame)
