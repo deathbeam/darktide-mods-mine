@@ -9,5 +9,5 @@ return {
 		})
 	end,
 	packages = {},
-	version = "1.2.3",
+	version = "1.2.5",
 }

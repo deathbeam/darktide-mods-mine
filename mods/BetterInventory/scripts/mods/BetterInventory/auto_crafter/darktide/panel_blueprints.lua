@@ -5,7 +5,7 @@ local PanelBlueprints = {}
 local ROW_HEIGHT = 32
 local COMPACT_ROW_HEIGHT = 26
 local STATUS_ROW_HEIGHT = 50
-local CURRENCY_ROW_HEIGHT = 58
+local CURRENCY_ROW_HEIGHT = 26
 local QUEUE_JOB_ROW_HEIGHT = 110
 local STAT_GRID_BUTTON_HEIGHT = 30
 local STAT_GRID_GAP = 6
@@ -259,32 +259,52 @@ local function status_block_passes(width)
 	}
 end
 
-local function queue_job_passes(width, height, highlighted)
+local function queue_job_passes(width, height, highlighted, entry)
 	height = height or QUEUE_JOB_ROW_HEIGHT
 	local border_color = highlighted and Color.terminal_corner_selected(255, true) or Color.terminal_frame(255, true)
 	local label_color = highlighted and Color.terminal_corner_selected(255, true) or Color.terminal_text_header(255, true)
+	-- Hotspot visibility receives its nested `remove_hotspot` content, while the
+	-- visual passes receive the widget's root content. Resolve both shapes so the
+	-- button's hit target cannot be hidden while its red X remains visible.
+	local function removable(content)
+		local parent = content and content.parent
+
+		return content and content.queue_removable == true or parent and parent.queue_removable == true or false
+	end
+	local button_y = height - 30
 
 	return {
-		{ content_id = "hotspot", pass_type = "hotspot", content = { on_hover_sound = UISoundEvents.default_mouse_hover, on_pressed_sound = UISoundEvents.default_click } },
+		{ content_id = "hotspot", pass_type = "hotspot", content = { on_hover_sound = UISoundEvents.default_mouse_hover, on_pressed_sound = UISoundEvents.default_click }, style = { size = { width - 40, height } } },
 		{ pass_type = "rect", style = { color = Color.terminal_background(220, true), size = { width, height }, offset = { 0, 0, 1 } } },
 		{ pass_type = "texture", value = "content/ui/materials/frames/frame_tile_2px", style = { color = border_color, size = { width, height }, offset = { 0, 0, 2 } } },
 		{ pass_type = "text", value_id = "label", style = { font_size = 15, font_type = "proxima_nova_bold", text_horizontal_alignment = "left", text_vertical_alignment = "top", text_color = label_color, size = { width - 16, 20 }, offset = { 8, 5, 3 } } },
 		{ pass_type = "text", value_id = "detail", style = { font_size = 12, font_type = "proxima_nova_medium", text_horizontal_alignment = "left", text_vertical_alignment = "top", text_color = Color.terminal_text_body(255, true), size = { width - 16, height - 28 }, offset = { 8, 25, 3 } } },
+		{ content_id = "remove_hotspot", pass_type = "hotspot", content = { on_hover_sound = UISoundEvents.default_mouse_hover, on_pressed_sound = UISoundEvents.default_click }, style = { size = { 30, 26 }, offset = { width - 34, button_y, 8 } }, visibility_function = removable },
+		{ pass_type = "rect", style = { color = Color.ui_red_medium(110, true), size = { 30, 26 }, offset = { width - 34, button_y, 5 } }, visibility_function = removable },
+		{ pass_type = "texture", value = "content/ui/materials/frames/frame_tile_2px", style = { color = Color.ui_red_medium(255, true), size = { 30, 26 }, offset = { width - 34, button_y, 6 } }, visibility_function = removable },
+		{ pass_type = "text", value = "X", style = { font_size = 17, font_type = "proxima_nova_bold", text_horizontal_alignment = "center", text_vertical_alignment = "center", text_color = Color.ui_red_medium(255, true), size = { 30, 26 }, offset = { width - 34, button_y, 7 } }, visibility_function = removable },
 	}
 end
 
+PanelBlueprints.queue_job_passes = queue_job_passes
+
 local function currency_row_passes(width)
-	local segment_width = width / 3
+	local label_width = 178
+	local segment_width = (width - label_width) / 3
 	local passes = {
-		{ pass_type = "text", value_id = "label", style = { font_size = 14, font_type = "proxima_nova_bold", text_horizontal_alignment = "left", text_vertical_alignment = "top", text_color = Color.terminal_text_body(255, true), size = { width, 20 } } },
+		{ pass_type = "text", value_id = "label", style = { font_size = 13, font_type = "proxima_nova_bold", text_horizontal_alignment = "left", text_vertical_alignment = "center", text_color = Color.terminal_text_body(255, true), size = { label_width - 4, CURRENCY_ROW_HEIGHT } } },
 	}
 	local currencies = { "credits", "plasteel", "diamantine" }
 
 	for index, currency in ipairs(currencies) do
-		local x = (index - 1) * segment_width
+		local x = label_width + (index - 1) * segment_width
+		local warning_id = currency .. "_warning"
+		local function normal(content) return content[warning_id] ~= true end
+		local function warning(content) return content[warning_id] == true end
 
-		passes[#passes + 1] = { pass_type = "texture", value = CURRENCY_ICONS[currency], style = { size = { 24, 24 }, offset = { x, 27, 2 } } }
-		passes[#passes + 1] = { pass_type = "text", value_id = currency, style = { font_size = 14, font_type = "proxima_nova_bold", text_horizontal_alignment = "left", text_vertical_alignment = "center", text_color = Color.terminal_text_body_sub_header(255, true), size = { segment_width - 28, 30 }, offset = { x + 28, 24, 3 } } }
+		passes[#passes + 1] = { pass_type = "texture", value = CURRENCY_ICONS[currency], style = { size = { 18, 18 }, offset = { x, 4, 2 } } }
+		passes[#passes + 1] = { pass_type = "text", value_id = currency, style = { font_size = 12, font_type = "proxima_nova_bold", text_horizontal_alignment = "left", text_vertical_alignment = "center", text_color = Color.terminal_text_body_sub_header(255, true), size = { segment_width - 21, CURRENCY_ROW_HEIGHT }, offset = { x + 21, 0, 3 } }, visibility_function = normal }
+		passes[#passes + 1] = { pass_type = "text", value_id = currency, style = { font_size = 12, font_type = "proxima_nova_bold", text_horizontal_alignment = "left", text_vertical_alignment = "center", text_color = Color.ui_red_medium(255, true), size = { segment_width - 21, CURRENCY_ROW_HEIGHT }, offset = { x + 21, 0, 3 } }, visibility_function = warning }
 	end
 
 	return passes
@@ -607,7 +627,7 @@ PanelBlueprints.definitions = {
 			elseif variant == "status" then
 				return status_block_passes(width)
 			elseif variant == "queue_job" then
-				return queue_job_passes(width, entry.size[2], entry.initial_content and entry.initial_content.queue_current == true)
+				return queue_job_passes(width, entry.size[2], entry.initial_content and entry.initial_content.queue_current == true, entry)
 			elseif variant == "currency" then
 				return currency_row_passes(width)
 			elseif variant == "section" then
@@ -652,6 +672,13 @@ PanelBlueprints.definitions = {
 
 			if entry.bind then
 				entry.bind(widget)
+			end
+
+			-- ViewElementGrid invokes hotspot callbacks directly during UIWidget.draw.
+			-- Bind after content initialization so this secondary hotspot follows the
+			-- same proven path as steppers and other nested panel controls.
+			if widget.content.remove_hotspot and entry.remove_callback then
+				widget.content.remove_hotspot.pressed_callback = entry.remove_callback
 			end
 
 			if entry.refresh then

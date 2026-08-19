@@ -12,6 +12,8 @@ BetterBots
 -- M:745:1.2.3
 ChaosWastesAtHome
 -- M:1163:0.4.0
+SoloMinigames
+-- M:494:1.1.0
 
 -- Simple mods
 SimpleSequencer
@@ -65,13 +67,13 @@ LoadoutPreviews
 DumpStatFinder
 -- M:368:0.94.2
 BetterInventory
--- M:1144:2.7.0
+-- M:1144:2.8.2
 
 -- Performance
 SMOG
 -- M:847:3.1
 vfx_swapper
--- M:678:1.2.3
+-- M:678:1.2.5
 DisableScreenEffects
 -- M:17:26.02.08-1
 LessDoT

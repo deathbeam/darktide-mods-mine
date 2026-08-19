@@ -53,10 +53,10 @@ mod:hook_safe("SmokeFogSystem", "on_add_extension", function(self, world, unit, 
 
     local extension = self._unit_to_extension_map[unit]
     local radius = extension and extension.outer_radius or 5.5
-    mod:echo(tostring(extension) .. " radius: " .. tostring(radius))
-    for k, v in pairs(extension) do
-        mod:echo("extension." .. tostring(k) .. " = " .. tostring(v))
-    end
+    -- mod:echo(tostring(extension) .. " radius: " .. tostring(radius))
+    -- for k, v in pairs(extension) do
+    --     mod:echo("extension." .. tostring(k) .. " = " .. tostring(v))
+    -- end
 
     local position = Unit.local_position(unit, 1)
     local particle_ids = spawn_ring_particles(world, _replace_smoke_vfx, position, radius)
