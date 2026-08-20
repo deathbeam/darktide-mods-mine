@@ -5,7 +5,6 @@ local Breed                = require("scripts/utilities/breed")
 
 -- Global Cache
 local CLASS                = CLASS
-local HEALTH_ALIVE         = HEALTH_ALIVE
 local ScriptUnit_extension = ScriptUnit.extension
 local table_clear          = table.clear
 
@@ -41,7 +40,7 @@ local mod_settings         = {
     companion_cancel_mark                     = mod:get("companion_cancel_mark") or false,
     companion_cancel_mark_human               = mod:get("companion_cancel_mark_human") or false,
     companion_cancel_mark_non_human           = mod:get("companion_cancel_mark_non_human") or false,
-    companion_health_threshold                = mod:get("companion_health_threshold") or 0,
+    companion_health_threshold                = (mod:get("companion_health_threshold") or 0) / 100,
     companion_time_threshold                  = mod:get("companion_time_threshold") or 0,
     companion_distance_threshold              = mod:get("companion_distance_threshold") or 0,
     servo_skull_mark_keybind                  = mod:get("servo_skull_mark_keybind") or {},
@@ -56,16 +55,16 @@ local mod_settings         = {
     noospheric_command_boost_special          = mod:get("noospheric_command_boost_special") or false,
     noospheric_command_boost_boss             = mod:get("noospheric_command_boost_boss") or false,
     capacitance_retention                     = mod:get("capacitance_retention") or false,
-    capacitance_retention_elite_threshold     = mod:get("capacitance_retention_elite_threshold") or 0,
-    capacitance_retention_special_threshold   = mod:get("capacitance_retention_special_threshold") or 0,
-    capacitance_retention_boss_threshold      = mod:get("capacitance_retention_boss_threshold") or 0,
+    capacitance_retention_elite_threshold     = (mod:get("capacitance_retention_elite_threshold") or 0) / 100,
+    capacitance_retention_special_threshold   = (mod:get("capacitance_retention_special_threshold") or 0) / 100,
+    capacitance_retention_boss_threshold      = (mod:get("capacitance_retention_boss_threshold") or 0) / 100,
     servo_skull_mark_sticky_targeting         = mod:get("servo_skull_mark_sticky_targeting") or false,
     servo_skull_mark_sticky_targeting_elite   = mod:get("servo_skull_mark_sticky_targeting_elite") or false,
     servo_skull_mark_sticky_targeting_special = mod:get("servo_skull_mark_sticky_targeting_special") or false,
     servo_skull_mark_sticky_targeting_boss    = mod:get("servo_skull_mark_sticky_targeting_boss") or false,
     servo_skull_cancel_mark                   = mod:get("servo_skull_cancel_mark") or false,
     servo_skull_cancel_mark_time_threshold    = mod:get("servo_skull_cancel_mark_time_threshold") or 0,
-    servo_skull_cancel_mark_health_threshold  = mod:get("servo_skull_cancel_mark_health_threshold") or 0,
+    servo_skull_cancel_mark_health_threshold  = (mod:get("servo_skull_cancel_mark_health_threshold") or 0) / 100,
     focus_target_overwrite                    = mod:get("focus_target_overwrite") or false,
     focus_target_overwrite_delta              = mod:get("focus_target_overwrite_delta") or 5,
     focus_target_ignore_unaggroed             = mod:get("focus_target_ignore_unaggroed") or false,
@@ -94,14 +93,6 @@ for _, breed_settings in pairs(noospheric_command_breed_settings) do
     if breed_settings.threshold_negative_zero then
         breed_settings.threshold = -0
     end
-end
-
-do
-    local breed_name = mod:get("noospheric_command_boost_breed_name")
-    local breed_settings = noospheric_command_breed_settings[breed_name]
-    mod:set("noospheric_command_boost_breed_override", breed_settings and breed_settings.override or false, false)
-    mod:set("noospheric_command_boost_breed_toggle", breed_settings and breed_settings.toggle or false, false)
-    mod:set("capacitance_retention_breed_threshold", breed_settings and breed_settings.threshold or 0, false)
 end
 
 local companion_cancel_mark_breed_settings = mod:get("companion_cancel_mark_breed_settings") or {}
@@ -330,7 +321,8 @@ end
 mod:io_dofile("AutoMark/scripts/mods/AutoMark/utils/utils")
 mod:io_dofile("AutoMark/scripts/mods/AutoMark/context/context")
 mod:io_dofile("AutoMark/scripts/mods/AutoMark/setting/class_setting")
-mod:io_dofile("AutoMark/scripts/mods/AutoMark/setting/option_setting")
+mod:io_dofile("AutoMark/scripts/mods/AutoMark/setting/cyber_mastiff_setting")
+mod:io_dofile("AutoMark/scripts/mods/AutoMark/setting/servo_skull_setting")
 mod:io_dofile("AutoMark/scripts/mods/AutoMark/targeting/targeting")
 mod:io_dofile("AutoMark/scripts/mods/AutoMark/targeting/custom_targeting")
 mod:io_dofile("AutoMark/scripts/mods/AutoMark/mark/base_mark")
@@ -347,7 +339,9 @@ mod.on_enabled                = function(initial_call)
     mod:init_context()
     mod:init_execution_order_units()
     mod:init_visibility_raycast_objects()
-    mod:set_menu_settings(mod:get_menu_class_name())
+    mod:set_menu_class_settings(mod:get_menu_class_name())
+    mod:set_menu_servo_skull_breed_settings(mod:get("noospheric_command_boost_breed_name"))
+    mod:set_menu_cyber_mastiff_breed_settings(mod:get("companion_cancel_mark_breed_name"))
 end
 
 --  Mod Disabled
@@ -366,7 +360,7 @@ mod.on_game_state_changed     = function(status, state_name)
             -- game settings cache
             mod:init_game_settings()
             -- display
-            mod:set_menu_settings(mod:get_menu_class_name())
+            mod:set_menu_class_settings(mod:get_menu_class_name())
         elseif status == "exit" then
             context.game_mode_valid = false
             -- menu mark info rest
@@ -381,14 +375,17 @@ mod.on_setting_changed        = function(setting_id)
     local class_name = mod:get("class_selection")
     -- Normal Mod Settings
     if mod_settings[setting_id] ~= nil then
-        mod_settings[setting_id] = result
-        if setting_id == "capacitance_retention_elite_threshold" or setting_id == "capacitance_retention_special_threshold" or setting_id == "capacitance_retention_boss_threshold" then
+        if setting_id == "companion_health_threshold" or setting_id == "servo_skull_cancel_mark_health_threshold" then
+            result = result / 100
+        elseif setting_id == "capacitance_retention_elite_threshold" or setting_id == "capacitance_retention_special_threshold" or setting_id == "capacitance_retention_boss_threshold" then
+            result = result / 100
             if result == -0 and 1 / result < 0 then
                 mod:set(setting_id .. "_negative_zero", true, false)
             else
                 mod:set(setting_id .. "_negative_zero", false, false)
             end
         end
+        mod_settings[setting_id] = result
         -- Apply Class Settings to Other Classes
     elseif setting_id == "apply_button" then
         if result == "apply_to_all" then
@@ -404,110 +401,25 @@ mod.on_setting_changed        = function(setting_id)
         elseif result == "reset_current" then
             mod:reset_class_settings(class_name)
         end
-        mod:set_menu_settings(class_name)
+        mod:set_menu_class_settings(class_name)
         mod:set("reset_button", "blank", false)
-        -- Reset Noospheric Command Breed Settings
-    elseif setting_id == "noospheric_command_boost_reset" then
-        if result == "reset" then
-            table_clear(noospheric_command_breed_settings)
-            mod:set("noospheric_command_breed_settings", noospheric_command_breed_settings, false)
-            mod:set("noospheric_command_boost_breed_name", mod:get("noospheric_command_boost_breed_name"), true)
-        end
-        mod:set("noospheric_command_boost_reset", "blank", false)
         -- Select Noospheric Command Breed Name
     elseif setting_id == "noospheric_command_boost_breed_name" then
-        local breed_settings = noospheric_command_breed_settings[result]
-        mod:set("noospheric_command_boost_breed_override", breed_settings and breed_settings.override or false, false)
-        mod:set("servo_skull_range_limitation_breed", breed_settings and breed_settings.range_limitation or 0, false)
-        mod:set("noospheric_command_boost_breed_toggle", breed_settings and breed_settings.toggle or false, false)
-        mod:set("capacitance_retention_breed_threshold", breed_settings and breed_settings.threshold or 0, false)
-        mod:set("servo_skull_mark_sticky_targeting_breed", breed_settings and breed_settings.sticky_targeting or false, false)
-        mod:set("servo_skull_cancel_mark_breed_time_threshold", breed_settings and breed_settings.time_threshold or 0, false)
-        mod:set("servo_skull_cancel_mark_breed_health_threshold", breed_settings and breed_settings.health_threshold or 0, false)
+        mod:set_menu_servo_skull_breed_settings(result)
         -- Set Noospheric Command Breed Settings
-    elseif setting_id == "noospheric_command_boost_breed_override"
-        or setting_id == "servo_skull_range_limitation_breed"
-        or setting_id == "noospheric_command_boost_breed_toggle"
-        or setting_id == "capacitance_retention_breed_threshold"
-        or setting_id == "servo_skull_mark_sticky_targeting_breed"
-        or setting_id == "servo_skull_cancel_mark_breed_time_threshold"
-        or setting_id == "servo_skull_cancel_mark_breed_health_threshold"
-    then
+    elseif mod:is_servo_skull_breed_setting_id(setting_id) then
         local breed_name = mod:get("noospheric_command_boost_breed_name")
-        if noospheric_command_breed_settings[breed_name] == nil then
-            noospheric_command_breed_settings[breed_name] = { override = false, range_limitation = 0, toggle = false, threshold = 0, threshold_negative_zero = false, sticky_targeting = false, time_threshold = 0, health_threshold = 0 }
-        end
-        if setting_id == "noospheric_command_boost_breed_override" then
-            noospheric_command_breed_settings[breed_name].override = result
-        elseif setting_id == "servo_skull_range_limitation_breed" then
-            noospheric_command_breed_settings[breed_name].range_limitation = result
-        elseif setting_id == "noospheric_command_boost_breed_toggle" then
-            noospheric_command_breed_settings[breed_name].toggle = result
-        elseif setting_id == "capacitance_retention_breed_threshold" then
-            noospheric_command_breed_settings[breed_name].threshold = result
-            if result == -0 and 1 / result < 0 then
-                noospheric_command_breed_settings[breed_name].threshold_negative_zero = true
-            else
-                noospheric_command_breed_settings[breed_name].threshold_negative_zero = false
-            end
-        elseif setting_id == "servo_skull_mark_sticky_targeting_breed" then
-            noospheric_command_breed_settings[breed_name].sticky_targeting = result
-        elseif setting_id == "servo_skull_cancel_mark_breed_time_threshold" then
-            noospheric_command_breed_settings[breed_name].time_threshold = result
-        elseif setting_id == "servo_skull_cancel_mark_breed_health_threshold" then
-            noospheric_command_breed_settings[breed_name].health_threshold = result
-        end
-        mod:set("noospheric_command_breed_settings", noospheric_command_breed_settings, false)
-        -- Reset Companion Cancel Mark Breed Settings
-    elseif setting_id == "companion_cancel_mark_reset" then
-        if result == "reset" then
-            table_clear(companion_cancel_mark_breed_settings)
-            mod:set("companion_cancel_mark_breed_settings", companion_cancel_mark_breed_settings, false)
-            mod:set("companion_cancel_mark_breed_name", mod:get("companion_cancel_mark_breed_name"), true)
-        end
-        mod:set("companion_cancel_mark_reset", "blank", false)
+        mod:set_servo_skull_breed_setting(breed_name, setting_id, result)
         -- Select Companion Cancel Mark Breed Name
     elseif setting_id == "companion_cancel_mark_breed_name" then
-        local breed_settings = companion_cancel_mark_breed_settings[result]
-        mod:set("companion_cancel_mark_breed_override", breed_settings and breed_settings.override or false, false)
-        mod:set("companion_range_limitation_breed", breed_settings and breed_settings.range_limitation or 0, false)
-        mod:set("companion_mark_max_distance_breed", breed_settings and breed_settings.max_distance or 0, false)
-        mod:set("companion_mark_sticky_targeting_breed", breed_settings and breed_settings.sticky_targeting or false, false)
-        mod:set("companion_cancel_mark_breed_health_threshold", breed_settings and breed_settings.health_threshold or 0, false)
-        mod:set("companion_cancel_mark_breed_time_threshold", breed_settings and breed_settings.time_threshold or 0, false)
-        mod:set("companion_cancel_mark_breed_distance_threshold", breed_settings and breed_settings.distance_threshold or 0, false)
+        mod:set_menu_cyber_mastiff_breed_settings(result)
         -- Set Companion Cancel Mark Breed Settings
-    elseif setting_id == "companion_cancel_mark_breed_override"
-        or setting_id == "companion_range_limitation_breed"
-        or setting_id == "companion_mark_max_distance_breed"
-        or setting_id == "companion_mark_sticky_targeting_breed"
-        or setting_id == "companion_cancel_mark_breed_health_threshold"
-        or setting_id == "companion_cancel_mark_breed_time_threshold"
-        or setting_id == "companion_cancel_mark_breed_distance_threshold"
-    then
+    elseif mod:is_cyber_mastiff_breed_setting_id(setting_id) then
         local breed_name = mod:get("companion_cancel_mark_breed_name")
-        if companion_cancel_mark_breed_settings[breed_name] == nil then
-            companion_cancel_mark_breed_settings[breed_name] = { override = false, range_limitation = 0, max_distance = 0, sticky_targeting = false, health_threshold = 0, time_threshold = 0, distance_threshold = 0 }
-        end
-        if setting_id == "companion_cancel_mark_breed_override" then
-            companion_cancel_mark_breed_settings[breed_name].override = result
-        elseif setting_id == "companion_range_limitation_breed" then
-            companion_cancel_mark_breed_settings[breed_name].range_limitation = result
-        elseif setting_id == "companion_mark_max_distance_breed" then
-            companion_cancel_mark_breed_settings[breed_name].max_distance = result
-        elseif setting_id == "companion_mark_sticky_targeting_breed" then
-            companion_cancel_mark_breed_settings[breed_name].sticky_targeting = result
-        elseif setting_id == "companion_cancel_mark_breed_health_threshold" then
-            companion_cancel_mark_breed_settings[breed_name].health_threshold = result
-        elseif setting_id == "companion_cancel_mark_breed_time_threshold" then
-            companion_cancel_mark_breed_settings[breed_name].time_threshold = result
-        elseif setting_id == "companion_cancel_mark_breed_distance_threshold" then
-            companion_cancel_mark_breed_settings[breed_name].distance_threshold = result
-        end
-        mod:set("companion_cancel_mark_breed_settings", companion_cancel_mark_breed_settings, false)
+        mod:set_cyber_mastiff_breed_setting(breed_name, setting_id, result)
         -- Set Class Name
     elseif setting_id == "class_selection" then
-        mod:set_menu_settings(class_name)
+        mod:set_menu_class_settings(result)
         -- Set Class Settings
     else
         local class_settings = auto_mark_settings[class_name]
@@ -516,7 +428,7 @@ mod.on_setting_changed        = function(setting_id)
         elseif DEFAULT_CLASS_SETTINGS.breed_priorities[setting_id] ~= nil then
             if (class_name == "adamant_companion" or class_name == "cryptic_servo_skull") and setting_id == "chaos_poxwalker_bomber" then
                 class_settings.breed_priorities[setting_id] = 0
-                mod:set_menu_settings(class_name)
+                mod:set_menu_class_settings(class_name)
             else
                 class_settings.breed_priorities[setting_id] = result
             end

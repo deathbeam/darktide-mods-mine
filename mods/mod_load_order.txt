@@ -34,7 +34,7 @@ WeaponStats
 
 -- Gameplay
 AutoMark
--- M:736:2.5.0
+-- M:736:2.5.1
 guarantee_weapon_swap
 -- M:331:1.4.4
 guarantee_special_action
@@ -80,7 +80,7 @@ LessDoT
 ConstantFov
 -- M:91:1.9
 markers_aio
--- M:447:2.14.2
+-- M:447:2.14.3
 DynamicCrosshair
 -- M:110:1.7
 stamina_dodge_bars
@@ -113,6 +113,6 @@ crosshair_hud
 PlayerOutlines
 -- M:734:0.0.4
 enemies_improved
--- M:809:2.1.4
+-- M:809:2.1.5
 danger_zone
 -- M:440:1.1.1

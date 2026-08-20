@@ -108,9 +108,9 @@ local localization = {
         ["zh-tw"] = "威脅優先",
     },
     threat_priority_tooltip = {
-        en = "When enabled, Auto Mark prioritizes enemies targeting the player.",
-        ["zh-cn"] = "开启后，自动标记将优先标记以玩家为攻击目标的敌人。",
-        ["zh-tw"] = "開啟後，自動標記將優先標記以玩家為攻擊目標的敵人。",
+        en = "When enabled, Companion Auto-Mark prioritizes enemies targeting the player.",
+        ["zh-cn"] = "开启后，伙伴自动标记将优先标记以玩家为攻击目标的敌人。",
+        ["zh-tw"] = "開啟後，同伴自動標記將優先標記以玩家為攻擊目標的敵人。",
     },
     execution_order_priority = {
         en = "Execution Order Priority",
@@ -128,9 +128,9 @@ local localization = {
         ["zh-tw"] = "處決指令強制標記",
     },
     execution_order_force_mark_description = {
-        en = "When enabled, targets chosen by Execution Order can be auto-marked even if their enemy type is set to ignored in priority settings.",
-        ["zh-cn"] = "开启后，处决指令选中的目标，即便其敌人类型在优先级设置中被设为忽略，仍可被自动标记。",
-        ["zh-tw"] = "開啟後，處決指令選中的目標，即便其敵人類型在優先度設定中被設為忽略，仍可被自動標記。",
+        en = "When enabled, targets chosen by Execution Order can be auto marked by Cyber-Mastiff even if their enemy type is set to ignored in priority settings.",
+        ["zh-cn"] = "开启后，处决指令选中的目标，即便其敌人类型在优先级设置中被设为忽略，仍可被智能獒犬自动标记。",
+        ["zh-tw"] = "開啟後，處決指令選中的目標，即便其敵人類型在優先度設定中被設為忽略，仍可被電子獒犬自動標記。",
     },
     companion_range_limitation = {
         en = "Companion Range Limitation",
@@ -138,11 +138,11 @@ local localization = {
         ["zh-tw"] = "伙伴範圍限制",
     },
     companion_range_limitation_tooltip = {
-        en = "Restrict the maximum distance between your " .. highlight("companion") .. " and a target that can be marked by the Auto-Mark.\n\n" ..
+        en = "Restrict the maximum distance between your " .. highlight("companion") .. " and a target that can be marked by the Companion Auto-Mark.\n\n" ..
             "Set to " .. highlight("0") .. " to disable.",
-        ["zh-cn"] = "限制自动标记系统可标记的目标与你的" .. highlight("伙伴") .. "之间的最大距离。\n\n" ..
+        ["zh-cn"] = "限制伙伴自动标记系统可标记的目标与你的" .. highlight("伙伴") .. "之间的最大距离。\n\n" ..
             "设置为" .. highlight("0") .. "以禁用。",
-        ["zh-tw"] = "限制自動標記系統可標記的目標與你的" .. highlight("同伴") .. "之間的最大距離。\n\n" ..
+        ["zh-tw"] = "限制同伴自動標記系統可標記的目標與你的" .. highlight("同伴") .. "之間的最大距離。\n\n" ..
             "設為" .. highlight("0") .. "可停用",
     },
     companion_cancel_mark = {
@@ -287,11 +287,11 @@ local localization = {
         ["zh-tw"] = "玩家最大距離",
     },
     companion_mark_max_distance_tooltip = {
-        en = "Restrict the maximum distance between " .. highlight("player") .. " and a target that can be marked by the Auto-Mark.\n\n" ..
+        en = "Restrict the maximum distance between " .. highlight("player") .. " and a target that can be marked by the Companion Auto-Mark.\n\n" ..
             "Set to " .. highlight("0") .. " to disable.",
-        ["zh-cn"] = "限制自动标记系统可标记的目标与" .. highlight("玩家") .. "之间的最大距离。\n\n" ..
+        ["zh-cn"] = "限制伙伴自动标记系统可标记的目标与" .. highlight("玩家") .. "之间的最大距离。\n\n" ..
             "设置为" .. highlight("0") .. "以禁用。",
-        ["zh-tw"] = "限制自動標記系統可標記的目標與" .. highlight("玩家") .. "之間的最大距離。\n\n" ..
+        ["zh-tw"] = "限制同伴自動標記系統可標記的目標與" .. highlight("玩家") .. "之間的最大距離。\n\n" ..
             "設為" .. highlight("0") .. "可停用",
     },
     -- cryptic settings
@@ -834,6 +834,32 @@ local localization = {
         ["zh-tw"] = "當你的伺服顱骨目前攻擊目標的生命值低於設定百分比時，取消該目標的伺服顱骨標記。\n\n" ..
             "設為" .. highlight("0") .. "可停用。\n" ..
             "不影響" .. highlight("手動") .. "標記。",
+    },
+    meter = {
+        en = "m",
+        ["zh-cn"] = "米",
+        ["zh-tw"] = "公尺",
+    },
+    percent = {
+        en = "%%",
+    },
+    degree = {
+        en = "°",
+    },
+    stack = {
+        en = "stack",
+        ["zh-cn"] = "层",
+        ["zh-tw"] = "层",
+    },
+    second = {
+        en = "s",
+        ["zh-cn"] = "秒",
+        ["zh-tw"] = "秒",
+    },
+    hold_to_reset = {
+        en = "to Reset",
+        ["zh-cn"] = "重置",
+        ["zh-tw"] = "重設",
     },
 }
 

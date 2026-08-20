@@ -151,7 +151,7 @@ function mod:apply_to_normal_tag(class_name)
 end
 
 -- Set Menu for Display
-function mod:set_menu_settings(class_name)
+function mod:set_menu_class_settings(class_name)
     if not VALID_CLASSES[class_name] then
         return
     end
