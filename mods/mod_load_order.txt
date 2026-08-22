@@ -2,7 +2,7 @@
 
 -- Base
 -- dmf
--- M:8:26.06.24
+-- M:8:26.08.19
 
 -- Game modes
 BetterBots
@@ -14,23 +14,23 @@ SoloMinigames
 
 -- Simple mods
 SimpleSequencer
--- M:1160:0.0.12
+-- M:1160:0.0.13
 SimpleActivate
--- M:1145:0.0.4
+-- M:1145:0.0.5
 SimpleMovement
--- M:1146:0.0.3
+-- M:1146:0.0.4
 SimpleCharging
--- M:1141:0.0.9
+-- M:1141:0.0.10
 
 -- Stats mods
 CharacterStats
--- M:1093:0.2.10
+-- M:1093:0.2.11
 CombatStats
--- M:661:0.5.11
+-- M:661:0.5.12
 EnemyStats
--- M:1054:0.3.3
+-- M:1054:0.3.4
 WeaponStats
--- M:999:0.2.9
+-- M:999:0.2.10
 
 -- Gameplay
 AutoMark
